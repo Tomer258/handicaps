@@ -25,6 +25,14 @@ public static class VoiceEndpoints
             return Results.NoContent();
         });
 
+        voice.MapPost("/{leaseId:guid}/publications/{kind}", async (Guid leaseId, string kind, PublicationRequest? req, HttpContext http, VoiceService svc, CancellationToken ct) =>
+            Results.Ok(await svc.ReservePublicationAsync(http.User.UserId(), http.User.SessionId(), leaseId, ParseKind(kind), req ?? new PublicationRequest(null, false), ct)));
+        voice.MapDelete("/{leaseId:guid}/publications/{kind}", async (Guid leaseId, string kind, HttpContext http, VoiceService svc, CancellationToken ct) =>
+        {
+            await svc.ReleasePublicationAsync(http.User.UserId(), leaseId, ParseKind(kind), ct);
+            return Results.NoContent();
+        });
+
         api.MapGet("/servers/{serverId:guid}/voice", async (Guid serverId, HttpContext http, VoiceService svc, CancellationToken ct) =>
             Results.Ok(await svc.ListAsync(http.User.UserId(), serverId, ct))).WithTags("Voice");
     }
@@ -54,6 +62,13 @@ public static class VoiceEndpoints
             return token is not null && await svc.AdmitAsync(token, ct) ? Results.Ok() : Results.StatusCode(403);
         });
     }
+
+    private static PublicationKind ParseKind(string kind) => kind switch
+    {
+        "camera" => PublicationKind.Camera,
+        "screen" => PublicationKind.Screen,
+        _ => throw Hangar.Core.Common.AppProblem.NotFound("media.kind", "Unknown publication kind."),
+    };
 
     private static string? TokenFrom(HttpContext http)
     {

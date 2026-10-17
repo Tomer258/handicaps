@@ -21,6 +21,13 @@ public sealed record VoiceMemberDto(
 
 public sealed record VoiceStateUpdate(bool Muted, bool Deafened);
 
+public sealed record PublicationRequest(string? Quality, bool WithAudio);
+
+public sealed record PublicationDto(Guid Id, string Kind, string? Quality, bool WithAudio, DateTimeOffset ExpiresAt);
+
+/// <summary>Roster flags per lease: mute/deafen are self-reported; camera/screen come from LiveKit (webhook/reconcile).</summary>
+public sealed record VoiceFlags(bool Muted, bool Deafened, bool Camera, bool Screen);
+
 /// <summary>Post-commit voice roster changes (implemented by the realtime layer). Null state = user left voice.</summary>
 public interface IVoiceEventSink
 {
@@ -30,9 +37,23 @@ public interface IVoiceEventSink
 /// <summary>Ephemeral self-reported mute/deafen flags per lease. Lost on restart; clients re-report after reconnect.</summary>
 public sealed class VoiceStateCache
 {
-    private readonly ConcurrentDictionary<Guid, VoiceStateUpdate> states = new();
-    public VoiceStateUpdate Get(Guid leaseId) => states.GetValueOrDefault(leaseId, new VoiceStateUpdate(false, false));
-    public void Set(Guid leaseId, VoiceStateUpdate s) => states[leaseId] = s;
+    private static readonly VoiceFlags Empty = new(false, false, false, false);
+    private readonly ConcurrentDictionary<Guid, VoiceFlags> states = new();
+    public VoiceFlags Get(Guid leaseId) => states.GetValueOrDefault(leaseId, Empty);
+
+    /// <summary>Applies a change; returns true when the flags actually changed.</summary>
+    public bool Update(Guid leaseId, Func<VoiceFlags, VoiceFlags> change)
+    {
+        while (true)
+        {
+            var exists = states.TryGetValue(leaseId, out var current);
+            var before = exists ? current! : Empty;
+            var after = change(before);
+            if (after == before) return false;
+            if (exists ? states.TryUpdate(leaseId, after, current!) : states.TryAdd(leaseId, after)) return true;
+        }
+    }
+
     public void Remove(Guid leaseId) => states.TryRemove(leaseId, out _);
 }
 
@@ -52,6 +73,7 @@ public sealed class VoiceService(
 {
     public const string PublisherIdentityPrefix = "sb_";
     private const long AdmissionLockKey = 0x4841_4E47_5643; // "HANGVC"
+    private const long PublicationLockKey = 0x4841_4E47_5050; // "HANGPP"
     private LiveKitOptions O => options.Value;
 
     // ---- client commands ------------------------------------------------------------------------
@@ -69,7 +91,7 @@ public sealed class VoiceService(
         {
             if (retry.Status is VoiceLeaseStatus.Revoked or VoiceLeaseStatus.Ended || retry.ChannelId != channelId)
                 throw AppProblem.Conflict("voice.request_reused", "This join request has already ended. Join again.");
-            return Issue(retry, await DisplayNameAsync(userId, ct), now);
+            return Issue(retry, await SourcesAsync(retry, ct), await DisplayNameAsync(userId, ct), now);
         }
 
         var room = RoomName(channel);
@@ -94,6 +116,8 @@ public sealed class VoiceService(
                 .Where(l => l.UserId == userId && (l.Status == VoiceLeaseStatus.Joining || l.Status == VoiceLeaseStatus.Active))
                 .ToListAsync(ct);
             foreach (var old in replaced) End(old, VoiceLeaseStatus.Revoked, "switched", now);
+            // Flush before inserting: EF does not order the UPDATE before the INSERT, and ux_voice_leases_one_active would trip.
+            if (replaced.Count > 0) await db.SaveChangesAsync(ct);
 
             var humans = await db.VoiceLeases.CountAsync(l => l.UserId != userId &&
                 (l.Status == VoiceLeaseStatus.Joining || l.Status == VoiceLeaseStatus.Active), ct);
@@ -125,7 +149,7 @@ public sealed class VoiceService(
 
         // Remove the previous participant (other channel or another tab) after commit; failures are reconciled later.
         foreach (var old in replaced) await AfterEndAsync(old, ct);
-        return Issue(lease, await DisplayNameAsync(userId, ct), now);
+        return Issue(lease, MicSources(lease), await DisplayNameAsync(userId, ct), now);
     }
 
     /// <summary>Full reconnect: reauthorizes from current state; a revoked/ended lease never gets a new token.</summary>
@@ -139,7 +163,7 @@ public sealed class VoiceService(
         lease.CanCamera = mask.HasFlag(Permission.PublishCamera);
         lease.CanScreen = mask.HasFlag(Permission.ShareScreen);
         await db.SaveChangesAsync(ct);
-        return Issue(lease, await DisplayNameAsync(userId, ct), clock.GetUtcNow());
+        return Issue(lease, await SourcesAsync(lease, ct), await DisplayNameAsync(userId, ct), clock.GetUtcNow());
     }
 
     /// <summary>Client reports it connected; the server verifies with LiveKit instead of trusting the claim.</summary>
@@ -172,10 +196,80 @@ public sealed class VoiceService(
     {
         var lease = await db.VoiceLeases.AsNoTracking().FirstOrDefaultAsync(l => l.Id == leaseId && l.UserId == userId, ct);
         if (lease is null || lease.Status is not (VoiceLeaseStatus.Joining or VoiceLeaseStatus.Active)) return;
-        var before = states.Get(leaseId);
-        if (before == update) return;
-        states.Set(leaseId, update);
-        if (Visible(lease)) await events.VoiceStateChangedAsync(lease.ServerId, lease.ChannelId, userId, ToDto(lease), ct);
+        if (states.Update(leaseId, f => f with { Muted = update.Muted, Deafened = update.Deafened }) && Visible(lease))
+            await events.VoiceStateChangedAsync(lease.ServerId, lease.ChannelId, userId, ToDto(lease), ct);
+    }
+
+    // ---- camera / screen publications ------------------------------------------------------------
+
+    /// <summary>
+    /// Reserves capacity for a camera or screen publication and grants the matching LiveKit source to this participant only.
+    /// The client captures first (inside the click) and publishes only after this succeeds.
+    /// </summary>
+    public async Task<PublicationDto> ReservePublicationAsync(Guid userId, Guid sessionId, Guid leaseId, PublicationKind kind, PublicationRequest req, CancellationToken ct)
+    {
+        var lease = await OwnLeaseAsync(userId, leaseId, ct);
+        if (lease.Status is not (VoiceLeaseStatus.Joining or VoiceLeaseStatus.Active) || lease.SessionId != sessionId)
+            throw AppProblem.Conflict("voice.lease_ended", "This voice session has ended. Join again.");
+        var required = kind == PublicationKind.Camera ? Permission.PublishCamera : Permission.ShareScreen;
+        await permissions.RequireChannelAsync(userId, lease.ChannelId, Permission.JoinVoice | required, ct);
+        var quality = kind == PublicationKind.Camera ? "720p30" : req.Quality switch
+        {
+            null or "1080p60" => "1080p60",
+            "720p30" => "720p30",
+            _ => throw AppProblem.BadRequest("media.quality", "Unknown quality preset."),
+        };
+        var max = kind == PublicationKind.Camera ? O.MaxCameras : O.MaxScreens;
+        var now = clock.GetUtcNow();
+
+        MediaPublicationReservation r;
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            await db.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_xact_lock({PublicationLockKey})", ct);
+            r = await db.MediaPublicationReservations.FirstOrDefaultAsync(x => x.VoiceLeaseId == leaseId && x.Kind == kind && x.State == ReservationState.Active, ct)
+                ?? new MediaPublicationReservation();
+            if (r.Id == Guid.Empty)
+            {
+                var inUse = await db.MediaPublicationReservations.CountAsync(x => x.Kind == kind && x.State == ReservationState.Active && x.ExpiresAt > now &&
+                    db.VoiceLeases.Any(l => l.Id == x.VoiceLeaseId && (l.Status == VoiceLeaseStatus.Joining || l.Status == VoiceLeaseStatus.Active)), ct);
+                if (inUse >= max)
+                    throw AppProblem.Conflict("media.limit", kind == PublicationKind.Camera
+                        ? $"Up to {max} cameras can be on at once. Try again when someone turns theirs off."
+                        : $"Up to {max} people can share their screen at once. Try again when a stream ends.");
+                r.Id = Guid.CreateVersion7();
+                r.VoiceLeaseId = leaseId;
+                r.UserId = userId;
+                r.ChannelId = lease.ChannelId;
+                r.Kind = kind;
+                r.State = ReservationState.Active;
+                r.CreatedAt = now;
+                db.MediaPublicationReservations.Add(r);
+            }
+            r.Quality = quality;
+            r.WithAudio = kind == PublicationKind.Screen && req.WithAudio;
+            if (r.ExpiresAt < now + O.PublishWindow) r.ExpiresAt = now + O.PublishWindow;
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        await SafeUpdateSourcesAsync(lease, ct);
+        return ToDto(r);
+    }
+
+    public async Task ReleasePublicationAsync(Guid userId, Guid leaseId, PublicationKind kind, CancellationToken ct)
+    {
+        var lease = await db.VoiceLeases.FirstOrDefaultAsync(l => l.Id == leaseId && l.UserId == userId, ct);
+        if (lease is null) return;
+        var active = await db.MediaPublicationReservations
+            .Where(x => x.VoiceLeaseId == leaseId && x.Kind == kind && x.State == ReservationState.Active).ToListAsync(ct);
+        if (active.Count == 0) return;
+        foreach (var r in active) r.State = ReservationState.Released;
+        await db.SaveChangesAsync(ct);
+        if (lease.Status is VoiceLeaseStatus.Joining or VoiceLeaseStatus.Active)
+        {
+            // Removing the source makes LiveKit unpublish that track: the grant, not the client, is authoritative.
+            await SafeUpdateSourcesAsync(lease, ct);
+            await SetMediaFlagsAsync(lease, kind == PublicationKind.Camera ? false : null, kind == PublicationKind.Screen ? false : null, ct);
+        }
     }
 
     /// <summary>Roster snapshot of voice channels in a server, limited to channels the caller can see.</summary>
@@ -253,20 +347,25 @@ public sealed class VoiceService(
             if (ev == "participant_joined" && roomName is not null) await SafeRemoveAsync(roomName, identity, ct);
             return true;
         }
+        var source = root.TryGetProperty("track", out var t) && t.TryGetProperty("source", out var s) ? s.GetString() : null;
         switch (ev)
         {
+            case "track_published" or "track_unpublished" when source is "CAMERA" or "SCREEN_SHARE":
+            {
+                var published = ev == "track_published";
+                var kind = source == "CAMERA" ? PublicationKind.Camera : PublicationKind.Screen;
+                if (published) await RenewReservationAsync(lease.Id, kind, ct);
+                else await ReleasePublicationAsync(lease.UserId, lease.Id, kind, ct); // capture ended or user stopped
+                await SetMediaFlagsAsync(lease, kind == PublicationKind.Camera ? published : null, kind == PublicationKind.Screen ? published : null, ct);
+                break;
+            }
             case "participant_joined":
                 if (lease.Status is VoiceLeaseStatus.Joining or VoiceLeaseStatus.Active) await MarkActiveAsync(lease, ct);
                 else await SafeRemoveAsync(lease.RoomName, identity, ct); // revoked lease reconnected with an old token
                 break;
             case "participant_left":
-                if (lease.Status == VoiceLeaseStatus.Active)
-                {
-                    // Start the reconnect grace; the reconciler ends it if the participant does not return.
-                    lease.Status = VoiceLeaseStatus.Joining;
-                    lease.LastConfirmedAt = clock.GetUtcNow();
-                    await db.SaveChangesAsync(ct);
-                }
+                // Start the reconnect grace; the reconciler ends it if the participant does not return.
+                if (lease.Status == VoiceLeaseStatus.Active) await StartGraceAsync(lease, clock.GetUtcNow(), ct);
                 break;
         }
         return true;
@@ -320,23 +419,21 @@ public sealed class VoiceService(
             {
                 continue;
             }
-            var present = (participants ?? []).Select(p => p.Identity).ToHashSet();
+            var byIdentity = (participants ?? []).ToDictionary(p => p.Identity);
+            var present = byIdentity.Keys.ToHashSet();
             foreach (var lease in remaining.Where(l => l.RoomName == room))
             {
-                if (present.Contains(lease.Id.ToString()))
+                if (byIdentity.TryGetValue(lease.Id.ToString(), out var participant))
                 {
                     await MarkActiveAsync(lease, ct);
+                    await ReconcilePublicationsAsync(lease, participant, now, ct);
                 }
                 else if (lease.Status == VoiceLeaseStatus.Active)
                 {
-                    lease.Status = VoiceLeaseStatus.Joining;
-                    lease.LastConfirmedAt = now;
-                    await db.SaveChangesAsync(ct);
+                    await StartGraceAsync(lease, now, ct);
                 }
-                else if (now - lease.LastConfirmedAt > O.ReconnectGrace)
+                else if (now - lease.LastConfirmedAt > O.ReconnectGrace && await TimeoutAsync(lease, now, ct))
                 {
-                    End(lease, VoiceLeaseStatus.Ended, "timeout", now);
-                    await db.SaveChangesAsync(ct);
                     await AfterEndAsync(lease, ct);
                 }
             }
@@ -362,13 +459,67 @@ public sealed class VoiceService(
 
     public static string RoomName(Channel channel) => $"v_{channel.Id:N}_{channel.MediaGeneration}";
 
-    public static IReadOnlyList<string> PublishSources(VoiceLease lease) =>
-        // Camera/screen are added per publication reservation (S5); a join grants the microphone only.
+    /// <summary>A join grants the microphone only; camera/screen sources exist only while a reservation is active.</summary>
+    public static IReadOnlyList<string> MicSources(VoiceLease lease) =>
         lease.CanSpeak && !lease.ServerMuted ? ["microphone"] : [];
 
-    private VoiceJoinResponse Issue(VoiceLease lease, string displayName, DateTimeOffset now)
+    private async Task<IReadOnlyList<string>> SourcesAsync(VoiceLease lease, CancellationToken ct)
     {
-        var sources = PublishSources(lease);
+        var sources = MicSources(lease).ToList();
+        var now = clock.GetUtcNow();
+        var reservations = await db.MediaPublicationReservations.AsNoTracking()
+            .Where(x => x.VoiceLeaseId == lease.Id && x.State == ReservationState.Active && x.ExpiresAt > now).ToListAsync(ct);
+        if (lease.CanCamera && reservations.Any(r => r.Kind == PublicationKind.Camera)) sources.Add("camera");
+        if (reservations.FirstOrDefault(r => r.Kind == PublicationKind.Screen) is { } screen && lease.CanScreen)
+        {
+            sources.Add("screen_share");
+            if (screen.WithAudio) sources.Add("screen_share_audio");
+        }
+        return sources;
+    }
+
+    private async Task RenewReservationAsync(Guid leaseId, PublicationKind kind, CancellationToken ct)
+    {
+        var until = clock.GetUtcNow() + O.PublishWindow + O.ReconcileInterval;
+        await db.MediaPublicationReservations
+            .Where(x => x.VoiceLeaseId == leaseId && x.Kind == kind && x.State == ReservationState.Active && x.ExpiresAt < until)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.ExpiresAt, until), ct);
+    }
+
+    /// <summary>Renews reservations backed by a live track, releases ones never published in time, refreshes roster flags.</summary>
+    private async Task ReconcilePublicationsAsync(VoiceLease lease, LiveKitParticipant participant, DateTimeOffset now, CancellationToken ct)
+    {
+        var hasCamera = participant.Tracks.Any(t => t.Source == "CAMERA");
+        var hasScreen = participant.Tracks.Any(t => t.Source == "SCREEN_SHARE");
+        var active = await db.MediaPublicationReservations
+            .Where(x => x.VoiceLeaseId == lease.Id && x.State == ReservationState.Active).ToListAsync(ct);
+        var changed = false;
+        foreach (var r in active)
+        {
+            var live = r.Kind == PublicationKind.Camera ? hasCamera : hasScreen;
+            if (live) r.ExpiresAt = now + O.PublishWindow + O.ReconcileInterval;
+            else if (r.ExpiresAt <= now)
+            {
+                r.State = ReservationState.Released;
+                changed = true;
+            }
+        }
+        await db.SaveChangesAsync(ct);
+        if (changed) await SafeUpdateSourcesAsync(lease, ct);
+        await SetMediaFlagsAsync(lease, hasCamera, hasScreen, ct);
+    }
+
+    private async Task SetMediaFlagsAsync(VoiceLease lease, bool? camera, bool? screen, CancellationToken ct)
+    {
+        if (states.Update(lease.Id, f => f with { Camera = camera ?? f.Camera, Screen = screen ?? f.Screen }) && Visible(lease))
+            await events.VoiceStateChangedAsync(lease.ServerId, lease.ChannelId, lease.UserId, ToDto(lease), ct);
+    }
+
+    private static PublicationDto ToDto(MediaPublicationReservation r) =>
+        new(r.Id, r.Kind == PublicationKind.Camera ? "camera" : "screen", r.Quality, r.WithAudio, r.ExpiresAt);
+
+    private VoiceJoinResponse Issue(VoiceLease lease, IReadOnlyList<string> sources, string displayName, DateTimeOffset now)
+    {
         var grant = new VideoGrant
         {
             Room = lease.RoomName,
@@ -404,10 +555,35 @@ public sealed class VoiceService(
     private async Task MarkActiveAsync(VoiceLease lease, CancellationToken ct)
     {
         var wasVisible = Visible(lease);
-        lease.Status = VoiceLeaseStatus.Active;
-        lease.LastConfirmedAt = clock.GetUtcNow();
-        await db.SaveChangesAsync(ct);
+        var now = clock.GetUtcNow();
+        // Conditional write: a concurrent switch/leave may have ended this lease after we loaded it; never resurrect it.
+        var updated = await db.VoiceLeases
+            .Where(l => l.Id == lease.Id && (l.Status == VoiceLeaseStatus.Joining || l.Status == VoiceLeaseStatus.Active))
+            .ExecuteUpdateAsync(u => u.SetProperty(l => l.Status, VoiceLeaseStatus.Active).SetProperty(l => l.LastConfirmedAt, now), ct);
+        await db.Entry(lease).ReloadAsync(ct);
+        if (updated == 0) return;
         if (!wasVisible) await events.VoiceStateChangedAsync(lease.ServerId, lease.ChannelId, lease.UserId, ToDto(lease), ct);
+    }
+
+    // Transitions decided from a snapshot (webhooks, reconciler) are compare-and-set in the database: a concurrent
+    // leave/switch may already have ended the lease, and a plain tracked update would resurrect it.
+
+    private async Task StartGraceAsync(VoiceLease lease, DateTimeOffset now, CancellationToken ct)
+    {
+        await db.VoiceLeases.Where(l => l.Id == lease.Id && l.Status == VoiceLeaseStatus.Active)
+            .ExecuteUpdateAsync(u => u.SetProperty(l => l.Status, VoiceLeaseStatus.Joining).SetProperty(l => l.LastConfirmedAt, now), ct);
+        await db.Entry(lease).ReloadAsync(ct);
+    }
+
+    private async Task<bool> TimeoutAsync(VoiceLease lease, DateTimeOffset now, CancellationToken ct)
+    {
+        var cutoff = now - O.ReconnectGrace;
+        var n = await db.VoiceLeases
+            .Where(l => l.Id == lease.Id && l.Status == VoiceLeaseStatus.Joining && l.LastConfirmedAt < cutoff)
+            .ExecuteUpdateAsync(u => u.SetProperty(l => l.Status, VoiceLeaseStatus.Ended)
+                .SetProperty(l => l.RevokedAt, now).SetProperty(l => l.EndReason, "timeout"), ct);
+        await db.Entry(lease).ReloadAsync(ct);
+        return n == 1;
     }
 
     private static void End(VoiceLease lease, VoiceLeaseStatus status, string reason, DateTimeOffset now)
@@ -420,6 +596,9 @@ public sealed class VoiceService(
     private async Task AfterEndAsync(VoiceLease lease, CancellationToken ct)
     {
         states.Remove(lease.Id);
+        await db.MediaPublicationReservations
+            .Where(x => x.VoiceLeaseId == lease.Id && x.State == ReservationState.Active)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.State, ReservationState.Released), ct);
         await SafeRemoveAsync(lease.RoomName, lease.Id.ToString(), ct);
         await events.VoiceStateChangedAsync(lease.ServerId, lease.ChannelId, lease.UserId, null, ct);
     }
@@ -440,7 +619,7 @@ public sealed class VoiceService(
     {
         try
         {
-            await rooms.UpdatePublishSourcesAsync(lease.RoomName, lease.Id.ToString(), PublishSources(lease), ct);
+            await rooms.UpdatePublishSourcesAsync(lease.RoomName, lease.Id.ToString(), await SourcesAsync(lease, ct), ct);
         }
         catch (LiveKitUnavailableException e)
         {
@@ -455,7 +634,7 @@ public sealed class VoiceService(
     private VoiceMemberDto ToDto(VoiceLease l)
     {
         var s = states.Get(l.Id);
-        return new VoiceMemberDto(l.UserId, l.ChannelId, s.Muted || s.Deafened, s.Deafened, l.ServerMuted, false, false, l.CreatedAt);
+        return new VoiceMemberDto(l.UserId, l.ChannelId, s.Muted || s.Deafened, s.Deafened, l.ServerMuted, s.Camera, s.Screen, l.CreatedAt);
     }
 
     private async Task<VoiceLease> OwnLeaseAsync(Guid userId, Guid leaseId, CancellationToken ct) =>

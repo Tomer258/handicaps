@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-17 — session 1
+**Last update:** 2026-10-17 — session 1 (after S5)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -8,23 +8,24 @@
 - [x] S2 Frontend foundation: Angular 21 app, design tokens, AppShell grid, login/register, core/api + core/auth, dev proxy
 - [x] S3 Text: channels, messages (send/edit/delete/reply/react), ChannelEvent outbox + dispatcher, SignalR hub, presence/typing, read positions/unreads, mentions/notifications; UI: sidebars, message list, composer, members
 - [x] S4 Voice: LiveKit compose, voice leases, JWT, admission endpoint, webhooks, reconciler; UI: MediaSessionService, voice control bar, participant grid, mute/deafen, per-user volume, audio buses, speaking
-- [ ] S5 Screen share: publication reservations, share dialog, stream viewer, multi-stream grid
+- [x] S5 Screen share + camera: publication reservations (caps 4 screens/6 cameras), source grants via UpdateParticipant, track webhooks → roster flags; UI share dialog, stream view (focus/grid, per-stream audio), camera in pcards, live banner
 - [ ] S6 Soundboard: file storage, upload + asset-validator worker, catalog/favorites/preview, sound-plays (reservations/rate limits), sound-publisher worker, track registry; UI popover
 - [ ] S7 Settings, admin (invites/roles), attachments/avatars, notifications, responsive
 - [ ] S8 Prod infra: Caddy (+forward_auth gate), prod compose, livekit.yaml, backups, runbooks, CI, AGENTS.md
 
 ## In progress
-- S5 Screen share (not started).
+- S6 Soundboard (not started).
 
 ## Next exact step
-- S5: POST/DELETE /voice/{leaseId}/publications/{kind} (MediaPublicationReservation, installation limits, UpdatePublishSources via RoomService adds camera/screen_share(+audio) sources), webhooks track_published/unpublished → VoiceMemberDto camera/screen flags; UI share dialog (capture inside click, publish after reservation), stream viewer (explicit video subscription), grid up to 4, theater. Prototype: SHARE SCREEN FLOW (~962) + STREAM VIEW (~679).
+- S6: file storage (./.data bind mount), upload endpoint + asset-validator worker (python 3.13, ffmpeg normalize/duration/loudness), catalog/favorites/preview endpoints, sound-plays (SoundPlaybackCommands, rate limit under advisory lock), sound-publisher worker (identity prefix sb_, network_mode service:livekit), soundboard popover UI (prototype Soundboard.dc.html). Enable dock soundboard button.
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
-- `cd apps/api && dotnet build` ; `dotnet test` (41 pass; integration uses Testcontainers postgres:18-alpine)
+- `cd apps/api && dotnet build` ; `dotnet test` (45 pass; integration uses Testcontainers postgres:18-alpine)
 - `cd apps/api && dotnet run --project src/Hangar.Api` → http://localhost:5080, migrates + seeds, logs one-time owner invite link
 - `cd apps/web && npx ng build --configuration development` ; `npx ng serve` (proxy → :5080). npm installs: `npx -y npm@11.6.2 install ...` (system npm 11.0.0 has arborist bug)
 - Voice smoke (real LiveKit, fake mic, 2 browsers): `cd tests/e2e && node scripts/smoke-voice.mjs ../../.tmp/shots` (needs compose livekit up)
+- Stream smoke (camera + screen share, live banner, stream view, flags): `cd tests/e2e && node scripts/smoke-stream.mjs ../../.tmp/shots`
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
 - `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations`
@@ -37,3 +38,6 @@
 - Frontend stores (root): SessionService, WorkspaceStore, PresenceStore, VoicePresenceStore, ChannelBadges, MediaSessionService (skeleton), LayoutService, ToastService, PreferencesService.
 - Routes: /login, /invite/:secret, /offline, '' (AppShell) → '' Home, s/:serverId (ServerView) → c/:channelId, v/:channelId.
 - EF Core pinned to 10.0.13 via explicit Relational reference (Npgsql 10.0.3 pulls 10.0.4).
+
+- Voice lease transitions decided from snapshots (webhook participant_left, reconciler grace/timeout, MarkActive) are compare-and-set ExecuteUpdates — plain tracked updates resurrected ended leases (zombie Joining rows → ux_voice_leases_one_active 500 on switch).
+- Vite error overlay can linger after transient build errors and block Playwright clicks: just rerun once ng serve log shows a clean build.

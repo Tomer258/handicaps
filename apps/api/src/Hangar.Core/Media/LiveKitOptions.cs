@@ -18,4 +18,10 @@ public sealed class LiveKitOptions
     /// <summary>A lease not confirmed in its room for this long (never connected, or dropped) ends.</summary>
     public TimeSpan ReconnectGrace { get; set; } = TimeSpan.FromSeconds(45);
     public TimeSpan ReconcileInterval { get; set; } = TimeSpan.FromSeconds(15);
+    /// <summary>Installation-wide concurrent screen shares (UI supports up to four stream tiles).</summary>
+    public int MaxScreens { get; set; } = 4;
+    /// <summary>Installation-wide concurrent cameras (capacity scenario C).</summary>
+    public int MaxCameras { get; set; } = 6;
+    /// <summary>A reservation must be backed by a published track within this window, and is renewed while it is.</summary>
+    public TimeSpan PublishWindow { get; set; } = TimeSpan.FromSeconds(60);
 }

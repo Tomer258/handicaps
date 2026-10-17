@@ -1,10 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import { MediaSessionService, RoomPeer } from '../../core/media/media-session.service';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { MediaSessionService, RoomPeer, StreamInfo } from '../../core/media/media-session.service';
 import { avatarColor, initials } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from '../shell/layout.service';
 import { PresenceStore } from '../presence/presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { ShareDialog } from './share-dialog';
+import { StreamTile } from './stream-tile';
+import { StreamView } from './stream-view';
 import { VoicePresenceStore } from './voice-presence.store';
 
 interface Card {
@@ -16,12 +19,14 @@ interface Card {
   muted: boolean;
   deafened: boolean;
   aria: string;
+  cam: StreamInfo | null;
+  screen: StreamInfo | null;
 }
 
-/** Voice channel view (prototype VOICE VIEW): join screen, participant grid, per-person volume menu, control dock. */
+/** Voice channel view (prototype VOICE VIEW + STREAM VIEW): join screen, participant grid, live banner, stream viewer, dock. */
 @Component({
   selector: 'hx-voice-room-page',
-  imports: [Icon],
+  imports: [Icon, StreamTile, StreamView, ShareDialog],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (channel(); as ch) {
@@ -32,6 +37,13 @@ interface Card {
           <h1 class="disp" style="margin: 0; font-size: 16px; font-weight: 600">{{ ch.name }}</h1>
           <span class="mono" style="font-size: 11.5px; color: var(--tx3)">{{ rosterCount() }} connected</span>
         </div>
+        @if (watching()) {
+          <div class="seg" role="group" aria-label="Stream layout">
+            <button [attr.aria-pressed]="streamLayout() === 'focus'" (click)="streamLayout.set('focus')">Focus</button>
+            <button [attr.aria-pressed]="streamLayout() === 'grid'" (click)="streamLayout.set('grid')">Grid</button>
+          </div>
+          <button class="btn sec" style="height: 32px" (click)="watching.set(false)"><hx-icon name="arrow-left" size="sm" />Back to voice</button>
+        }
         <button class="ibtn hide-m" [class.on]="layout.membersOpen()" aria-label="Toggle member list" [attr.aria-pressed]="layout.membersOpen()"
                 title="Member list" (click)="layout.membersOpen.set(!layout.membersOpen())"><hx-icon name="users" /></button>
       </header>
@@ -55,48 +67,80 @@ interface Card {
             }
           </div>
         } @else {
-          <div class="scroll" style="flex: 1; min-height: 0; padding: 20px 24px 120px">
-            @if (media.audioBlocked()) {
-              <div class="note w" role="alert" style="margin-bottom: 14px; align-items: center">
-                <span style="flex: 1">Your browser paused incoming audio.</span>
-                <button class="btn pri" (click)="media.enableAudio()">Enable audio</button>
-              </div>
-            }
-            @if (media.micBlocked()) {
-              <div class="note w" role="alert" style="margin-bottom: 14px; align-items: center">
-                <span style="flex: 1">Microphone unavailable — you are listen-only. Allow microphone access in the browser, then retry.</span>
-                <button class="btn sec" (click)="media.retryMic()">Retry microphone</button>
-              </div>
-            }
-            @if (cards().length === 1) {
-              <div style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; border: 1px dashed var(--line2); margin-bottom: 18px">
-                <div style="flex: 1"><div style="font-weight: 600">It is just you in here</div>
-                  <div style="font-size: 12.5px; color: var(--tx3)">{{ onlineFriends() }} {{ onlineFriends() === 1 ? 'friend is' : 'friends are' }} online right now.</div></div>
-              </div>
-            }
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px">
-              @for (c of cards(); track c.peer.identity) {
-                <div style="position: relative">
-                  <button class="pcard" [class.talk]="c.speaking" [attr.aria-label]="c.aria" (click)="openMenu($event, c)" (contextmenu)="openMenu($event, c)">
-                    <span class="av s72" [style.background]="c.color">{{ c.ini }}</span>
-                    <div class="foot">
-                      <span class="tag" style="font-size: 12px; font-weight: 600; letter-spacing: 0">{{ c.name }}{{ c.peer.isLocal ? ' (you)' : '' }}</span>
-                      @if (c.muted) {
-                        <span class="tag" style="background: var(--danger); padding: 0 5px" role="img" aria-label="Muted"><hx-icon name="mic-off" size="sm" /></span>
-                      }
-                      @if (c.deafened) {
-                        <span class="tag" style="background: var(--danger); padding: 0 5px" role="img" aria-label="Deafened"><hx-icon name="headphones-off" size="sm" /></span>
-                      }
-                      <span style="flex: 1"></span>
-                      @if (!c.peer.isLocal && media.volumeOf(c.peer.userId) !== 1) {
-                        <span class="tag mono" [title]="'Your volume for ' + c.name">{{ pct(media.volumeOf(c.peer.userId)) }}%</span>
-                      }
-                    </div>
-                  </button>
+          @if (watching()) {
+            <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 96px; background: #050608">
+              <hx-stream-view [streams]="watchedStreams()" [(primaryKey)]="primaryKey" [(layout)]="streamLayout" />
+            </div>
+          } @else {
+            <div class="scroll" style="flex: 1; min-height: 0; padding: 20px 24px 120px">
+              @if (media.audioBlocked()) {
+                <div class="note w" role="alert" style="margin-bottom: 14px; align-items: center">
+                  <span style="flex: 1">Your browser paused incoming audio.</span>
+                  <button class="btn pri" (click)="media.enableAudio()">Enable audio</button>
                 </div>
               }
+              @if (media.micBlocked()) {
+                <div class="note w" role="alert" style="margin-bottom: 14px; align-items: center">
+                  <span style="flex: 1">Microphone unavailable — you are listen-only. Allow microphone access in the browser, then retry.</span>
+                  <button class="btn sec" (click)="media.retryMic()">Retry microphone</button>
+                </div>
+              }
+              @if (liveStreams().length > 0) {
+                <div style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: var(--bg3); border: 1px solid var(--line); margin-bottom: 18px; flex-wrap: wrap">
+                  <div style="display: flex">
+                    @for (s of liveStreams(); track s.key) {
+                      <span class="av s32" [style.background]="colorOf(s.userId)" style="margin-right: -8px; border: 2px solid var(--bg3)">{{ iniOf(s.userId, s.name) }}</span>
+                    }
+                  </div>
+                  <div style="flex: 1; margin-left: 8px; min-width: 160px">
+                    <div style="font-weight: 600">{{ liveStreams().length === 1 ? '1 person is' : liveStreams().length + ' people are' }} live right now</div>
+                    <div style="font-size: 12.5px; color: var(--tx3)">{{ liveNames() }}</div>
+                  </div>
+                  <button class="btn sec" (click)="watch(liveStreams()[0])">Watch {{ nameOf(liveStreams()[0]) }}</button>
+                  @if (liveStreams().length > 1) {
+                    <button class="btn pri" (click)="watchAll()">Watch all</button>
+                  }
+                </div>
+              }
+              @if (cards().length === 1) {
+                <div style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; border: 1px dashed var(--line2); margin-bottom: 18px">
+                  <div style="flex: 1"><div style="font-weight: 600">It is just you in here</div>
+                    <div style="font-size: 12.5px; color: var(--tx3)">{{ onlineFriends() }} {{ onlineFriends() === 1 ? 'friend is' : 'friends are' }} online right now.</div></div>
+                </div>
+              }
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px">
+                @for (c of cards(); track c.peer.identity) {
+                  <div style="position: relative">
+                    <button class="pcard" [class.talk]="c.speaking" [attr.aria-label]="c.aria" (click)="openMenu($event, c)" (contextmenu)="openMenu($event, c)">
+                      @if (c.cam; as cam) {
+                        <hx-stream-tile [stream]="cam" fit="cover" [showLoading]="false" />
+                      } @else {
+                        <span class="av s72" [style.background]="c.color">{{ c.ini }}</span>
+                      }
+                      <div class="foot">
+                        <span class="tag" style="font-size: 12px; font-weight: 600; letter-spacing: 0">{{ c.name }}{{ c.peer.isLocal ? ' (you)' : '' }}</span>
+                        @if (c.muted) {
+                          <span class="tag" style="background: var(--danger); padding: 0 5px" role="img" aria-label="Muted"><hx-icon name="mic-off" size="sm" /></span>
+                        }
+                        @if (c.deafened) {
+                          <span class="tag" style="background: var(--danger); padding: 0 5px" role="img" aria-label="Deafened"><hx-icon name="headphones-off" size="sm" /></span>
+                        }
+                        <span style="flex: 1"></span>
+                        @if (!c.peer.isLocal && media.volumeOf(c.peer.userId) !== 1) {
+                          <span class="tag mono" [title]="'Your volume for ' + c.name">{{ pct(media.volumeOf(c.peer.userId)) }}%</span>
+                        }
+                        @if (c.screen) { <span class="tag live">LIVE</span> }
+                      </div>
+                    </button>
+                    @if (c.screen; as scr) {
+                      <button class="btn pri" (click)="watch(scr)" [attr.aria-label]="'Watch ' + c.name + ' stream'"
+                              style="position: absolute; top: 10px; right: 10px; height: 30px; padding: 0 12px; font-size: 12.5px">Watch</button>
+                    }
+                  </div>
+                }
+              </div>
             </div>
-          </div>
+          }
 
           <div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; pointer-events: none">
             <div class="dock" style="pointer-events: auto" role="toolbar" aria-label="Voice controls">
@@ -109,8 +153,17 @@ interface Card {
                 <hx-icon [name]="media.deafened() ? 'headphones-off' : 'headphones'" size="lg" />
               </button>
               <span style="width: 1px; height: 28px; background: var(--line2)"></span>
-              <button class="dbtn" aria-label="Camera (coming soon)" title="Camera — coming soon" disabled style="opacity: .45"><hx-icon name="camera" size="lg" /></button>
-              <button class="dbtn" aria-label="Share screen (coming soon)" title="Screen share — coming soon" disabled style="opacity: .45"><hx-icon name="screen" size="lg" /></button>
+              <button class="dbtn" [class.on]="media.camera() === 'on'" [attr.aria-label]="media.camera() === 'on' ? 'Turn camera off' : 'Turn camera on'"
+                      [attr.aria-pressed]="media.camera() === 'on'" [title]="media.canCamera() ? 'Camera' : 'You cannot use video in this channel'"
+                      [disabled]="!media.canCamera() || media.camera() === 'starting'" (click)="media.toggleCamera()">
+                <hx-icon [name]="media.camera() === 'on' ? 'camera' : 'camera-off'" size="lg" />
+              </button>
+              <button class="dbtn" [class.on]="media.sharing() === 'live'" [attr.aria-label]="media.sharing() === 'live' ? 'Stop sharing your screen' : 'Share your screen'"
+                      [attr.aria-pressed]="media.sharing() === 'live'"
+                      [title]="media.canScreen() ? (media.sharing() === 'live' ? 'Stop sharing' : 'Share screen') : 'You cannot stream in this channel'"
+                      [disabled]="!media.canScreen() || media.sharing() === 'starting'" (click)="shareClick()">
+                <hx-icon [name]="media.sharing() === 'live' ? 'screen-off' : 'screen'" size="lg" />
+              </button>
               <button class="dbtn sb" aria-label="Soundboard (coming soon)" title="Soundboard — coming soon" disabled style="opacity: .45"><hx-icon name="soundboard" size="lg" /></button>
               <span style="width: 1px; height: 28px; background: var(--line2)"></span>
               <button class="dbtn leave" aria-label="Disconnect" title="Disconnect" (click)="media.leave()"><hx-icon name="hangup" size="lg" /></button>
@@ -118,6 +171,9 @@ interface Card {
           </div>
         }
 
+        @if (shareOpen()) {
+          <hx-share-dialog [channelName]="ch.name" [viewers]="viewers()" (closed)="shareOpen.set(false)" />
+        }
         @if (menu(); as m) {
           <div style="position: absolute; inset: 0; z-index: 35" (click)="menu.set(null)" (contextmenu)="$event.preventDefault(); menu.set(null)"></div>
           <div class="pop fade" role="menu" [attr.aria-label]="m.card.name + ' options'"
@@ -125,6 +181,9 @@ interface Card {
             <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 10px">
               <span class="av s28" [style.background]="m.card.color">{{ m.card.ini }}</span><b>{{ m.card.name }}</b>
             </div>
+            @if (m.card.screen; as scr) {
+              <button class="menu-i" role="menuitem" (click)="menu.set(null); watch(scr)"><hx-icon name="screen" size="sm" /><span style="flex: 1">Watch stream</span></button>
+            }
             @if (!m.card.peer.isLocal) {
               <div style="padding: 6px 10px">
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--tx3); margin-bottom: 6px">
@@ -138,7 +197,7 @@ interface Card {
                 <span class="sw" [attr.aria-pressed]="media.volumeOf(m.card.peer.userId) === 0" style="transform: scale(.8)"></span>
               </button>
             } @else {
-              <div style="padding: 4px 10px 8px; font-size: 12.5px; color: var(--tx3)">This is you. Use the dock to mute or deafen.</div>
+              <div style="padding: 4px 10px 8px; font-size: 12.5px; color: var(--tx3)">This is you. Use the dock to mute, deafen, share or turn on your camera.</div>
             }
           </div>
         }
@@ -157,21 +216,38 @@ export class VoiceRoomPage {
   private readonly presence = inject(PresenceStore);
 
   readonly menu = signal<{ card: Card; x: number; y: number } | null>(null);
+  readonly shareOpen = signal(false);
+  readonly watching = signal(false);
+  /** Keys of the streams picked for watching; null = every live screen. */
+  readonly watchKeys = signal<string[] | null>(null);
+  readonly primaryKey = signal<string | null>(null);
+  readonly streamLayout = signal<'focus' | 'grid'>('focus');
   private readonly restoreVolume = new Map<string, number>();
 
   readonly channel = computed(() => this.store.channel(this.channelId()));
   readonly here = computed(() => this.media.connected() && this.media.channelId() === this.channelId());
   readonly rosterCount = computed(() => (this.here() ? this.media.peers().length : this.roster.inChannel(this.channelId()).length));
+  readonly viewers = computed(() => Math.max(0, this.rosterCount() - 1));
   readonly micLabel = computed(() => (!this.media.canSpeak() ? 'You cannot speak in this channel' : this.media.muted() || this.media.deafened() ? 'Unmute' : 'Mute'));
   readonly onlineFriends = computed(() => {
     const me = this.store.memberById();
     return [...me.keys()].filter((id) => this.presence.status(id) !== 'offline').length - 1;
   });
 
+  readonly liveStreams = computed(() => this.media.streams().filter((s) => s.kind === 'screen'));
+  readonly liveNames = computed(() => this.liveStreams().map((s) => this.nameOf(s)).join(', '));
+  readonly watchedStreams = computed(() => {
+    const keys = this.watchKeys();
+    const all = this.media.streams();
+    const picked = keys ? all.filter((s) => keys.includes(s.key)) : [];
+    return picked.length ? picked : all.filter((s) => s.kind === 'screen');
+  });
+
   readonly cards = computed<Card[]>(() => {
     const members = this.store.memberById();
     const flags = this.roster.byUser();
     const speaking = this.media.speaking();
+    const streams = this.media.streams();
     return this.media.peers().map((peer) => {
       const m = members.get(peer.userId);
       const name = m?.displayName ?? peer.name;
@@ -186,9 +262,49 @@ export class VoiceRoomPage {
         muted,
         deafened,
         aria: `${name}${muted ? ', muted' : ''}${deafened ? ', deafened' : ''}${speaking.has(peer.userId) ? ', speaking' : ''}`,
+        cam: streams.find((s) => s.identity === peer.identity && s.kind === 'camera') ?? null,
+        screen: streams.find((s) => s.identity === peer.identity && s.kind === 'screen') ?? null,
       };
     });
   });
+
+  constructor() {
+    // Nothing left to watch (every stream ended, or we left the call) → back to the voice grid.
+    effect(() => {
+      if (this.watching() && (!this.here() || this.watchedStreams().length === 0)) untracked(() => this.watching.set(false));
+    });
+  }
+
+  watch(s: StreamInfo): void {
+    this.watchKeys.set([s.key]);
+    this.primaryKey.set(s.key);
+    this.streamLayout.set('focus');
+    this.watching.set(true);
+  }
+
+  watchAll(): void {
+    this.watchKeys.set(null);
+    this.primaryKey.set(null);
+    this.streamLayout.set(this.liveStreams().length > 1 ? 'grid' : 'focus');
+    this.watching.set(true);
+  }
+
+  shareClick(): void {
+    if (this.media.sharing() === 'live') void this.media.stopScreenShare();
+    else this.shareOpen.set(true);
+  }
+
+  nameOf(s: StreamInfo): string {
+    return s.isLocal ? 'yourself' : (this.store.memberById().get(s.userId)?.displayName ?? s.name);
+  }
+
+  colorOf(userId: string): string {
+    return avatarColor(this.store.memberById().get(userId)?.avatarHue ?? 210);
+  }
+
+  iniOf(userId: string, fallback: string): string {
+    return initials(this.store.memberById().get(userId)?.displayName ?? fallback);
+  }
 
   openMenu(e: MouseEvent, card: Card): void {
     e.preventDefault();

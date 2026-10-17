@@ -231,6 +231,122 @@ public class VoiceTests(ApiFactory factory)
         Assert.False(await AdmitAsync(k.Token));
     }
 
+    private static Task<HttpResponseMessage> ReserveAsync(TestClient c, Guid leaseId, string kind, object? body = null) =>
+        c.Http.PostAsJsonAsync($"/api/v1/voice/{leaseId}/publications/{kind}", body ?? new { quality = "1080p60", withAudio = true });
+
+    [Fact]
+    public async Task Screen_reservations_grant_sources_per_participant_and_enforce_the_installation_limit()
+    {
+        await ResetLeasesAsync();
+        var (owner, serverId) = await OwnerAsync(factory);
+        var lounge = await ChannelAsync(factory, "Lounge");
+        var people = new List<(TestClient Client, Guid LeaseId)>();
+        for (var i = 0; i < ApiFactory.MaxScreens + 1; i++)
+        {
+            var (c, _) = await MemberAsync(factory, owner, serverId);
+            people.Add((c, (await JoinOkAsync(c, lounge)).LeaseId));
+        }
+
+        for (var i = 0; i < ApiFactory.MaxScreens; i++)
+            Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(people[i].Client, people[i].LeaseId, "screen")).StatusCode);
+        Assert.Equal(["microphone", "screen_share", "screen_share_audio"], factory.LiveKit.Sources[people[0].LeaseId.ToString()]);
+
+        // Idempotent for the same lease; the next person is over the limit.
+        Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(people[0].Client, people[0].LeaseId, "screen")).StatusCode);
+        var over = await ReserveAsync(people[^1].Client, people[^1].LeaseId, "screen");
+        Assert.Equal(HttpStatusCode.Conflict, over.StatusCode);
+        Assert.Equal("media.limit", (await Json(over)).GetProperty("code").GetString());
+        Assert.False(factory.LiveKit.Sources.ContainsKey(people[^1].LeaseId.ToString()));
+
+        // Releasing removes the source (LiveKit then unpublishes) and frees the slot.
+        Assert.Equal(HttpStatusCode.NoContent, (await people[0].Client.Http.DeleteAsync($"/api/v1/voice/{people[0].LeaseId}/publications/screen")).StatusCode);
+        Assert.Equal(["microphone"], factory.LiveKit.Sources[people[0].LeaseId.ToString()]);
+        Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(people[^1].Client, people[^1].LeaseId, "screen", new { quality = "720p30", withAudio = false })).StatusCode);
+        Assert.Equal(["microphone", "screen_share"], factory.LiveKit.Sources[people[^1].LeaseId.ToString()]);
+
+        // Ending the lease releases its reservation.
+        await people[1].Client.Http.DeleteAsync($"/api/v1/voice/{people[1].LeaseId}");
+        Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(people[0].Client, people[0].LeaseId, "screen")).StatusCode);
+        await ResetLeasesAsync();
+    }
+
+    [Fact]
+    public async Task Publication_requires_permission_and_unpublished_reservation_expires()
+    {
+        await ResetLeasesAsync();
+        var (owner, serverId) = await OwnerAsync(factory);
+        var voice = await NewVoiceChannelAsync(owner, serverId);
+        var (member, memberId) = await MemberAsync(factory, owner, serverId);
+        var j = await JoinOkAsync(member, voice);
+        factory.LiveKit.Connect(j.Room, j.LeaseId.ToString());
+
+        (await owner.Http.PutAsJsonAsync($"/api/v1/channels/{voice}/overrides", new { memberUserId = memberId, allow = 0, deny = 1 << 9 })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await ReserveAsync(member, j.LeaseId, "screen")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(member, j.LeaseId, "camera")).StatusCode);
+        Assert.Contains("camera", factory.LiveKit.Sources[j.LeaseId.ToString()]);
+
+        // Never published within the window → the reconciler releases it and withdraws the grant.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HangarDbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE media_publication_reservations SET expires_at = now() - interval '1 minute' WHERE voice_lease_id = {j.LeaseId}");
+        }
+        await ReconcileAsync();
+        Assert.DoesNotContain("camera", factory.LiveKit.Sources[j.LeaseId.ToString()]);
+    }
+
+    [Fact]
+    public async Task Track_webhooks_drive_roster_flags_and_unpublish_releases()
+    {
+        await ResetLeasesAsync();
+        var (owner, serverId) = await OwnerAsync(factory);
+        var lounge = await ChannelAsync(factory, "Lounge");
+        var j = await JoinOkAsync(owner, lounge);
+        var participant = new { identity = j.LeaseId.ToString() };
+        var room = new { name = j.Room };
+        await WebhookAsync(new { @event = "participant_joined", room, participant });
+        Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(owner, j.LeaseId, "screen")).StatusCode);
+
+        await WebhookAsync(new { @event = "track_published", room, participant, track = new { sid = "TR_1", source = "SCREEN_SHARE" } });
+        var row = (await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/voice"))).EnumerateArray().Single();
+        Assert.True(row.GetProperty("screen").GetBoolean());
+
+        await WebhookAsync(new { @event = "track_unpublished", room, participant, track = new { sid = "TR_1", source = "SCREEN_SHARE" } });
+        row = (await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/voice"))).EnumerateArray().Single();
+        Assert.False(row.GetProperty("screen").GetBoolean());
+        Assert.DoesNotContain("screen_share", factory.LiveKit.Sources[j.LeaseId.ToString()]);
+    }
+
+    [Fact]
+    public async Task Stale_participant_left_does_not_resurrect_a_lease_ended_meanwhile()
+    {
+        await ResetLeasesAsync();
+        var (owner, _) = await OwnerAsync(factory);
+        var lounge = await ChannelAsync(factory, "Lounge");
+        var ranked = await ChannelAsync(factory, "Ranked Grind");
+        var j = await JoinOkAsync(owner, lounge);
+        var participant = new { identity = j.LeaseId.ToString() };
+        await WebhookAsync(new { @event = "participant_joined", room = new { name = j.Room }, participant });
+
+        // Scope A snapshots the lease while Active (as an in-flight webhook would) ...
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HangarDbContext>();
+        Assert.Equal(VoiceLeaseStatus.Active, (await db.VoiceLeases.FirstAsync(l => l.Id == j.LeaseId)).Status);
+        // ... the user leaves meanwhile ...
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.Http.DeleteAsync($"/api/v1/voice/{j.LeaseId}")).StatusCode);
+        // ... and the late participant_left is handled with the stale snapshot.
+        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { @event = "participant_left", room = new { name = j.Room }, participant }));
+        var jwt = LiveKitTokens.Create(Options.ApiKey, Options.ApiSecret, "", TimeSpan.FromMinutes(1), DateTimeOffset.UtcNow,
+            extra: new Dictionary<string, object> { ["sha256"] = LiveKitTokens.Sha256Base64(bytes) });
+        Assert.True(await scope.ServiceProvider.GetRequiredService<VoiceService>().HandleWebhookAsync(jwt, bytes, CancellationToken.None));
+
+        using var check = factory.Services.CreateScope();
+        var status = await check.ServiceProvider.GetRequiredService<HangarDbContext>().VoiceLeases
+            .Where(l => l.Id == j.LeaseId).Select(l => l.Status).FirstAsync();
+        Assert.Equal(VoiceLeaseStatus.Ended, status);
+        await JoinOkAsync(owner, ranked); // would hit ux_voice_leases_one_active if the lease were resurrected
+    }
+
     private async Task ReconcileAsync()
     {
         using var scope = factory.Services.CreateScope();

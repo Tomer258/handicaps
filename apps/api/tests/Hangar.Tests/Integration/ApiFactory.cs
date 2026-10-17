@@ -35,12 +35,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Hangar:AllowedOrigins:0", "http://localhost");
         builder.UseSetting("Hangar:AuthRequestsPerMinute", "10000");
         builder.UseSetting("Hangar:LiveKit:MaxHumans", MaxHumans.ToString());
+        builder.UseSetting("Hangar:LiveKit:MaxScreens", MaxScreens.ToString());
         // Tests drive reconciliation explicitly; the background loop must not race them.
         builder.UseSetting("Hangar:LiveKit:ReconcileInterval", "01:00:00");
         builder.ConfigureTestServices(s => s.AddSingleton<ILiveKitRooms>(LiveKit));
     }
 
     public const int MaxHumans = 6;
+    public const int MaxScreens = 2;
     public FakeLiveKitRooms LiveKit { get; } = new();
 
     /// <summary>Re-issues the owner bootstrap invitation (only possible while no owner exists) and returns its secret.</summary>
