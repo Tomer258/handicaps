@@ -21,10 +21,12 @@ export class ChannelBadges {
   }
 
   setUnread(channelId: string, n: number): void {
+    if (this.unread(channelId) === Math.max(0, n)) return;
     this._unread.update((m) => ({ ...m, [channelId]: Math.max(0, n) }));
   }
 
   setMentions(channelId: string, n: number): void {
+    if (this.mentions(channelId) === Math.max(0, n)) return;
     this._mentions.update((m) => ({ ...m, [channelId]: Math.max(0, n) }));
   }
 

@@ -49,3 +49,9 @@ a.srv, a.card { color: inherit; }
 .srv .pip { height: 0; margin-top: 0; }
 .srv:hover .pip, .srv.unread .pip { height: 8px; margin-top: -4px; }
 .srv.on .pip { height: 28px; margin-top: -14px; }
+
+/* Composer: multi-line textarea variant of the prototype's single-line input. */
+.composer textarea.txt{flex:1;min-width:0;min-height:46px;max-height:220px;padding:13px 4px;resize:none;background:none;border:0;outline:none;font:inherit;font-size:var(--msg);line-height:1.4;color:var(--tx)}
+.composer textarea.txt::placeholder{color:var(--tx3)}
+.composer textarea.txt:disabled{cursor:not-allowed}
+.replyref:disabled{cursor:default}

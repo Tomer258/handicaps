@@ -4,6 +4,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { Icon } from '../../shared/ui/icon';
 import { ToastHost } from './toast-host';
+import { ChatStore } from '../messages/chat.store';
 
 /**
  * Top-level authenticated layout: server rail + routed content + toasts + session recovery.
@@ -57,6 +58,8 @@ import { ToastHost } from './toast-host';
 export class AppShell {
   readonly session = inject(SessionService);
   readonly store = inject(WorkspaceStore);
+  /** Eager: starts realtime + unread tracking for the session, independent of the routed view. */
+  private readonly chat = inject(ChatStore);
 
   readonly atHome = computed(() => this.store.serverId() === null);
 
