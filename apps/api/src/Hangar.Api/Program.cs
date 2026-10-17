@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -29,8 +30,25 @@ Directory.CreateDirectory(dataDir);
 
 builder.Services.AddHangarCore(config.GetConnectionString("Hangar")
                                ?? throw new InvalidOperationException("ConnectionStrings:Hangar is required."));
-builder.Services.AddScoped<IPolicyChangeSink, NoopPolicySink>();
-builder.Services.AddScoped<IProfileChangeSink, NoopProfileSink>();
+// Realtime (SignalR): registry, outbox dispatcher, presence, revocation.
+builder.Services.AddSingleton<ConnectionRegistry>();
+builder.Services.AddSingleton<OutboxSignal>();
+builder.Services.AddSingleton<Hangar.Core.Messaging.IOutboxSignal>(sp => sp.GetRequiredService<OutboxSignal>());
+builder.Services.AddSingleton<PresenceBroadcaster>();
+builder.Services.AddScoped<IPolicyChangeSink, SignalRPolicySink>();
+builder.Services.AddScoped<IProfileChangeSink, SignalRProfileSink>();
+builder.Services.AddScoped<ISessionRevocationListener, RealtimeRevocationListener>();
+builder.Services.AddHostedService<OutboxDispatcher>();
+builder.Services.AddHostedService<PresenceSweeper>();
+builder.Services.AddHostedService<MaintenanceService>();
+builder.Services.AddSignalR(o =>
+{
+    o.AddFilter<SessionHubFilter>();
+    o.MaximumReceiveMessageSize = 32 * 1024;
+    o.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    o.ClientTimeoutInterval = TimeSpan.FromSeconds(45);
+}).AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
+builder.Services.AddSingleton<SessionHubFilter>();
 
 builder.Services.AddHangarProblems();
 builder.Services.ConfigureHttpJsonOptions(o =>
@@ -113,6 +131,13 @@ var app = builder.Build();
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+// WebSocket/negotiate requests are not covered by CORS: enforce the expected browser Origin explicitly.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/hubs"))
+        OriginGuard.Ensure(ctx, ctx.RequestServices.GetRequiredService<IOptions<HangarOptions>>().Value);
+    await next();
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -126,6 +151,8 @@ app.MapGet("/healthz", async (HangarDbContext db, CancellationToken ct) =>
 var api = app.MapGroup("/api/v1").AddEndpointFilter<CsrfFilter>();
 api.MapAuth();
 api.MapWorkspaces();
+api.MapMessages();
+app.MapHub<HangarHub>(HangarHub.Path);
 
 await InitializeAsync(app);
 app.Run();

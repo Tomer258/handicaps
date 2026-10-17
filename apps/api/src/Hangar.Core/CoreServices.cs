@@ -1,6 +1,7 @@
 using Hangar.Core.Audit;
 using Hangar.Core.Channels;
 using Hangar.Core.Identity;
+using Hangar.Core.Messaging;
 using Hangar.Core.Permissions;
 using Hangar.Core.Persistence;
 using Hangar.Core.Users;
@@ -32,6 +33,8 @@ public static class CoreServices
         services.AddScoped<WorkspaceService>();
         services.AddScoped<ChannelService>();
         services.AddScoped<UserService>();
+        services.AddScoped<MessageService>();
+        services.AddScoped<RetentionService>();
         return services;
     }
 }

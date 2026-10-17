@@ -14,10 +14,10 @@
 - [ ] S8 Prod infra: Caddy (+forward_auth gate), prod compose, livekit.yaml, backups, runbooks, CI, AGENTS.md
 
 ## In progress
-- S3 text messaging (backend MessageService/outbox/dispatcher/SignalR hub, then frontend chat).
+- S3: backend DONE (MessageService, outbox dispatcher, HangarHub /hubs/realtime, presence, typing, unread, 33 tests). Frontend chat in progress.
 
 ## Next exact step
-- Backend: Messaging/MessageService.cs (send/edit/delete/react/read-position/history/events), Realtime hub + dispatcher; then frontend features/messages.
+- Frontend: core/realtime/realtime.service.ts (SignalR client), features/messages (store, list, message, composer), unread → ChannelBadges, presence heartbeat.
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
