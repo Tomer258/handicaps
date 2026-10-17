@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant C as Clicking browser
+    participant A as API and database
+    participant P as Sound RTC publisher
+    participant L as LiveKit SFU
+    participant R as Every authorized listener
+    C->>A: Play sound with lease and request ID
+    A->>A: Check membership, permission, rate and capacity
+    A->>A: Commit accepted command with deadline
+    A-->>C: Accepted playback ID
+    A->>P: Start approved immutable sound version
+    P->>L: Ensure separate audio track for actor
+    P->>A: Register track SID and actor mapping
+    A-->>R: Track registry and playback state
+    P->>P: Read normalized PCM into bounded AudioSource
+    P->>L: Publish real Opus audio frames
+    L->>R: Forward real audio to all subscribed listeners
+    Note over C,R: Clicker is also a listener, no duplicate local play
+    R->>R: Actor mute, sound volume, limiter and output
+    C->>A: Stop playback
+    A->>P: Cancel feed and clear queue
+    P->>L: End audio and mute idle publication
+    A-->>R: Stopped state

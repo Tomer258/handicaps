@@ -1,0 +1,37 @@
+erDiagram
+    direction TB
+    User ||--o{ UserSession : owns
+    User ||--o{ ServerMember : joins
+    User ||--|| UserSettings : configures
+    Server ||--o{ ServerMember : contains
+    Server ||--o{ Invitation : issues
+    Server ||--o{ Role : defines
+    Server ||--o{ Channel : contains
+    ServerMember ||--o{ MemberRole : receives
+    Role ||--o{ MemberRole : grants
+    Channel ||--o{ ChannelPermission : overrides
+    Role o|--o{ ChannelPermission : targets
+    ServerMember o|--o{ ChannelPermission : targets
+    User {
+        uuid id PK
+        string normalizedLogin UK
+        string passwordHash
+        bigint securityVersion
+    }
+    UserSession {
+        uuid id PK
+        uuid userId FK
+        datetime revokedAt
+        datetime absoluteExpiresAt
+    }
+    Server {
+        uuid id PK
+        uuid ownerUserId FK
+        bigint policyVersion
+    }
+    Channel {
+        uuid id PK
+        uuid serverId FK
+        string type
+        bigint policyVersion
+    }

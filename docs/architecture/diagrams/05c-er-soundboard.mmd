@@ -1,0 +1,29 @@
+erDiagram
+    direction TB
+    UserSession ||--o{ VoiceLease : authorizes
+    Channel ||--o{ VoiceLease : hosts
+    VoiceLease ||--o{ MediaPublicationReservation : reserves
+    Server ||--o{ SoundboardSound : owns
+    User ||--o{ SoundboardSound : uploads
+    SoundboardSound ||--o{ SoundAssetVersion : versions
+    FileAsset ||--o| SoundAssetVersion : stores
+    FileAsset ||--o{ AssetValidationJob : validates
+    User ||--o{ SoundboardFavorite : favorites
+    SoundboardSound ||--o{ SoundboardFavorite : selected
+    VoiceLease ||--o{ SoundPlaybackCommand : requests
+    SoundAssetVersion ||--o{ SoundPlaybackCommand : plays
+    VoiceLease {
+        uuid id PK
+        uuid sessionId FK
+        uuid channelId FK
+        string roomName
+        string status
+    }
+    SoundPlaybackCommand {
+        uuid id PK
+        uuid voiceLeaseId FK
+        uuid soundVersionId FK
+        uuid requestId
+        string workerEpoch
+        string state
+    }

@@ -1,0 +1,19 @@
+flowchart TB
+    Entry["REST endpoints and SignalR hub"] --> Auth["Identity and sessions"]
+    Entry --> Commands["Application services"]
+    Auth --> Policy["Shared permission evaluator"]
+    Commands --> Policy
+    Commands --> Community["Users, servers and channels"]
+    Commands --> Messaging["Messages and notifications"]
+    Commands --> Media["Media coordination and soundboard"]
+    Community --> DB[("PostgreSQL")]
+    Messaging --> DB
+    Media --> DB
+    Messaging --> Files["File management"]
+    Media --> Files
+    DB --> Outbox["Event dispatch and reconciliation"]
+    Outbox --> Entry
+    Media --> Adapter["LiveKit and publisher adapters"]
+    Files --> Validator["Restricted validation adapter"]
+    Entry --> Presence["Ephemeral presence registry"]
+    Policy --> Outbox

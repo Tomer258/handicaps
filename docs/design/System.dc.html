@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hangar design system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#C8F05A}a:hover{color:#ECEEF1}
+.ds *{box-sizing:border-box}
+.disp{font-family:'Bricolage Grotesque',sans-serif;letter-spacing:-.01em}
+.mono{font-family:'Geist Mono',ui-monospace,monospace}
+.h2{font-family:'Bricolage Grotesque',sans-serif;font-size:26px;font-weight:700;margin:0}
+.eyebrow{font:500 11.5px 'Geist Mono',monospace;letter-spacing:.12em;color:#868D99;text-transform:uppercase}
+.sw{display:flex;flex-direction:column;gap:8px}
+.chip{height:72px;border-radius:12px;border:1px solid #262A31}
+.tok{font:500 11.5px 'Geist Mono',monospace;color:#ECEEF1}
+.hex{font:400 11px 'Geist Mono',monospace;color:#868D99}
+.row{display:flex;align-items:baseline;gap:24px;padding:12px 0;border-bottom:1px solid #262A31}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:10px;font:600 13.5px 'Geist',sans-serif;border:0}
+.ib{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:#AEB4BE;background:transparent;border:0}
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lab{font-size:11.5px;color:#868D99;margin-top:8px}
+.card{border-radius:16px;background:#1C1F24;border:1px solid #262A31;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.av{border-radius:50%;display:grid;place-items:center;color:#0B0C0E;font-weight:600}
+.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:.03em}
+.foot{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:6px;align-items:center}
+</style>
+</helmet>
+<div class="ds" style="width: 1440px; height: 2000px; box-sizing: border-box; padding: 64px; background: #0E0F12; color: #ECEEF1; font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-size: 14px; display: flex; flex-direction: column; gap: 56px">
+
+<div style="display: flex; align-items: center; gap: 28px">
+<span style="width: 88px; height: 88px; border-radius: 26px; background: #C8F05A; color: #0E1104; display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="width: 46px; height: 46px; stroke-width: 2.2"><path d="M3 11 12 4l9 7"/><path d="M6 10v9h4v-5h4v5h4v-9"/></svg></span>
+<div style="flex: 1">
+<div class="disp" style="font-size: 64px; font-weight: 700; line-height: 1">Hangar</div>
+<div style="font-size: 17px; color: #AEB4BE; margin-top: 8px">Graphite surfaces, one volt accent, orchid for sound. Quiet enough for a second monitor, loud where it matters.</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #AEB4BE; width: 360px">
+<div><b style="color: #ECEEF1">Volt lime</b> = you and your friends: speaking, focus, primary.</div>
+<div><b style="color: #D98BFF">Orchid</b> = soundboard audio, everywhere.</div>
+<div><b style="color: #F0484E">Signal red</b> = LIVE streams and unread mentions.</div>
+</div>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 20px">
+<div class="eyebrow">01 · Color tokens</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 16px">
+<div class="sw"><div class="chip" style="background: #0A0B0D"></div><span class="tok">--bg-0 rail</span><span class="hex">#0A0B0D</span></div>
+<div class="sw"><div class="chip" style="background: #101215"></div><span class="tok">--bg-1 sidebar</span><span class="hex">#101215</span></div>
+<div class="sw"><div class="chip" style="background: #15171B"></div><span class="tok">--bg-2 canvas</span><span class="hex">#15171B</span></div>
+<div class="sw"><div class="chip" style="background: #1C1F24"></div><span class="tok">--bg-3 raised</span><span class="hex">#1C1F24</span></div>
+<div class="sw"><div class="chip" style="background: #252930"></div><span class="tok">--bg-4 hover</span><span class="hex">#252930</span></div>
+<div class="sw"><div class="chip" style="background: #262A31"></div><span class="tok">--line</span><span class="hex">#262A31</span></div>
+<div class="sw"><div class="chip" style="background: #353A43"></div><span class="tok">--line-2</span><span class="hex">#353A43</span></div>
+<div class="sw"><div class="chip" style="background: #ECEEF1"></div><span class="tok">--tx / tx-2 / tx-3</span><span class="hex">#ECEEF1 · #AEB4BE · #868D99</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 16px">
+<div class="sw"><div class="chip" style="background: #C8F05A"></div><span class="tok">--accent Volt</span><span class="hex">#C8F05A · ink #0E1104</span></div>
+<div class="sw"><div class="chip" style="background: #5CE1E6"></div><span class="tok">alt Glacier</span><span class="hex">#5CE1E6</span></div>
+<div class="sw"><div class="chip" style="background: #FF8A65"></div><span class="tok">alt Ember</span><span class="hex">#FF8A65</span></div>
+<div class="sw"><div class="chip" style="background: #A78BFA"></div><span class="tok">alt Iris</span><span class="hex">#A78BFA</span></div>
+<div class="sw"><div class="chip" style="background: #D98BFF"></div><span class="tok">--sb soundboard</span><span class="hex">#D98BFF · ink #1A0A22</span></div>
+<div class="sw"><div class="chip" style="background: #F0484E"></div><span class="tok">--live</span><span class="hex">#F0484E</span></div>
+<div class="sw"><div class="chip" style="background: #F5B544"></div><span class="tok">--warn</span><span class="hex">#F5B544</span></div>
+<div class="sw"><div class="chip" style="background: #FF6B6B"></div><span class="tok">--danger</span><span class="hex">#FF6B6B</span></div>
+</div>
+<div style="display: flex; gap: 28px; font-size: 13px; color: #AEB4BE; align-items: center">
+<span style="display: flex; align-items: center; gap: 8px"><i style="width: 12px; height: 12px; border-radius: 50%; background: #4ADE80"></i>Online</span>
+<span style="display: flex; align-items: center; gap: 8px"><i style="width: 12px; height: 12px; border-radius: 50%; background: #F5B544"></i>Idle</span>
+<span style="display: flex; align-items: center; gap: 8px"><i style="width: 12px; height: 12px; border-radius: 50%; background: #FF6B6B"></i>Do not disturb</span>
+<span style="display: flex; align-items: center; gap: 8px"><i style="width: 12px; height: 12px; border-radius: 50%; background: #6B7280"></i>Offline / invisible</span>
+<span style="flex: 1"></span>
+<span class="mono" style="font-size: 12px">Light theme mirrors every token (canvas #FFFFFF, text #121417, accent text #4F6B00).</span>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 56px">
+<div>
+<div class="eyebrow" style="margin-bottom: 8px">02 · Type scale</div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">display-xl 44/1.05</span><span class="disp" style="font-size: 44px; font-weight: 700">Welcome back</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">title 20/1.2 · 700</span><span class="disp" style="font-size: 20px; font-weight: 700">Go live in Lounge</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">server 16 · 700</span><span class="disp" style="font-size: 16px; font-weight: 700">The Hangar</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">username 14.5 · 600</span><span style="font-size: 14.5px; font-weight: 600; color: #F59BC4">Maya</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">message 15/1.5</span><span style="font-size: 15px; line-height: 1.5">perfect. bring snacks and patience</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">nav/channel 14 · 500</span><span style="font-size: 14px; font-weight: 500; color: #AEB4BE">game-night</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">sound label 12.5 · 600</span><span style="font-size: 12.5px; font-weight: 600">Sad Trombone</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">section 11.5 caps</span><span style="font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #868D99">Voice channels</span></div>
+<div class="row"><span class="mono" style="width: 150px; font-size: 11.5px; color: #868D99">mono 11.5 · time/meta</span><span class="mono" style="font-size: 11.5px; color: #868D99">20:12 · 1080p · 60 · Alt+1</span></div>
+<div style="font-size: 12.5px; color: #868D99; margin-top: 12px">Bricolage Grotesque for display only · Geist for UI and chat · Geist Mono for timestamps, quality and shortcuts. Fallbacks: Segoe UI / Consolas on Windows.</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 28px">
+<div>
+<div class="eyebrow" style="margin-bottom: 14px">03 · Spacing (4 px base)</div>
+<div style="display: flex; align-items: flex-end; gap: 14px">
+<div style="text-align: center"><div style="width: 4px; height: 4px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">4</div></div>
+<div style="text-align: center"><div style="width: 8px; height: 8px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">8</div></div>
+<div style="text-align: center"><div style="width: 12px; height: 12px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">12</div></div>
+<div style="text-align: center"><div style="width: 16px; height: 16px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">16</div></div>
+<div style="text-align: center"><div style="width: 20px; height: 20px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">20</div></div>
+<div style="text-align: center"><div style="width: 24px; height: 24px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">24</div></div>
+<div style="text-align: center"><div style="width: 32px; height: 32px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">32</div></div>
+<div style="text-align: center"><div style="width: 48px; height: 48px; background: #C8F05A; margin: 0 auto"></div><div class="hex" style="margin-top: 6px">48</div></div>
+</div>
+</div>
+<div>
+<div class="eyebrow" style="margin-bottom: 14px">04 · Radii</div>
+<div style="display: flex; gap: 16px">
+<div style="text-align: center"><div style="width: 56px; height: 56px; background: #252930; border-radius: 6px"></div><div class="hex" style="margin-top: 6px">6 tag</div></div>
+<div style="text-align: center"><div style="width: 56px; height: 56px; background: #252930; border-radius: 8px"></div><div class="hex" style="margin-top: 6px">8 row</div></div>
+<div style="text-align: center"><div style="width: 56px; height: 56px; background: #252930; border-radius: 10px"></div><div class="hex" style="margin-top: 6px">10 button</div></div>
+<div style="text-align: center"><div style="width: 56px; height: 56px; background: #252930; border-radius: 14px"></div><div class="hex" style="margin-top: 6px">14 panel</div></div>
+<div style="text-align: center"><div style="width: 56px; height: 56px; background: #252930; border-radius: 18px"></div><div class="hex" style="margin-top: 6px">18 dock</div></div>
+<div style="text-align: center"><div style="width: 56px; height: 56px; background: #252930; border-radius: 50%"></div><div class="hex" style="margin-top: 6px">full avatar</div></div>
+</div>
+</div>
+<div>
+<div class="eyebrow" style="margin-bottom: 10px">05 · Motion</div>
+<div class="row" style="padding: 8px 0"><span class="mono" style="width: 130px; font-size: 11.5px">80 ms linear</span><span style="font-size: 13px; color: #AEB4BE">Speaking ring on/off — must feel instant</span></div>
+<div class="row" style="padding: 8px 0"><span class="mono" style="width: 130px; font-size: 11.5px">120 ms ease</span><span style="font-size: 13px; color: #AEB4BE">Hover, press (scale .96), toggles</span></div>
+<div class="row" style="padding: 8px 0"><span class="mono" style="width: 130px; font-size: 11.5px">160 ms ease-out</span><span style="font-size: 13px; color: #AEB4BE">Popovers & panels: fade + 6 px rise</span></div>
+<div class="row" style="padding: 8px 0"><span class="mono" style="width: 130px; font-size: 11.5px">600 ms loop</span><span style="font-size: 13px; color: #AEB4BE">Waveform on playing sound tiles only</span></div>
+<div style="font-size: 12.5px; color: #868D99; margin-top: 8px">prefers-reduced-motion and the in-app toggle remove all loops. Nothing animates over a stream except its own controls.</div>
+</div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div class="eyebrow">06 · Controls &amp; states</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px">
+<div><button class="btn" style="background: #C8F05A; color: #0E1104">Join voice</button><div class="lab">Primary · default</div></div>
+<div><button class="btn" style="background: #D5F57A; color: #0E1104">Join voice</button><div class="lab">Hover · brightness 108%</div></div>
+<div><button class="btn" style="background: #C8F05A; color: #0E1104; outline: 2px solid #C8F05A; outline-offset: 2px">Join voice</button><div class="lab">Focus-visible · 2 px ring, 2 px offset</div></div>
+<div><button class="btn" style="background: #C8F05A; color: #0E1104; transform: scale(.97)">Join voice</button><div class="lab">Active · scale .97</div></div>
+<div><button class="btn" style="background: #C8F05A; color: #0E1104; opacity: .45">Join voice</button><div class="lab">Disabled · 45% + not-allowed</div></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px">
+<div style="display: flex; gap: 8px"><button class="btn" style="background: #252930; color: #ECEEF1">Secondary</button><button class="btn" style="background: transparent; color: #AEB4BE">Ghost</button></div>
+<div style="display: flex; gap: 8px"><button class="btn" style="background: #FF6B6B; color: #fff">Delete</button><button class="btn" style="background: #D98BFF; color: #1A0A22">Upload</button></div>
+<div style="display: flex; gap: 6px">
+<button class="ib" aria-label="Mic on"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+<button class="ib" aria-label="Mic muted" style="background: rgba(255,107,107,.18); color: #FF6B6B"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M3 3l18 18"/></svg></button>
+<button class="ib" aria-label="Camera on" style="background: rgba(200,240,90,.18); color: #C8F05A"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></button>
+<button class="ib" aria-label="Soundboard open" style="background: rgba(217,139,255,.2); color: #D98BFF"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg></button>
+<button class="ib" aria-label="Disconnect" style="color: #FF6B6B"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M3 13.5c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0v2.5l-3 1.5z"/></svg></button>
+</div>
+<div style="display: flex; gap: 8px; align-items: center">
+<span style="position: relative; width: 38px; height: 22px; border-radius: 11px; background: #C8F05A"><i style="position: absolute; right: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #0E1104"></i></span>
+<span style="position: relative; width: 38px; height: 22px; border-radius: 11px; background: #353A43"><i style="position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff"></i></span>
+<span style="position: relative; width: 38px; height: 22px; border-radius: 11px; background: #D98BFF"><i style="position: absolute; right: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #1A0A22"></i></span>
+<span style="font-size: 11.5px; color: #868D99">Switch · on / off / soundboard</span>
+</div>
+<div style="display: flex; gap: 6px; align-items: center">
+<span style="display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 13px; background: rgba(200,240,90,.16); border: 1px solid rgba(200,240,90,.5); font-size: 12.5px">😂 <span class="mono">3</span></span>
+<span style="display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 13px; background: #1C1F24; border: 1px solid #262A31; font-size: 12.5px; color: #AEB4BE">💀 <span class="mono">1</span></span>
+<span class="tag" style="background: #F0484E; color: #fff">LIVE</span>
+<span class="tag" style="background: #D98BFF; color: #1A0A22">Vine Boom</span>
+</div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div class="eyebrow">07 · VoiceParticipantCard</div>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px">
+<div><div class="card"><span class="av" style="width: 64px; height: 64px; font-size: 22px; background: #8FB8FF">Jo</span><div class="foot"><span class="tag" style="background: rgba(0,0,0,.45); color: #fff">Jonah</span></div></div><div class="lab">Idle</div></div>
+<div><div class="card" style="border-color: #C8F05A; box-shadow: 0 0 0 1px #C8F05A, 0 0 28px -6px rgba(200,240,90,.7)"><span class="av" style="width: 64px; height: 64px; font-size: 22px; background: #F59BC4; box-shadow: 0 0 0 3px #1C1F24, 0 0 0 6px #C8F05A">Ma</span><div class="foot"><span class="tag" style="background: rgba(0,0,0,.45); color: #fff">Maya</span></div></div><div class="lab">Speaking · ring + border</div></div>
+<div><div class="card"><span class="av" style="width: 64px; height: 64px; font-size: 22px; background: #F2C46D">No</span><div class="foot"><span class="tag" style="background: rgba(0,0,0,.45); color: #fff">Noa</span><span class="tag" style="background: #FF6B6B; color: #fff">MUTED</span></div></div><div class="lab">Mic muted</div></div>
+<div><div class="card"><span class="av" style="width: 64px; height: 64px; font-size: 22px; background: #C8F05A">To</span><div class="foot"><span class="tag" style="background: rgba(0,0,0,.45); color: #fff">Tomer</span><span class="tag" style="background: #FF6B6B; color: #fff">DEAFENED</span></div></div><div class="lab">Deafened (implies muted)</div></div>
+<div><div class="card" style="background: linear-gradient(180deg,#1b0f1f 0%,#4a1d1f 55%,#c2572b 100%)"><span class="av" style="width: 64px; height: 64px; font-size: 22px; background: #F59BC4">Ma</span><span class="tag" style="position: absolute; top: 10px; right: 10px; background: #C8F05A; color: #0E1104">Watch</span><div class="foot"><span class="tag" style="background: rgba(0,0,0,.45); color: #fff">Maya</span><span style="flex: 1"></span><span class="tag" style="background: #F0484E; color: #fff">LIVE</span></div></div><div class="lab">Streaming · muted preview</div></div>
+<div><div class="card" style="opacity: .6"><span class="av" style="width: 64px; height: 64px; font-size: 22px; background: #B7A1FF">Ga</span><div class="foot"><span class="tag" style="background: rgba(0,0,0,.45); color: #fff">Gal</span><span style="flex: 1"></span><span class="tag" style="background: #F5B544; color: #1D1300">Reconnecting…</span></div></div><div class="lab">Dropped / reconnecting</div></div>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px">
+<div>
+<div class="eyebrow" style="margin-bottom: 14px">08 · VoiceControlBar (persistent)</div>
+<div style="width: 236px; border-radius: 12px; background: #101215; padding: 8px; border: 1px solid #262A31">
+<div style="padding: 10px; border-radius: 12px 12px 0 0; background: #15171B; border: 1px solid #262A31; border-bottom: 0">
+<div style="display: flex; align-items: center; gap: 10px"><span style="display: flex; align-items: flex-end; gap: 2px; height: 14px"><i style="width: 3px; height: 5px; background: #C8F05A"></i><i style="width: 3px; height: 9px; background: #C8F05A"></i><i style="width: 3px; height: 14px; background: #C8F05A"></i></span><div style="flex: 1"><div style="font-size: 12.5px; font-weight: 600; color: #C8F05A">Voice connected</div><div style="font-size: 12px; color: #868D99">Lounge / The Hangar</div></div><span style="color: #FF6B6B"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M3 13.5c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0v2.5l-3 1.5z"/></svg></span></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px"><span style="height: 34px; border-radius: 8px; background: #252930"></span><span style="height: 34px; border-radius: 8px; background: rgba(200,240,90,.18)"></span><span style="height: 34px; border-radius: 8px; background: rgba(217,139,255,.2)"></span><span style="height: 34px; border-radius: 8px; background: #252930"></span></div>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 0 0 12px 12px; background: #15171B; border: 1px solid #262A31"><span class="av" style="width: 32px; height: 32px; font-size: 12px; background: #C8F05A; box-shadow: 0 0 0 2px #15171B, 0 0 0 4px #C8F05A">To</span><div style="flex: 1"><div style="font-weight: 600; font-size: 13.5px">Tomer</div><div style="font-size: 11.5px; color: #868D99">In Lounge</div></div><span style="width: 24px; height: 24px; border-radius: 6px; background: rgba(255,107,107,.18)"></span><span style="width: 24px; height: 24px; border-radius: 6px; background: #252930"></span></div>
+</div>
+<div style="font-size: 12.5px; color: #868D99; margin-top: 12px; max-width: 420px">Mic and deafen live on the user row so they are always in the same place — connected or not. Camera · Share · Soundboard · Settings sit above, only while in voice.</div>
+</div>
+<div>
+<div class="eyebrow" style="margin-bottom: 14px">09 · Iconography · 24 px grid, 1.8 stroke, round caps</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; color: #AEB4BE">
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><path d="M5 9h14M4 15h14M10 3 8 21M16 3l-2 18"/></svg>
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg>
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px; color: #D98BFF" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg>
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
+<svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><path d="M9 4h6l-1 6 4 3H6l4-3z"/><path d="M12 13v8"/></svg>
+</div>
+<div style="font-size: 12.5px; color: #868D99; margin-top: 16px">Channels · voice · mic · deafen · share · soundboard · camera · pin. Emoji appear only as user content: reactions and sound icons.</div>
+<div class="eyebrow" style="margin: 28px 0 12px">10 · NotificationToast</div>
+<div style="display: flex; flex-direction: column; gap: 8px; width: 380px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: #252930; border: 1px solid #353A43; font-size: 13px"><i style="width: 8px; height: 8px; border-radius: 50%; background: #D98BFF"></i>Jonah played Vine Boom</div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: #252930; border: 1px solid #353A43; font-size: 13px"><i style="width: 8px; height: 8px; border-radius: 50%; background: #F5B544"></i>Gal disconnected unexpectedly — reconnecting…</div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: #252930; border: 1px solid #353A43; font-size: 13px"><i style="width: 8px; height: 8px; border-radius: 50%; background: #F0484E"></i>You’re live in Lounge · 1080p 60</div>
+</div>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

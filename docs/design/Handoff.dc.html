@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hangar Angular handoff</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#C8F05A}a:hover{color:#ECEEF1}
+.ho *{box-sizing:border-box}
+.disp{font-family:'Bricolage Grotesque',sans-serif;letter-spacing:-.01em}
+.mono{font-family:'Geist Mono',ui-monospace,monospace}
+.spec{border-radius:14px;background:#15171B;border:1px solid #262A31;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.k{font:500 10.5px 'Geist Mono',monospace;letter-spacing:.08em;color:#868D99;text-transform:uppercase;width:84px;flex:none;padding-top:2px}
+.kv{display:flex;gap:10px;font-size:12.5px;line-height:1.5;color:#AEB4BE}
+.code{font:400 12px/1.6 'Geist Mono',monospace;white-space:pre;color:#ECEEF1;background:#0A0B0D;border:1px solid #262A31;border-radius:12px;padding:16px 18px;overflow:hidden}
+.c1{color:#868D99}.c2{color:#C8F05A}.c3{color:#D98BFF}
+</style>
+</helmet>
+<div class="ho" style="width: 1440px; height: 2640px; box-sizing: border-box; padding: 56px 64px; background: #0E0F12; color: #ECEEF1; font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; align-items: flex-end; gap: 24px">
+<div style="flex: 1"><div class="mono" style="font-size: 12px; letter-spacing: .12em; color: #868D99">SECTION 12 · ANGULAR 18+ · STANDALONE · SIGNALS · ONPUSH</div><h1 class="disp" style="margin: 6px 0 0; font-size: 44px; font-weight: 700">Component handoff</h1></div>
+<div style="font-size: 13px; color: #AEB4BE; max-width: 460px">The prototype on this canvas is a design tool artifact, not production code. Build these as Angular standalone components; overlays use CDK Overlay, focus traps use CDK A11y.</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="code"><span class="c1">/* tokens.css — :root, dark default */</span>
+:root {
+  --bg-0: #0A0B0D;  --bg-1: #101215;
+  --bg-2: #15171B;  --bg-3: #1C1F24;
+  --bg-4: #252930;  --line: #262A31;
+  --tx: #ECEEF1; --tx-2: #AEB4BE;
+  --tx-3: #868D99;
+  <span class="c2">--accent: #C8F05A;</span> --accent-ink: #0E1104;
+  <span class="c3">--sb: #D98BFF;</span>  --live: #F0484E;
+  --warn: #F5B544;  --danger: #FF6B6B;
+  --r-tag: 6px; --r-btn: 10px;
+  --r-panel: 14px; --r-dock: 18px;
+  --s-1: 4px … --s-12: 48px;
+  --dur-ring: 80ms; --dur-ui: 120ms;
+  --dur-pop: 160ms;
+}
+[data-theme="light"] { … }</div>
+<div class="code"><span class="c1">// core services (providedIn: 'root')</span>
+VoiceService
+  connection = signal&lt;'idle'|'connecting'
+    |'connected'|'reconnecting'&gt;()
+  channelId, muted, deafened
+  speaking = signal&lt;Set&lt;UserId&gt;&gt;()
+MediaService
+  startShare(opts) → getDisplayMedia
+  streams = signal&lt;RemoteStream[]&gt;()
+  primaryId, perStreamGain
+SoundboardService
+  sounds, favorites, cooldownUntil
+  play(id) → server broadcast
+PresenceService · ChatService</div>
+<div class="code"><span class="c1">// three separate audio buses</span>
+ctx = new AudioContext()
+voiceBus  = ctx.createGain()
+streamBus = ctx.createGain()
+<span class="c3">sbBus     = ctx.createGain()</span>
+<span class="c1">// per-user gain → voiceBus</span>
+<span class="c1">// per-stream gain → streamBus</span>
+<span class="c1">// sound clips → sbBus</span>
+<span class="c1">// deafen = all three to 0</span>
+
+<span class="c1">// getDisplayMedia({ video:</span>
+<span class="c1">//  {frameRate:60,height:1080},</span>
+<span class="c1">//  audio: includeSystemAudio })</span>
+<span class="c1">// browser picker is mandatory</span></div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{specs}}" as="c" hint-placeholder-count="20">
+<div class="spec">
+<div style="display: flex; align-items: baseline; gap: 10px"><b class="disp" style="font-size: 18px">{{c.name}}</b><span class="mono" style="font-size: 11.5px; color: #C8F05A">&lt;{{c.sel}}&gt;</span></div>
+<div class="kv"><span class="k">Layout</span><span>{{c.layout}}</span></div>
+<div class="kv"><span class="k">API</span><span class="mono" style="font-size: 11.5px">{{c.api}}</span></div>
+<div class="kv"><span class="k">Variants</span><span>{{c.variants}}</span></div>
+<div class="kv"><span class="k">States</span><span>{{c.states}}</span></div>
+<div class="kv"><span class="k">A11y</span><span>{{c.a11y}}</span></div>
+</div>
+</sc-for>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="spec"><b class="disp" style="font-size: 18px">Accessibility baseline</b><div class="kv"><span>All text ≥ 4.5:1 on its surface (tx-3 #868D99 on bg-2 = 4.9:1). Speaking, muted and live are never color-only: ring + icon + aria-label. Focus-visible ring on every control. Live regions announce “Maya started streaming” and sound plays (rate-limited).</span></div></div>
+<div class="spec"><b class="disp" style="font-size: 18px">Keyboard</b><div class="kv"><span class="mono" style="font-size: 11.5px; line-height: 1.8">Ctrl+Shift+M  mute<br>Ctrl+Shift+D  deafen<br>Ctrl+K        search / jump<br>Alt+↑ / ↓     prev / next channel<br>Alt+1…9       favorite sounds<br>Esc           close top overlay</span></div><div class="kv"><span>Tab-focused only — no global OS hotkeys from a website.</span></div></div>
+<div class="spec"><b class="disp" style="font-size: 18px">Motion &amp; performance</b><div class="kv"><span>Speaking ring toggles a class (no layout). Waveforms run only on the playing tile. Stream tiles use CSS aspect-ratio and object-fit for Fit / Fill. Honor prefers-reduced-motion and the in-app toggle via a root [data-reduce-motion] attribute.</span></div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const S = [
+      ['AppShell', 'hx-app-shell', 'CSS grid: 68px rail · 252px sidebar · 1fr main · 248px aside. Height 100dvh, min 560.', 'theater = input<boolean>() · asideMode: members | soundboard | none', 'default · theater · drawer (< 820)', 'Hosts toasts, overlays and the docked player layer.', 'Landmarks: nav, aside, main. Skip link to composer.'],
+      ['ServerSidebar', 'hx-server-sidebar', '68px wide, 44px tiles, 10px gap, scrolls vertically.', 'servers · selectedId · (select) · (create)', 'tile: default · selected (pip 28px) · unread (pip 8px) · mention (red badge)', 'hover radius 14→12 · active scale .95 · focus ring', 'role=list; tiles are buttons with aria-label server name + unread count.'],
+      ['ChannelSidebar', 'hx-channel-sidebar', '252px (212 at sm). Header 52px, list scrolls, voice panel + user panel pinned bottom.', 'server · channels · voiceRooms · (openText) · (joinVoice)', 'group collapsed / expanded · create (+) for admins only', 'channel: idle · hover · current · unread (bold) · mention', 'aria-current=page on active; groups use aria-expanded.'],
+      ['ChannelHeader', 'hx-channel-header', '52px tall, 16px left pad, actions right with 12px gap.', 'mode: text | voice | stream · (togglePins) · (toggleMembers)', 'text (topic, pins, search) · voice (count, live) · stream (layout seg, theater)', 'toggle buttons show pressed state', 'h1 is the channel name; icon buttons have aria-label + aria-pressed.'],
+      ['ChatMessageList', 'hx-message-list', 'Virtual scroll (CDK), 8px top pad, anchors to bottom unless user scrolled up.', 'messages · unreadFromId · highlightId · (loadOlder)', 'cozy · compact', 'loading skeleton · empty channel · “jump to present” pill', 'role=log, aria-live=polite for new messages from others only.'],
+      ['ChatMessage', 'hx-message', 'Row: 40px gutter + body, 14px gap. Grouped follow-ups 1px vertical pad.', 'message · grouped · mine · (react) · (reply) · (edit) · (delete) · (pin)', 'default · grouped · mentions-me (warn tint) · highlighted · editing', 'hover reveals action toolbar (opacity + 3px rise, 120ms)', 'Toolbar also opens on focus-within; edit input Enter/Esc.'],
+      ['MessageComposer', 'hx-composer', '16px outer margin, 46px input row, 14px radius. Reply and attachment rows stack above.', 'channel · replyTo · (send) · (attach)', 'idle · focused · replying · with attachments · drag-over overlay', 'send disabled when empty; emoji popover 312px', 'Label “Message #channel”; Esc clears reply; drop zone announced.'],
+      ['VoiceChannelView', 'hx-voice-view', 'Grid auto-fill minmax(220px,1fr), 14px gap; floating dock 20px from bottom.', 'room · participants · streams · (watch) · (leave)', 'not joined · alone · normal · 15 people (min 150px cards)', 'live banner appears when ≥1 stream', 'Dock is role=toolbar; arrow keys move between buttons.'],
+      ['VoiceParticipantCard', 'hx-participant-card', '16:10, 16px radius, avatar 72px centred, footer tags 10px inset.', 'user · speaking · muted · deafened · live · camera · connection', 'avatar · camera · live preview', 'speaking ring (80ms) · reconnecting 60% opacity · weak signal tag', 'Button; aria-label composes name + states; context menu on right-click and Shift+F10.'],
+      ['VoiceControlBar', 'hx-voice-controls', 'Bottom of sidebar: status row + 4-up grid (34px), then user row (mic, deafen, settings).', 'state from VoiceService · (mute) · (deafen) · (share) · (soundboard) · (leave)', 'disconnected (user row only) · connected · reconnecting', 'mic/deafen red tint when active; soundboard orchid when open', 'Always visible; aria-pressed on toggles; connection quality in title + sr text.'],
+      ['ScreenShareControls', 'hx-share-dialog', '520px dialog. Quality cards 2-up, audio switch, title, explainer, actions.', 'defaultQuality · (start) · (cancel)', 'setup · awaiting browser picker · denied · live (stop)', '1080p60 recommended, 720p30 fallback; audio disabled note for windows', 'CDK FocusTrap; explicit copy that the browser chooses the source.'],
+      ['StreamViewer', 'hx-stream-viewer', 'Stage flex:1 with 14px pad; thumbnail strip 112px. Fit = aspect-ratio 16/9 contain.', 'stream · volume · muted · fit · (fullscreen) · (popOut)', 'fit · fill · theater · fullscreen', 'connecting spinner · buffering · ended · weak connection badge', 'Video has aria-label “Maya’s stream”; controls reachable without hover.'],
+      ['MultiStreamGrid', 'hx-multi-stream', '1 stream = 1 col; 2–4 = 2 cols; ≥ md shows grid, below md forces focus+strip.', 'streams · primaryId · (focus) · (muteToggle) · (volume)', 'grid · focus + strip', 'primary has 2px accent border; audible streams show EQ badge', 'Each tile labelled; per-tile mute is a real button.'],
+      ['SoundboardPanel', 'hx-soundboard', 'Popover 384px above voice controls (default) or 340px docked aside.', 'sounds · favorites · cooldownUntil · volume · muted · mode', 'popover · docked · bottom sheet (mobile)', 'now playing strip · cooldown line · no results · muted-for-you note', 'role=dialog (popover) or complementary (docked); search first in tab order.'],
+      ['SoundTile', 'hx-sound-tile', '3-up grid, min 82–96px, 12px radius, emoji 22px, label 12.5/600.', 'sound · playing · progress · favorite · shortcut · (play) · (favorite)', 'idle · playing (you) · playing (friend) · cooldown · muted', 'press scale .96; progress bar 3px; waveform loop only while playing', 'Button “Play Airhorn”; favorite star is a separate button with aria-pressed.'],
+      ['SoundUploadDialog', 'hx-sound-upload', '500px dialog. Drop zone → trim (waveform 56px + two ranges) → name + icon → progress.', '(uploaded) · limits {maxSeconds: 5, maxBytes: 1MB}', 'drop · edit · uploading · error', 'too long → red length + disabled save; type/size errors inline', 'Real file input behind the drop label; ranges labelled Start / End.'],
+      ['MemberList', 'hx-member-list', '248px aside, 8px pad, grouped Admins / Online / Offline.', 'members · (openProfile)', 'shown · hidden (toggle) · hidden < 1280 by default', 'offline 50% opacity; speaking ring; LIVE tag', 'role=list per group with heading counts.'],
+      ['UserProfilePopover', 'hx-profile-popover', '320px, banner 84px, avatar 80px overlapping by 40px.', 'user · inMyVoice · (mention) · (mute) · (muteSounds) · (volume)', 'self (status picker) · friend · friend in voice (volume)', 'opens from avatar, name, member row', 'CDK Overlay, Esc closes, focus returns to trigger.'],
+      ['SettingsDialog', 'hx-settings', 'Full-window layer: 260px nav + scrolling content max 720px.', 'initialSection · (close)', 'Account · Voice · Video · Soundboard · Appearance · Notifications', 'mic test meter; shortcut recorder; permission states', 'Nav buttons use aria-pressed; Esc closes; shortcut recorder announces captured keys.'],
+      ['NotificationToast', 'hx-toast', 'Top-centre stack, max 3, 12px radius, 8px dot by category.', 'text · kind: info | sound | live | warn | danger', 'enter 220ms rise; auto-dismiss 3.6s', 'pause on hover', 'aria-live=polite container; never steals focus.']
+    ];
+    return { specs: S.map((r) => ({ name: r[0], sel: r[1], layout: r[2], api: r[3], variants: r[4], states: r[5], a11y: r[6] })) };
+  }
+}
+</script>
+</body>
+</html>

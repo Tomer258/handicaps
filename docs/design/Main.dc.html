@@ -1,0 +1,1885 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hangar — app prototype</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:var(--accent-tx)}a:hover{color:var(--tx)}
+.app *{box-sizing:border-box}
+.app{font-family:'Geist',ui-sans-serif,system-ui,'Segoe UI',sans-serif;font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+.app button:disabled{cursor:not-allowed;opacity:.45}
+.app input,.app select,.app textarea{font:inherit;color:var(--tx)}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.sm{width:15px;height:15px}.ic.lg{width:22px;height:22px}
+.disp{font-family:'Bricolage Grotesque','Geist',ui-sans-serif,sans-serif;letter-spacing:-.01em}
+.mono{font-family:'Geist Mono',ui-monospace,Consolas,monospace}
+.scroll{overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+/* rail */
+.srv{position:relative;width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-weight:600;font-size:13px;transition:border-radius .18s,transform .12s,background .15s}
+.srv:hover{border-radius:12px}
+.srv:active{transform:scale(.95)}
+.srv .pip{position:absolute;left:-12px;top:50%;width:4px;height:8px;margin-top:-4px;border-radius:0 4px 4px 0;background:var(--tx);transition:height .18s,margin .18s}
+.srv.on .pip{height:28px;margin-top:-14px;background:var(--accent)}
+.srv .badge{position:absolute;right:-4px;bottom:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--live);color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;border:3px solid var(--bg0)}
+/* sidebar */
+.ch{display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 8px;border-radius:8px;color:var(--tx3);text-align:left;transition:background .12s,color .12s}
+.ch:hover{background:var(--bg3);color:var(--tx2)}
+.ch.on{background:var(--bg4);color:var(--tx)}
+.ch.unread{color:var(--tx)}
+.ch .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.ch.unread .nm{font-weight:600}
+.cnt{min-width:18px;height:18px;padding:0 6px;border-radius:9px;font-size:11px;font-weight:600;display:grid;place-items:center;background:var(--bg4);color:var(--tx2)}
+.cnt.m{background:var(--live);color:#fff}
+.grp{display:flex;align-items:center;gap:4px;width:100%;padding:16px 8px 6px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3)}
+.grp:hover{color:var(--tx2)}
+.vp{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px 0 30px;border-radius:7px;color:var(--tx2);font-size:13px;width:100%;text-align:left}
+.vp:hover{background:var(--bg3);color:var(--tx)}
+.av{position:relative;border-radius:50%;display:grid;place-items:center;color:#0B0C0E;font-weight:600;flex:none}
+.av.s20{width:20px;height:20px;font-size:9px}.av.s28{width:28px;height:28px;font-size:11px}.av.s32{width:32px;height:32px;font-size:12px}.av.s40{width:40px;height:40px;font-size:14px}.av.s72{width:72px;height:72px;font-size:24px}.av.s80{width:80px;height:80px;font-size:26px}
+.av .st{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;border:3px solid var(--bg1)}
+.ring{transition:box-shadow .08s}
+.ring.talk{box-shadow:0 0 0 2px var(--bg1),0 0 0 4px var(--accent)}
+.vbar{display:flex;align-items:center;gap:6px}
+.ibtn{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--tx2);transition:background .12s,color .12s}
+.ibtn:hover{background:var(--bg4);color:var(--tx)}
+.ibtn.on{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent-tx)}
+.ibtn.bad{background:color-mix(in oklab,var(--danger) 18%,transparent);color:var(--danger)}
+.ibtn.sb.on{background:color-mix(in oklab,var(--sb) 20%,transparent);color:var(--sb)}
+.ibtn.leave{color:var(--danger)}.ibtn.leave:hover{background:var(--danger);color:#fff}
+/* chat */
+.msg{position:relative;display:flex;gap:14px;padding:6px 20px 6px 18px;transition:background .12s}
+.msg.grouped{padding-top:1px;padding-bottom:1px}
+.msg:hover{background:color-mix(in oklab,var(--bg3) 60%,transparent)}
+.msg.me-mention{background:color-mix(in oklab,var(--warn) 9%,transparent);box-shadow:inset 2px 0 0 var(--warn)}
+.msg.hl{background:color-mix(in oklab,var(--accent) 14%,transparent);transition:background .6s}
+.msg .acts{position:absolute;right:18px;top:-14px;display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--bg3);border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;pointer-events:none;transform:translateY(3px);transition:opacity .12s,transform .12s;z-index:3}
+.msg:hover .acts,.msg .acts.open,.msg:focus-within .acts{opacity:1;pointer-events:auto;transform:none}
+.acts .ibtn{width:28px;height:28px}
+.gut{width:40px;flex:none}
+.gut .ts{display:none;font-size:10.5px;color:var(--tx3);padding-top:4px;text-align:right}
+.msg.grouped:hover .gut .ts{display:block}
+.uname{font-weight:600;font-size:14.5px}
+.mtime{font-size:11.5px;color:var(--tx3)}
+.mtext{font-size:var(--msg);line-height:1.5;color:var(--tx);white-space:pre-wrap;word-wrap:break-word;text-wrap:pretty}
+.mention{display:inline;padding:0 3px;border-radius:4px;background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent-tx);font-weight:500;cursor:pointer}
+.react{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 8px;border-radius:13px;background:var(--bg3);border:1px solid var(--line);font-size:12.5px;color:var(--tx2);transition:transform .1s,background .12s}
+.react:hover{border-color:var(--line2)}
+.react:active{transform:scale(.94)}
+.react.mine{background:color-mix(in oklab,var(--accent) 16%,transparent);border-color:color-mix(in oklab,var(--accent) 50%,transparent);color:var(--tx)}
+.replyref{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--tx3);margin-bottom:2px;text-align:left}
+.replyref:hover{color:var(--tx)}
+.sep{display:flex;align-items:center;gap:10px;margin:10px 20px;color:var(--live);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.sep::before,.sep::after{content:"";height:1px;flex:1;background:color-mix(in oklab,var(--live) 55%,transparent)}
+.sep::before{flex:0 0 0}
+.daysep{display:flex;align-items:center;gap:10px;margin:14px 20px 6px;color:var(--tx3);font-size:11.5px;font-weight:500}
+.daysep::before,.daysep::after{content:"";height:1px;flex:1;background:var(--line)}
+.img{position:relative;display:block;width:380px;max-width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-top:6px;text-align:left}
+.img:hover{border-color:var(--line2)}
+.img .cap{position:absolute;left:10px;bottom:10px;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,.55);color:#fff;font-size:11.5px}
+.composer{margin:0 16px 16px;border-radius:14px;background:var(--bg3);border:1px solid var(--line);transition:border-color .15s}
+.composer:focus-within{border-color:var(--line2)}
+.composer input.txt{flex:1;min-width:0;height:46px;background:none;border:0;outline:none;font-size:var(--msg)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;background:var(--bg4);font-size:12.5px;color:var(--tx2)}
+.typing i{display:inline-block;width:5px;height:5px;margin-right:2px;border-radius:50%;background:var(--tx3);animation:dot 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,60%,100%{transform:none;opacity:.5}30%{transform:translateY(-3px);opacity:1}}
+/* panels, menus */
+.pop{background:var(--bg2);border:1px solid var(--line2);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.2)}
+.menu-i{display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 10px;border-radius:8px;color:var(--tx2);text-align:left;font-size:13.5px}
+.menu-i:hover{background:var(--bg4);color:var(--tx)}
+.menu-i.dz{color:var(--danger)}.menu-i.dz:hover{background:var(--danger);color:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:10px;font-weight:600;font-size:13.5px;transition:filter .12s,transform .1s,background .12s}
+.btn:active{transform:scale(.97)}
+.btn.pri{background:var(--accent);color:var(--accent-ink)}.btn.pri:hover{filter:brightness(1.08)}
+.btn.sec{background:var(--bg4);color:var(--tx)}.btn.sec:hover{background:var(--line2)}
+.btn.ghost{color:var(--tx2)}.btn.ghost:hover{background:var(--bg4);color:var(--tx)}
+.btn.dng{background:var(--danger);color:#fff}
+.btn.sbb{background:var(--sb);color:#1A0A22}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>label,.lbl{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3)}
+.inp{height:38px;padding:0 12px;border-radius:9px;background:var(--bg1);border:1px solid var(--line);outline:none}
+.inp:focus{border-color:var(--accent)}
+.sw{position:relative;width:38px;height:22px;border-radius:11px;background:var(--line2);transition:background .15s;flex:none}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.sw[aria-pressed="true"]{background:var(--accent)}
+.sw[aria-pressed="true"]::after{transform:translateX(16px);background:var(--accent-ink)}
+.sw.sbsw[aria-pressed="true"]{background:var(--sb)}
+input[type=range].rng{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--line2);outline:none;flex:1;min-width:60px;accent-color:var(--accent)}
+input[type=range].rng::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--tx);border:0}
+input[type=range].rng.sbr{accent-color:var(--sb)}
+.seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--bg1);border:1px solid var(--line);gap:2px}
+.seg button{height:28px;padding:0 10px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--tx2)}
+.seg button[aria-pressed="true"]{background:var(--bg4);color:var(--tx)}
+/* voice */
+.pcard{position:relative;border-radius:16px;background:var(--bg3);border:1px solid var(--line);aspect-ratio:16/10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow:hidden;transition:border-color .1s,box-shadow .1s;text-align:center;width:100%}
+.pcard:hover{border-color:var(--line2)}
+.pcard.talk{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 28px -6px color-mix(in oklab,var(--accent) 70%,transparent)}
+.pcard .av{transition:box-shadow .08s}
+.pcard.talk .av{box-shadow:0 0 0 3px var(--bg3),0 0 0 6px var(--accent)}
+.pcard.recon{opacity:.6}
+.pcard .foot{position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:center;gap:6px}
+.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:.03em;background:rgba(0,0,0,.45);color:#fff}
+.tag.live{background:var(--live);color:#fff}
+.tag.sbt{background:var(--sb);color:#1A0A22}
+.tag.warn{background:var(--warn);color:#1D1300}
+.dock{display:flex;align-items:center;gap:8px;padding:8px;border-radius:18px;background:var(--bg2);border:1px solid var(--line2);box-shadow:0 16px 40px rgba(0,0,0,.35)}
+.dbtn{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:var(--bg4);color:var(--tx);transition:background .12s,transform .1s}
+.dbtn:hover{background:var(--line2)}
+.dbtn:active{transform:scale(.95)}
+.dbtn.bad{background:var(--danger);color:#fff}
+.dbtn.on{background:var(--accent);color:var(--accent-ink)}
+.dbtn.sb{color:var(--sb)}.dbtn.sb.on{background:var(--sb);color:#1A0A22}
+.dbtn.leave{background:color-mix(in oklab,var(--danger) 18%,var(--bg4));color:var(--danger);width:64px}
+.dbtn.leave:hover{background:var(--danger);color:#fff}
+/* streams */
+.scene{position:relative;overflow:hidden;background:#0d0d10}
+.scene .sky{position:absolute;inset:0}
+.scene .hz{position:absolute;left:-10%;right:-10%;bottom:0;height:42%}
+.scene .orb{position:absolute;border-radius:50%;filter:blur(1px)}
+.scene .hud{position:absolute;left:3.5%;bottom:6%;display:flex;flex-direction:column;gap:5px;width:24%}
+.scene .hp{height:7px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden}
+.scene .hp i{display:block;height:100%}
+.scene .map{position:absolute;right:3.5%;top:6%;width:13%;aspect-ratio:1;border-radius:6px;border:1.5px solid rgba(255,255,255,.4);background:rgba(0,0,0,.25)}
+.scene .sim{position:absolute;right:3.5%;bottom:6%;font:500 10px 'Geist Mono',monospace;letter-spacing:.06em;color:rgba(255,255,255,.65);text-transform:uppercase}
+.scene .drift{animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translateX(6%) translateY(-3%)}}
+.s-ember .sky{background:linear-gradient(180deg,#1b0f1f 0%,#4a1d1f 55%,#c2572b 100%)}
+.s-ember .hz{background:#170c10;clip-path:polygon(0 60%,12% 30%,22% 55%,35% 18%,48% 50%,60% 25%,74% 58%,86% 32%,100% 52%,100% 100%,0 100%)}
+.s-ember .orb{width:12%;aspect-ratio:1;left:58%;top:22%;background:#ffcf8a;box-shadow:0 0 60px 20px rgba(255,140,60,.45)}
+.s-arena .sky{background:linear-gradient(180deg,#071528 0%,#0d3350 60%,#13627a 100%)}
+.s-arena .hz{height:48%;background:repeating-linear-gradient(90deg,#0b4d3a 0 8%,#0e5b45 8% 16%);transform:perspective(300px) rotateX(48deg);transform-origin:bottom}
+.s-arena .orb{width:7%;aspect-ratio:1;left:44%;top:46%;background:#e9f2ff;box-shadow:0 0 30px 8px rgba(120,200,255,.55)}
+.s-farm .sky{background:linear-gradient(180deg,#8fd0ff 0%,#c9ecff 60%,#f4f0c8 100%)}
+.s-farm .hz{background:repeating-linear-gradient(90deg,#5aa04a 0 6%,#64ad52 6% 12%);clip-path:polygon(0 30%,30% 20%,60% 35%,100% 18%,100% 100%,0 100%)}
+.s-farm .orb{width:10%;aspect-ratio:1;left:12%;top:12%;background:#fff3b0;box-shadow:0 0 40px 12px rgba(255,240,150,.6)}
+.s-desk .sky{background:#1a1d22}
+.s-desk .hz{left:6%;right:6%;top:10%;bottom:10%;height:auto;border-radius:6px;background:linear-gradient(90deg,#23272e 0 22%,#2b3038 22% 100%)}
+.s-desk .orb{width:30%;height:34%;left:34%;top:26%;border-radius:8px;filter:none;background:#3a4150}
+.tile{position:relative;border-radius:14px;overflow:hidden;border:2px solid transparent;background:#000;transition:border-color .12s}
+.tile.prim{border-color:var(--accent)}
+.tile .ovl{position:absolute;left:0;right:0;bottom:0;padding:10px;display:flex;align-items:center;gap:8px;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff}
+.tile .top{position:absolute;left:10px;top:10px;right:10px;display:flex;gap:6px;align-items:center}
+.eq{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
+.eq i{width:3px;background:currentColor;border-radius:1px;animation:eq .9s ease-in-out infinite}
+.eq i:nth-child(1){height:40%;animation-delay:-.2s}.eq i:nth-child(2){height:100%;animation-delay:-.5s}.eq i:nth-child(3){height:65%;animation-delay:-.1s}
+@keyframes eq{50%{transform:scaleY(.35)}}
+.eq i{transform-origin:bottom}
+.ctl{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:#fff;background:rgba(255,255,255,.08)}
+.ctl:hover{background:rgba(255,255,255,.18)}
+.ctl.on{background:var(--accent);color:var(--accent-ink)}
+.spin{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* soundboard */
+.stile{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:10px;border-radius:12px;background:var(--bg3);border:1px solid var(--line);text-align:left;overflow:hidden;transition:transform .08s,border-color .12s,background .12s;min-height:82px;width:100%}
+.stile:hover{border-color:color-mix(in oklab,var(--sb) 50%,var(--line));background:var(--bg4)}
+.stile:active{transform:scale(.96)}
+.stile.play{border-color:var(--sb);background:color-mix(in oklab,var(--sb) 14%,var(--bg3))}
+.stile .em{font-size:22px;line-height:1}
+.stile .sn{font-size:12.5px;font-weight:600;line-height:1.2;color:var(--tx)}
+.stile .sd{font-size:10.5px;color:var(--tx3)}
+.stile .prog{position:absolute;left:0;bottom:0;height:3px;background:var(--sb);transition:width .25s linear}
+.stile .wv{position:absolute;right:10px;top:12px;display:flex;gap:2px;align-items:center;height:18px;color:var(--sb)}
+.stile .wv i{width:3px;border-radius:2px;background:currentColor;animation:eq .6s ease-in-out infinite;transform-origin:center}
+.stile .wv i:nth-child(1){height:8px}.stile .wv i:nth-child(2){height:16px;animation-delay:-.2s}.stile .wv i:nth-child(3){height:11px;animation-delay:-.35s}.stile .wv i:nth-child(4){height:14px;animation-delay:-.1s}
+.stile.cool{opacity:.5}
+.fav{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--tx3);opacity:0;transition:opacity .12s}
+.stwrap{position:relative}
+.stwrap:hover .fav,.fav.on{opacity:1}
+.fav.on{color:var(--warn)}
+.fav.on .ic{fill:currentColor}
+.cat{height:28px;padding:0 10px;border-radius:14px;font-size:12px;font-weight:500;color:var(--tx2);background:var(--bg3);border:1px solid var(--line);white-space:nowrap}
+.cat[aria-pressed="true"]{background:color-mix(in oklab,var(--sb) 20%,transparent);border-color:color-mix(in oklab,var(--sb) 60%,transparent);color:var(--tx)}
+.wave{display:flex;align-items:center;gap:2px;height:56px}
+.wave i{flex:1;border-radius:2px;background:var(--line2)}
+.wave i.in{background:var(--sb)}
+/* settings */
+.snav{display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 10px;border-radius:8px;color:var(--tx2);text-align:left;font-weight:500}
+.snav:hover{background:var(--bg3);color:var(--tx)}
+.snav[aria-pressed="true"]{background:var(--bg4);color:var(--tx)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:14px 0;border-bottom:1px solid var(--line)}
+.srow .t{font-weight:500}.srow .d{font-size:12.5px;color:var(--tx3);margin-top:2px}
+.card{border-radius:14px;background:var(--bg3);border:1px solid var(--line);padding:16px}
+.note{display:flex;gap:10px;padding:12px 14px;border-radius:12px;background:var(--bg3);border:1px solid var(--line);font-size:12.5px;color:var(--tx2);line-height:1.5}
+.note.w{background:color-mix(in oklab,var(--warn) 10%,var(--bg3));border-color:color-mix(in oklab,var(--warn) 40%,transparent)}
+.note.e{background:color-mix(in oklab,var(--danger) 10%,var(--bg3));border-color:color-mix(in oklab,var(--danger) 40%,transparent)}
+.kbd{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:6px;background:var(--bg1);border:1px solid var(--line2);border-bottom-width:2px;font:500 11.5px 'Geist Mono',monospace;color:var(--tx)}
+.meter{position:relative;height:8px;border-radius:4px;background:var(--bg1);overflow:hidden;flex:1}
+.meter i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);transition:width .2s}
+.meter b{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--tx)}
+.toast{display:flex;align-items:center;gap:10px;min-width:260px;max-width:380px;padding:10px 14px;border-radius:12px;background:var(--bg4);border:1px solid var(--line2);box-shadow:0 12px 30px rgba(0,0,0,.35);font-size:13px;animation:tin .22s ease-out}
+.toast .dotc{width:8px;height:8px;border-radius:50%;flex:none}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}}
+.fade{animation:fin .16s ease-out}
+@keyframes fin{from{opacity:0;transform:translateY(6px) scale(.985)}}
+.scrim{position:absolute;inset:0;background:rgba(4,5,7,.62);display:grid;place-items:center;z-index:40;animation:sfin .15s}
+@keyframes sfin{from{opacity:0}}
+.only-m{display:none}
+.th-hide{display:none!important}
+.reduce *,.reduce *::before,.reduce *::after{animation:none!important;transition:none!important}
+@media (max-width:1280px){.members{display:none!important}}
+@media (max-width:1080px){.side{width:212px!important}}
+@media (max-width:820px){.rail{display:none!important}.side{position:absolute!important;left:0;top:0;bottom:0;z-index:30;transform:translateX(-100%);transition:transform .2s;width:280px!important}.side.open{transform:none}.only-m{display:grid}.hide-m{display:none!important}}
+</style>
+</helmet>
+<div class="app {{rootClass}}" style="{{rootStyle}} position: relative; width: 100%; height: 100vh; min-height: 560px; display: flex; overflow: hidden; background: var(--bg0); color: var(--tx)">
+
+<!-- ============ SERVER RAIL ============ -->
+<nav class="rail {{chromeCls}}" aria-label="Servers" style="width: 68px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; background: var(--bg0)">
+<button class="srv {{homeCls}}" aria-label="Home" onClick="{{goHome}}" style="background: var(--accent); color: var(--accent-ink)">
+<span class="pip"></span>
+<svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true" style="stroke-width: 2.2"><path d="M3 11 12 4l9 7"/><path d="M6 10v9h4v-5h4v5h4v-9"/></svg>
+</button>
+<div style="width: 28px; height: 2px; border-radius: 1px; background: var(--line)"></div>
+<sc-for list="{{servers}}" as="s" hint-placeholder-count="2">
+<button class="srv {{s.cls}}" aria-label="{{s.name}}" title="{{s.name}}" onClick="{{s.pick}}" style="background: {{s.bg}}; color: {{s.fg}}">
+<span class="pip"></span>
+<span class="disp" style="font-size: 15px; font-weight: 700">{{s.short}}</span>
+<sc-if value="{{s.hasBadge}}" hint-placeholder-val="{{false}}"><span class="badge">{{s.badge}}</span></sc-if>
+</button>
+</sc-for>
+<button class="srv" aria-label="Create or join a server" title="Create or join a server" onClick="{{addServer}}" style="background: var(--bg2); color: var(--accent-tx); border: 1px dashed var(--line2)">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+<div style="flex: 1"></div>
+<button class="srv" aria-label="User settings" title="Settings" onClick="{{openSettings}}" style="background: var(--bg2); color: var(--tx2)">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+</button>
+</nav>
+
+<!-- ============ CHANNEL SIDEBAR ============ -->
+<aside class="side {{sideCls}} {{chromeCls}}" aria-label="Channels" style="width: 252px; flex: none; display: flex; flex-direction: column; background: var(--bg1); border-radius: 14px 0 0 0; border-left: 1px solid var(--line); border-top: 1px solid var(--line); margin-top: 8px">
+<button onClick="{{addServer}}" style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line); text-align: left">
+<span class="disp" style="flex: 1; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{server.name}}</span>
+<span class="mono" style="font-size: 11px; color: var(--tx3)">{{server.online}} online</span>
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--tx3)"><path d="m6 9 6 6 6-6"/></svg>
+</button>
+<div class="scroll" style="flex: 1; padding: 4px 8px 12px">
+<div style="display: flex; align-items: center">
+<button class="grp" onClick="{{toggleText}}" aria-expanded="{{textOpen}}">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="width: 12px; height: 12px; transform: {{textChevron}}"><path d="m6 9 6 6 6-6"/></svg>
+Text channels
+</button>
+<button class="ibtn" aria-label="Create text channel (admin)" title="Create channel" onClick="{{createChannel}}" style="width: 24px; height: 24px; margin-top: 10px; flex: none"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+<sc-if value="{{textOpen}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{textChannels}}" as="c" hint-placeholder-count="5">
+<button class="ch {{c.cls}}" onClick="{{c.pick}}" aria-current="{{c.current}}">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M5 9h14M4 15h14M10 3 8 21M16 3l-2 18"/></svg>
+<span class="nm">{{c.name}}</span>
+<sc-if value="{{c.hasMention}}" hint-placeholder-val="{{false}}"><span class="cnt m">@{{c.mention}}</span></sc-if>
+<sc-if value="{{c.hasUnread}}" hint-placeholder-val="{{false}}"><span class="cnt">{{c.unread}}</span></sc-if>
+</button>
+</sc-for>
+</div>
+</sc-if>
+<div style="display: flex; align-items: center">
+<button class="grp" onClick="{{toggleVoice}}" aria-expanded="{{voiceOpen}}">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="width: 12px; height: 12px; transform: {{voiceChevron}}"><path d="m6 9 6 6 6-6"/></svg>
+Voice channels
+</button>
+<button class="ibtn" aria-label="Create voice channel (admin)" title="Create channel" onClick="{{createChannel}}" style="width: 24px; height: 24px; margin-top: 10px; flex: none"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+<sc-if value="{{voiceOpen}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{voiceChannels}}" as="v" hint-placeholder-count="3">
+<div>
+<button class="ch {{v.cls}}" onClick="{{v.pick}}" title="{{v.hint}}">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+<span class="nm">{{v.name}}</span>
+<sc-if value="{{v.hasLive}}" hint-placeholder-val="{{false}}"><span class="tag live" style="height: 18px; font-size: 10px; padding: 0 6px">LIVE {{v.live}}</span></sc-if>
+<sc-if value="{{v.hasPeople}}" hint-placeholder-val="{{false}}"><span class="mono" style="font-size: 11px; color: var(--tx3)">{{v.count}}</span></sc-if>
+</button>
+<sc-for list="{{v.people}}" as="p" hint-placeholder-count="2">
+<button class="vp" onClick="{{p.open}}" onContextMenu="{{p.ctx}}">
+<span class="av s20 ring {{p.ring}}" style="background: {{p.color}}">{{p.ini}}</span>
+<span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: {{p.nameColor}}">{{p.name}}</span>
+<sc-if value="{{p.live}}" hint-placeholder-val="{{false}}"><span class="tag live" style="height: 16px; font-size: 9.5px; padding: 0 5px">LIVE</span></sc-if>
+<sc-if value="{{p.cam}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic sm" aria-label="Camera on" role="img" style="color: var(--tx3)"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></sc-if>
+<sc-if value="{{p.muted}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic sm" aria-label="Muted" role="img" style="color: var(--danger)"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M3 3l18 18"/></svg></sc-if>
+<sc-if value="{{p.deaf}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic sm" aria-label="Deafened" role="img" style="color: var(--danger)"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/><path d="M3 3l18 18"/></svg></sc-if>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<!-- persistent voice panel -->
+<sc-if value="{{inVoice}}" hint-placeholder-val="{{false}}">
+<section aria-label="Voice connection" class="fade" style="margin: 0 8px; padding: 10px; border-radius: 12px 12px 0 0; background: var(--bg2); border: 1px solid var(--line); border-bottom: 0">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="display: flex; align-items: flex-end; gap: 2px; height: 14px" title="{{conn.title}}" role="img" aria-label="{{conn.title}}">
+<i style="width: 3px; height: 5px; border-radius: 1px; background: {{conn.c}}"></i>
+<i style="width: 3px; height: 9px; border-radius: 1px; background: {{conn.c}}"></i>
+<i style="width: 3px; height: 14px; border-radius: 1px; background: {{conn.c3}}"></i>
+</div>
+<button onClick="{{openVoiceView}}" style="flex: 1; min-width: 0; text-align: left">
+<div style="font-size: 12.5px; font-weight: 600; color: {{conn.c}}">{{conn.label}}</div>
+<div style="font-size: 12px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{voiceChannel.name}} / {{server.name}}</div>
+</button>
+<button class="ibtn leave" aria-label="Disconnect from voice" title="Disconnect" onClick="{{disconnect}}">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M3 13.5c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0v2.5l-3 1.5z"/></svg>
+</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px">
+<button class="ibtn {{camCls}}" style="width: 100%; height: 34px; background: var(--bg4)" aria-label="Toggle camera" aria-pressed="{{camera}}" title="Camera" onClick="{{toggleCamera}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></button>
+<button class="ibtn {{shareCls}}" style="width: 100%; height: 34px; background: var(--bg4)" aria-label="Share your screen" aria-pressed="{{sharing}}" title="Share screen" onClick="{{shareBtn}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+<button class="ibtn sb {{sbCls}}" style="width: 100%; height: 34px; background: var(--bg4)" aria-label="Soundboard" aria-pressed="{{sbOpen}}" title="Soundboard" onClick="{{toggleSb}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg></button>
+<button class="ibtn" style="width: 100%; height: 34px; background: var(--bg4)" aria-label="Voice settings" title="Voice settings" onClick="{{openVoiceSettings}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+</div>
+</section>
+</sc-if>
+
+<!-- user panel -->
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px; margin: 0 8px 8px; border-radius: {{userPanelRadius}}; background: var(--bg2); border: 1px solid var(--line)">
+<button onClick="{{openMe}}" style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 2px 4px; border-radius: 8px; text-align: left">
+<span class="av s32 ring {{meRing}}" style="background: {{me.color}}">{{me.ini}}<span class="st" style="background: {{me.statusColor}}; border-color: var(--bg2)"></span></span>
+<span style="min-width: 0">
+<span style="display: block; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{me.name}}</span>
+<span style="display: block; font-size: 11.5px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{me.sub}}</span>
+</span>
+</button>
+<button class="ibtn {{micCls}}" aria-label="{{micLabel}}" aria-pressed="{{muted}}" title="{{micLabel}}" onClick="{{toggleMute}}">
+<sc-if value="{{micOff}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M3 3l18 18"/></svg></sc-if>
+<sc-if value="{{micOn}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></sc-if>
+</button>
+<button class="ibtn {{deafCls}}" aria-label="{{deafLabel}}" aria-pressed="{{deafened}}" title="{{deafLabel}}" onClick="{{toggleDeaf}}">
+<sc-if value="{{deafened}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/><path d="M3 3l18 18"/></svg></sc-if>
+<sc-if value="{{notDeaf}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg></sc-if>
+</button>
+<button class="ibtn" aria-label="User settings" title="Settings" onClick="{{openSettings}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
+</div>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg2); margin-top: 8px; border-top: 1px solid var(--line); position: relative">
+
+<!-- header -->
+<header style="height: 52px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line)">
+<button class="ibtn only-m" aria-label="Open channels" onClick="{{toggleNav}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+
+<sc-if value="{{isText}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="color: var(--tx3)"><path d="M5 9h14M4 15h14M10 3 8 21M16 3l-2 18"/></svg>
+<h1 class="disp" style="margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap">{{channel.name}}</h1>
+<span class="hide-m" style="width: 1px; height: 20px; background: var(--line2)"></span>
+<span class="hide-m" style="font-size: 13px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{channel.topic}}</span>
+</div>
+<button class="ibtn {{pinsCls}}" aria-label="Pinned messages" aria-pressed="{{pinsOpen}}" title="Pinned messages" onClick="{{togglePins}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M9 4h6l-1 6 4 3H6l4-3z"/><path d="M12 13v8"/></svg></button>
+<button class="hide-m" onClick="{{toggleSearch}}" aria-label="Search messages" style="display: flex; align-items: center; gap: 8px; width: 200px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--bg1); border: 1px solid var(--line); color: var(--tx3); font-size: 13px; text-align: left">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+<span style="flex: 1">Search</span>
+<span class="kbd" style="height: 20px; font-size: 10.5px">Ctrl K</span>
+</button>
+</sc-if>
+
+<sc-if value="{{isVoice}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="color: var(--tx3)"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+<h1 class="disp" style="margin: 0; font-size: 16px; font-weight: 600">{{voiceView.name}}</h1>
+<span class="mono" style="font-size: 11.5px; color: var(--tx3)">{{voiceView.count}} connected</span>
+<sc-if value="{{voiceView.hasLive}}" hint-placeholder-val="{{false}}"><span class="tag live">{{voiceView.liveCount}} LIVE</span></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{isStream}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0">
+<button class="btn ghost" onClick="{{openVoiceView}}" style="height: 32px; padding: 0 10px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>{{voiceChannel.name}}</button>
+<span style="width: 1px; height: 20px; background: var(--line2)"></span>
+<span class="av s28" style="background: {{prim.color}}">{{prim.ini}}</span>
+<div style="min-width: 0">
+<div style="font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{prim.name}} — {{prim.title}}</div>
+<div class="mono" style="font-size: 11px; color: var(--tx3)">{{prim.quality}} · {{prim.viewers}} watching</div>
+</div>
+</div>
+<div class="seg" role="group" aria-label="Stream layout">
+<button aria-pressed="{{layoutFocus}}" onClick="{{setFocus}}" style="display: flex; align-items: center; gap: 6px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><rect x="3" y="3" width="18" height="12" rx="1.5"/><rect x="3" y="17" width="5" height="4" rx="1"/><rect x="10" y="17" width="5" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></svg>Focus</button>
+<button aria-pressed="{{layoutGrid}}" onClick="{{setGrid}}" style="display: flex; align-items: center; gap: 6px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>Grid · {{streamCount}}</button>
+</div>
+<button class="ibtn {{theaterCls}}" aria-label="Theater mode" aria-pressed="{{theater}}" title="Theater mode — hide sidebars" onClick="{{toggleTheater}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+</sc-if>
+
+<button class="ibtn {{membersCls}} hide-m" aria-label="Toggle member list" aria-pressed="{{members}}" title="Member list" onClick="{{toggleMembers}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg></button>
+</header>
+
+<div style="flex: 1; min-height: 0; display: flex; position: relative">
+<section style="flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative">
+
+<!-- ======== TEXT VIEW ======== -->
+<sc-if value="{{isText}}" hint-placeholder-val="{{true}}">
+<div style="flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative" onDragOver="{{onDragOver}}" onDragLeave="{{onDragLeave}}" onDrop="{{onDrop}}">
+<div id="chat-scroll" class="scroll" style="flex: 1; min-height: 0; padding: 8px 0 12px">
+
+<sc-if value="{{chatEmpty}}" hint-placeholder-val="{{false}}">
+<div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px; text-align: center">
+<div style="position: relative; width: 96px; height: 96px; border-radius: 28px; background: var(--bg3); border: 1px solid var(--line); display: grid; place-items: center; color: var(--accent-tx)">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="width: 40px; height: 40px; stroke-width: 1.4"><path d="M5 9h14M4 15h14M10 3 8 21M16 3l-2 18"/></svg>
+<span style="position: absolute; right: -8px; top: -8px; width: 26px; height: 26px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="stroke-width: 2.4"><path d="M12 5v14M5 12h14"/></svg></span>
+</div>
+<h2 class="disp" style="margin: 0; font-size: 24px; font-weight: 700">This is the start of #{{channel.name}}</h2>
+<p style="margin: 0; max-width: 380px; color: var(--tx2)">Nobody has posted here yet. Drop a file, share a link, or write the first message — it is a blank page.</p>
+<button class="btn pri" onClick="{{focusComposer}}">Write the first message</button>
+</div>
+</sc-if>
+
+<sc-for list="{{msgs}}" as="m" hint-placeholder-count="6">
+<div>
+<sc-if value="{{m.showDay}}" hint-placeholder-val="{{false}}"><div class="daysep">{{m.day}}</div></sc-if>
+<sc-if value="{{m.showUnread}}" hint-placeholder-val="{{false}}"><div class="sep" role="separator">New messages</div></sc-if>
+<article id="{{m.domId}}" class="msg {{m.cls}}" aria-label="{{m.aria}}">
+<div class="gut">
+<sc-if value="{{m.showHead}}" hint-placeholder-val="{{true}}">
+<button class="av s40" style="background: {{m.color}}" onClick="{{m.openUser}}" aria-label="Open {{m.name}} profile">{{m.ini}}</button>
+</sc-if>
+<sc-if value="{{m.grouped}}" hint-placeholder-val="{{false}}"><div class="ts mono">{{m.time}}</div></sc-if>
+</div>
+<div style="flex: 1; min-width: 0">
+<sc-if value="{{m.hasReply}}" hint-placeholder-val="{{false}}">
+<button class="replyref" onClick="{{m.reply.jump}}">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="transform: scaleX(-1) rotate(180deg)"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v4"/></svg>
+<span class="av s20" style="background: {{m.reply.color}}; width: 16px; height: 16px; font-size: 8px">{{m.reply.ini}}</span>
+<b style="font-weight: 600; color: var(--tx2)">{{m.reply.name}}</b>
+<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px">{{m.reply.text}}</span>
+</button>
+</sc-if>
+<sc-if value="{{m.showHead}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: baseline; gap: 8px">
+<button class="uname" style="color: {{m.color}}" onClick="{{m.openUser}}">{{m.name}}</button>
+<sc-if value="{{m.isAdmin}}" hint-placeholder-val="{{false}}"><span style="font-size: 10px; font-weight: 600; letter-spacing: .06em; padding: 1px 5px; border-radius: 4px; background: var(--bg4); color: var(--tx2)">ADMIN</span></sc-if>
+<span class="mtime mono">{{m.time}}</span>
+<sc-if value="{{m.pinned}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; color: var(--tx3); display: inline-flex; align-items: center; gap: 3px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="width: 12px; height: 12px"><path d="M9 4h6l-1 6 4 3H6l4-3z"/><path d="M12 13v8"/></svg>pinned</span></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{m.notEditing}}" hint-placeholder-val="{{true}}">
+<div class="mtext"><sc-for list="{{m.parts}}" as="p" hint-placeholder-count="1"><sc-if value="{{p.isMention}}" hint-placeholder-val="{{false}}"><button class="mention" onClick="{{p.open}}">{{p.text}}</button></sc-if><sc-if value="{{p.isText}}" hint-placeholder-val="{{true}}">{{p.text}}</sc-if></sc-for><sc-if value="{{m.edited}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; color: var(--tx3)"> (edited)</span></sc-if></div>
+</sc-if>
+<sc-if value="{{m.isEditing}}" hint-placeholder-val="{{false}}">
+<div style="margin-top: 4px">
+<input class="inp" aria-label="Edit message" value="{{editText}}" onChange="{{onEditText}}" onKeyDown="{{onEditKey}}" style="width: 100%; background: var(--bg3)">
+<div style="font-size: 11.5px; color: var(--tx3); margin-top: 6px">Enter to <button onClick="{{saveEdit}}" style="color: var(--accent-tx); font-weight: 600">save</button> · Esc to <button onClick="{{cancelEdit}}" style="color: var(--accent-tx); font-weight: 600">cancel</button></div>
+</div>
+</sc-if>
+<sc-if value="{{m.hasImage}}" hint-placeholder-val="{{false}}">
+<button class="img" onClick="{{m.openImage}}" aria-label="Open image {{m.image.title}}">
+<div class="scene {{m.image.scene}}" style="position: absolute; inset: 0"><div class="sky"></div><div class="hz"></div><div class="orb"></div></div>
+<span class="cap">{{m.image.title}}</span>
+</button>
+</sc-if>
+<sc-if value="{{m.hasFile}}" hint-placeholder-val="{{false}}">
+<div style="display: inline-flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--line)">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="color: var(--accent-tx)"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>
+<div><div style="font-weight: 500; font-size: 13px">{{m.file.name}}</div><div class="mono" style="font-size: 11px; color: var(--tx3)">{{m.file.size}}</div></div>
+</div>
+</sc-if>
+<sc-if value="{{m.hasReactions}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px">
+<sc-for list="{{m.reactions}}" as="r" hint-placeholder-count="2">
+<button class="react {{r.cls}}" onClick="{{r.toggle}}" aria-pressed="{{r.mine}}" aria-label="{{r.aria}}" title="{{r.who}}"><span style="font-size: 14px">{{r.e}}</span><span class="mono">{{r.count}}</span></button>
+</sc-for>
+<button class="react" onClick="{{m.openReact}}" aria-label="Add reaction" style="color: var(--tx3)"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></button>
+</div>
+</sc-if>
+</div>
+<div class="acts {{m.actsCls}}" role="toolbar" aria-label="Message actions">
+<sc-if value="{{m.reactOpen}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; gap: 2px; padding-right: 4px; margin-right: 2px; border-right: 1px solid var(--line)">
+<sc-for list="{{m.quick}}" as="q" hint-placeholder-count="6"><button class="ibtn" style="font-size: 16px" onClick="{{q.pick}}" aria-label="React {{q.e}}">{{q.e}}</button></sc-for>
+</div>
+</sc-if>
+<button class="ibtn" aria-label="Add reaction" title="React" onClick="{{m.openReact}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></button>
+<button class="ibtn" aria-label="Reply" title="Reply" onClick="{{m.onReply}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v4"/></svg></button>
+<button class="ibtn" aria-label="{{m.pinLabel}}" title="{{m.pinLabel}}" onClick="{{m.onPin}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M9 4h6l-1 6 4 3H6l4-3z"/><path d="M12 13v8"/></svg></button>
+<sc-if value="{{m.mine}}" hint-placeholder-val="{{false}}">
+<button class="ibtn" aria-label="Edit" title="Edit" onClick="{{m.onEdit}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
+<button class="ibtn" aria-label="Delete" title="Delete" onClick="{{m.onDelete}}" style="color: var(--danger)"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+</sc-if>
+</div>
+</article>
+</div>
+</sc-for>
+</div>
+
+<!-- typing -->
+<div style="height: 22px; padding: 0 22px; font-size: 12px; color: var(--tx3); display: flex; align-items: center; gap: 6px">
+<sc-if value="{{showTyping}}" hint-placeholder-val="{{true}}"><span class="typing"><i></i><i></i><i></i></span><span><b style="color: var(--tx2); font-weight: 600">{{typingName}}</b> is typing…</span></sc-if>
+</div>
+
+<!-- composer -->
+<div class="composer" style="position: relative">
+<sc-if value="{{hasReplyTo}}" hint-placeholder-val="{{false}}">
+<div class="fade" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--tx3)">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v4"/></svg>
+<span>Replying to <b style="color: {{replyTo.color}}; font-weight: 600">{{replyTo.name}}</b></span>
+<span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">— {{replyTo.text}}</span>
+<button class="ibtn" style="width: 24px; height: 24px" aria-label="Cancel reply" onClick="{{cancelReply}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+</sc-if>
+<sc-if value="{{hasAttach}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px 0">
+<sc-for list="{{attachList}}" as="a" hint-placeholder-count="1">
+<span class="chip"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>{{a.name}}<span class="mono" style="color: var(--tx3)">{{a.size}}</span><button aria-label="Remove attachment" onClick="{{a.remove}}" style="display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></span>
+</sc-for>
+</div>
+</sc-if>
+<div style="display: flex; align-items: center; gap: 4px; padding: 0 8px">
+<button class="ibtn" aria-label="Attach a file" title="Attach a file" onClick="{{attachMock}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/></svg></button>
+<input id="composer" class="txt" aria-label="Message {{channel.name}}" placeholder="Message #{{channel.name}}" value="{{draft}}" onChange="{{onDraft}}" onKeyDown="{{onDraftKey}}" autocomplete="off">
+<button class="ibtn {{emojiCls}}" aria-label="Emoji" aria-pressed="{{emojiOpen}}" title="Emoji" onClick="{{toggleEmoji}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></button>
+<button class="ibtn" aria-label="Send message" title="Send" onClick="{{send}}" disabled="{{cantSend}}" style="color: var(--accent-tx)"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 12 20 4l-6 16-3-7z"/></svg></button>
+</div>
+<sc-if value="{{emojiOpen}}" hint-placeholder-val="{{false}}">
+<div class="pop fade" style="position: absolute; right: 8px; bottom: 56px; width: 312px; padding: 12px; z-index: 12">
+<div class="lbl" style="margin-bottom: 8px">Frequently used</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px">
+<sc-for list="{{emojis}}" as="e" hint-placeholder-count="24"><button class="ibtn" style="font-size: 20px; width: 100%; height: 34px" onClick="{{e.pick}}" aria-label="Insert {{e.e}}">{{e.e}}</button></sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{dragOver}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 12px; border-radius: 18px; border: 2px dashed var(--accent); background: color-mix(in oklab,var(--bg2) 82%,var(--accent)); display: grid; place-items: center; z-index: 20; pointer-events: none">
+<div style="text-align: center">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="width: 40px; height: 40px; color: var(--accent-tx)"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+<div class="disp" style="font-size: 22px; font-weight: 700; margin-top: 8px">Drop to share in #{{channel.name}}</div>
+<div style="color: var(--tx2); font-size: 13px">Images, clips and files up to 25 MB</div>
+</div>
+</div>
+</sc-if>
+
+<!-- pins / search panels -->
+<sc-if value="{{pinsOpen}}" hint-placeholder-val="{{false}}">
+<div class="pop fade" style="position: absolute; right: 12px; top: 8px; width: 360px; max-height: 70%; display: flex; flex-direction: column; z-index: 15">
+<div style="display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line)"><b class="disp" style="flex: 1; font-size: 15px">Pinned in #{{channel.name}}</b><button class="ibtn" aria-label="Close pins" onClick="{{togglePins}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+<div class="scroll" style="padding: 8px">
+<sc-if value="{{noPins}}" hint-placeholder-val="{{false}}"><div style="padding: 24px; text-align: center; color: var(--tx3); font-size: 13px">Nothing pinned yet. Hover a message and use the pin action.</div></sc-if>
+<sc-for list="{{pins}}" as="p" hint-placeholder-count="1">
+<button onClick="{{p.jump}}" style="display: block; width: 100%; text-align: left; padding: 10px; border-radius: 10px; background: var(--bg3); margin-bottom: 6px">
+<div style="display: flex; gap: 8px; align-items: baseline"><b style="color: {{p.color}}; font-size: 13px">{{p.name}}</b><span class="mono" style="font-size: 11px; color: var(--tx3)">{{p.time}}</span><span style="flex: 1"></span><span style="font-size: 11.5px; color: var(--accent-tx)">Jump</span></div>
+<div style="font-size: 13px; color: var(--tx2); margin-top: 2px">{{p.text}}</div>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{searchOpen}}" hint-placeholder-val="{{false}}">
+<div class="pop fade" style="position: absolute; right: 12px; top: 8px; width: 400px; max-height: 75%; display: flex; flex-direction: column; z-index: 15">
+<div style="display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line)">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="color: var(--tx3); margin-left: 4px"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+<input id="search-input" aria-label="Search messages" placeholder="Search {{server.name}}" value="{{searchQ}}" onChange="{{onSearch}}" style="flex: 1; height: 32px; background: none; border: 0; outline: none">
+<button class="ibtn" aria-label="Close search" onClick="{{toggleSearch}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+<div style="display: flex; gap: 6px; padding: 10px 12px 0; flex-wrap: wrap">
+<sc-for list="{{searchHints}}" as="h" hint-placeholder-count="3"><button class="cat" onClick="{{h.pick}}">{{h.label}}</button></sc-for>
+</div>
+<div class="scroll" style="padding: 10px">
+<div class="lbl" style="margin: 0 2px 8px">{{searchSummary}}</div>
+<sc-for list="{{searchResults}}" as="r" hint-placeholder-count="2">
+<button onClick="{{r.jump}}" style="display: flex; gap: 10px; width: 100%; text-align: left; padding: 10px; border-radius: 10px; margin-bottom: 4px; background: var(--bg3)">
+<span class="av s28" style="background: {{r.color}}">{{r.ini}}</span>
+<span style="min-width: 0; flex: 1"><span style="display: flex; gap: 8px; align-items: baseline"><b style="font-size: 13px">{{r.name}}</b><span class="mono" style="font-size: 11px; color: var(--tx3)">#{{r.ch}} · {{r.time}}</span></span><span style="display: block; font-size: 13px; color: var(--tx2)">{{r.text}}</span></span>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ======== VOICE VIEW ======== -->
+<sc-if value="{{isVoice}}" hint-placeholder-val="{{false}}">
+<div class="fade" style="flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; background: radial-gradient(120% 80% at 50% 0%, var(--bg3) 0%, var(--bg2) 60%)">
+<sc-if value="{{voiceView.notJoined}}" hint-placeholder-val="{{false}}">
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center">
+<h2 class="disp" style="margin: 0; font-size: 26px">{{voiceView.name}}</h2>
+<p style="margin: 0; color: var(--tx2)">{{voiceView.count}} people hanging out</p>
+<button class="btn pri" style="height: 44px; padding: 0 22px" onClick="{{voiceView.join}}">Join voice</button>
+</div>
+</sc-if>
+<sc-if value="{{voiceView.joined}}" hint-placeholder-val="{{true}}">
+<div class="scroll" style="flex: 1; min-height: 0; padding: 20px 24px 120px">
+<sc-if value="{{voiceView.hasLive}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: var(--bg3); border: 1px solid var(--line); margin-bottom: 18px">
+<div style="display: flex">
+<sc-for list="{{streams}}" as="s" hint-placeholder-count="3"><span class="av s32" style="background: {{s.color}}; margin-right: -8px; border: 2px solid var(--bg3)">{{s.ini}}</span></sc-for>
+</div>
+<div style="flex: 1; margin-left: 8px"><div style="font-weight: 600">{{voiceView.liveCount}} friends are live right now</div><div style="font-size: 12.5px; color: var(--tx3)">{{voiceView.liveNames}}</div></div>
+<button class="btn sec" onClick="{{watchFirst}}">Watch {{firstLive}}</button>
+<button class="btn pri" onClick="{{watchAll}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>Watch all</button>
+</div>
+</sc-if>
+<sc-if value="{{voiceView.alone}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; border: 1px dashed var(--line2); margin-bottom: 18px">
+<div style="flex: 1"><div style="font-weight: 600">It is just you in here</div><div style="font-size: 12.5px; color: var(--tx3)">{{onlineFriends}} friends are online. A ping drops a one-tap join link in their notifications.</div></div>
+<button class="btn pri" onClick="{{pingFriends}}">Ping online friends</button>
+</div>
+</sc-if>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px">
+<sc-for list="{{participants}}" as="p" hint-placeholder-count="6">
+<div style="position: relative">
+<button class="pcard {{p.cls}}" onClick="{{p.open}}" onContextMenu="{{p.ctx}}" aria-label="{{p.aria}}">
+<sc-if value="{{p.showCam}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: radial-gradient(60% 70% at 50% 75%, #3b4a5e 0%, #1a212b 70%)"><div style="position: absolute; left: 50%; bottom: -12%; width: 46%; aspect-ratio: 1; margin-left: -23%; border-radius: 50% 50% 0 0; background: #4d6079"></div><div style="position: absolute; left: 50%; top: 22%; width: 22%; aspect-ratio: 1; margin-left: -11%; border-radius: 50%; background: #5d7391"></div></div>
+</sc-if>
+<sc-if value="{{p.showLive}}" hint-placeholder-val="{{false}}">
+<div class="scene {{p.scene}}" style="position: absolute; inset: 0; opacity: .55"><div class="sky"></div><div class="hz"></div><div class="orb"></div></div>
+</sc-if>
+<sc-if value="{{p.showAvatar}}" hint-placeholder-val="{{true}}"><span class="av s72" style="background: {{p.color}}">{{p.ini}}</span></sc-if>
+<div class="foot">
+<span class="tag" style="font-size: 12px; font-weight: 600; letter-spacing: 0">{{p.name}}</span>
+<sc-if value="{{p.muted}}" hint-placeholder-val="{{false}}"><span class="tag" style="background: var(--danger); padding: 0 5px" role="img" aria-label="Muted"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M3 3l18 18"/></svg></span></sc-if>
+<sc-if value="{{p.deaf}}" hint-placeholder-val="{{false}}"><span class="tag" style="background: var(--danger); padding: 0 5px" role="img" aria-label="Deafened"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/><path d="M3 3l18 18"/></svg></span></sc-if>
+<span style="flex: 1"></span>
+<sc-if value="{{p.recon}}" hint-placeholder-val="{{false}}"><span class="tag warn">Reconnecting…</span></sc-if>
+<sc-if value="{{p.poor}}" hint-placeholder-val="{{false}}"><span class="tag warn" title="Unstable connection">Weak signal</span></sc-if>
+<sc-if value="{{p.hasSound}}" hint-placeholder-val="{{false}}"><span class="tag sbt"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg>{{p.sound}}</span></sc-if>
+<sc-if value="{{p.live}}" hint-placeholder-val="{{false}}"><span class="tag live">LIVE</span></sc-if>
+</div>
+</button>
+<sc-if value="{{p.canWatch}}" hint-placeholder-val="{{false}}">
+<button class="btn pri" onClick="{{p.watch}}" style="position: absolute; top: 10px; right: 10px; height: 30px; padding: 0 12px; font-size: 12.5px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>Watch</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; pointer-events: none">
+<div class="dock" style="pointer-events: auto" role="toolbar" aria-label="Voice controls">
+<button class="dbtn {{dockMicCls}}" aria-label="{{micLabel}}" aria-pressed="{{muted}}" title="{{micLabel}}" onClick="{{toggleMute}}">
+<sc-if value="{{micOff}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M3 3l18 18"/></svg></sc-if>
+<sc-if value="{{micOn}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></sc-if>
+</button>
+<button class="dbtn {{dockDeafCls}}" aria-label="{{deafLabel}}" aria-pressed="{{deafened}}" title="{{deafLabel}}" onClick="{{toggleDeaf}}">
+<svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></svg>
+</button>
+<span style="width: 1px; height: 28px; background: var(--line2)"></span>
+<button class="dbtn {{dockCamCls}}" aria-label="Toggle camera" aria-pressed="{{camera}}" title="Camera" onClick="{{toggleCamera}}"><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></button>
+<button class="dbtn {{dockShareCls}}" aria-label="Share your screen" aria-pressed="{{sharing}}" title="Share screen" onClick="{{shareBtn}}"><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></button>
+<button class="dbtn sb {{dockSbCls}}" aria-label="Soundboard" aria-pressed="{{sbOpen}}" title="Soundboard" onClick="{{toggleSb}}"><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg></button>
+<span style="width: 1px; height: 28px; background: var(--line2)"></span>
+<button class="dbtn leave" aria-label="Disconnect" title="Disconnect" onClick="{{disconnect}}"><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true"><path d="M3 13.5c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 0 0-7 0v2.5l-3 1.5z"/></svg></button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ======== STREAM VIEW ======== -->
+<sc-if value="{{isStream}}" hint-placeholder-val="{{false}}">
+<div class="fade" style="flex: 1; min-height: 0; display: flex; flex-direction: column; background: #050608">
+<sc-if value="{{layoutFocus}}" hint-placeholder-val="{{true}}">
+<div style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px; gap: 12px">
+<div id="stage" class="stage" style="flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center">
+<div class="scene {{prim.scene}} tile prim" style="{{stageStyle}} border-radius: 14px">
+<div class="sky"></div><div class="hz drift"></div><div class="orb drift"></div>
+<div class="map"></div>
+<div class="hud"><div class="hp"><i style="width: 72%; background: #ff5e5e"></i></div><div class="hp"><i style="width: 45%; background: #6ec1ff"></i></div></div>
+<span class="sim">Simulated feed · {{prim.quality}}</span>
+<sc-if value="{{loading}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.6)"><div style="display: flex; flex-direction: column; align-items: center; gap: 12px; color: #fff"><div class="spin"></div><div style="font-size: 13px">Connecting to {{prim.name}}'s stream…</div></div></div>
+</sc-if>
+<div class="tile" style="position: absolute; inset: 0; border: 0; background: transparent">
+<div class="top">
+<span class="tag live">LIVE</span>
+<span class="tag mono">{{prim.quality}}</span>
+<span class="tag" title="Connection to streamer"><span style="display: inline-flex; align-items: flex-end; gap: 1.5px; height: 10px"><i style="width: 2px; height: 4px; background: var(--accent)"></i><i style="width: 2px; height: 7px; background: var(--accent)"></i><i style="width: 2px; height: 10px; background: var(--accent)"></i></span>Excellent · 38 ms</span>
+<span style="flex: 1"></span>
+<sc-if value="{{prim.audible}}" hint-placeholder-val="{{true}}"><span class="tag" style="background: var(--accent); color: var(--accent-ink)"><span class="eq"><i></i><i></i><i></i></span>Stream audio</span></sc-if>
+</div>
+<div class="ovl" style="padding: 12px 14px">
+<span class="av s28" style="background: {{prim.color}}">{{prim.ini}}</span>
+<b style="font-size: 13.5px">{{prim.name}}</b>
+<span style="font-size: 12.5px; opacity: .8">{{prim.title}}</span>
+<span style="flex: 1"></span>
+<button class="ctl" aria-label="{{prim.muteLabel}}" onClick="{{prim.toggleMute}}">
+<sc-if value="{{prim.muted}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9 5 6M21 9l-5 6"/></svg></sc-if>
+<sc-if value="{{prim.notMuted}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></sc-if>
+</button>
+<input type="range" class="rng" min="0" max="100" value="{{prim.vol}}" onChange="{{prim.setVol}}" aria-label="{{prim.name}} stream volume" style="max-width: 110px">
+<span class="mono" style="font-size: 11px; width: 30px">{{prim.vol}}%</span>
+<div class="seg" role="group" aria-label="Video fit" style="background: rgba(255,255,255,.08); border-color: transparent">
+<button aria-pressed="{{fitOn}}" onClick="{{setFit}}" style="color: #fff">Fit</button>
+<button aria-pressed="{{fillOn}}" onClick="{{setFill}}" style="color: #fff">Fill</button>
+</div>
+<button class="ctl" aria-label="Pop out to docked player" title="Docked player" onClick="{{popOut}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/></svg></button>
+<button class="ctl" aria-label="Full screen" title="Full screen" onClick="{{fullscreen}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+</div>
+</div>
+</div>
+</div>
+<div style="display: flex; gap: 10px; height: 112px; flex: none">
+<sc-for list="{{streams}}" as="s" hint-placeholder-count="3">
+<div class="tile {{s.cls}}" style="width: 200px; flex: none">
+<button onClick="{{s.focus}}" aria-label="Watch {{s.name}}" style="position: absolute; inset: 0"><div class="scene {{s.scene}}" style="position: absolute; inset: 0"><div class="sky"></div><div class="hz"></div><div class="orb"></div></div></button>
+<div class="top" style="pointer-events: none"><span class="tag live" style="height: 18px; font-size: 10px">LIVE</span><sc-if value="{{s.isPrim}}" hint-placeholder-val="{{false}}"><span class="tag" style="height: 18px; font-size: 10px">Watching</span></sc-if></div>
+<div class="ovl" style="padding: 6px 8px">
+<span style="font-size: 12px; font-weight: 600; flex: 1">{{s.name}}</span>
+<sc-if value="{{s.audible}}" hint-placeholder-val="{{false}}"><span class="eq" style="color: var(--accent)" role="img" aria-label="Audio playing"><i></i><i></i><i></i></span></sc-if>
+<button class="ctl" style="width: 26px; height: 26px" aria-label="{{s.muteLabel}}" onClick="{{s.toggleMute}}">
+<sc-if value="{{s.muted}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9 5 6M21 9l-5 6"/></svg></sc-if>
+<sc-if value="{{s.notMuted}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></sc-if>
+</button>
+</div>
+</div>
+</sc-for>
+<div style="flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; color: #9aa1ab; font-size: 12px">Click a thumbnail to switch · audio is per stream</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{layoutGrid}}" hint-placeholder-val="{{false}}">
+<div style="flex: 1; min-height: 0; padding: 14px; display: grid; grid-template-columns: {{gridCols}}; gap: 12px; align-content: center">
+<sc-for list="{{streams}}" as="s" hint-placeholder-count="4">
+<div class="tile {{s.cls}}" style="aspect-ratio: 16/9">
+<div class="scene {{s.scene}}" style="position: absolute; inset: 0"><div class="sky"></div><div class="hz drift"></div><div class="orb drift"></div><div class="map"></div><span class="sim">Simulated · {{s.quality}}</span></div>
+<div class="top">
+<span class="tag live">LIVE</span><span class="tag mono">{{s.quality}}</span><span style="flex: 1"></span>
+<sc-if value="{{s.audible}}" hint-placeholder-val="{{false}}"><span class="tag" style="background: var(--accent); color: var(--accent-ink)"><span class="eq"><i></i><i></i><i></i></span>Audio</span></sc-if>
+</div>
+<div class="ovl">
+<span class="av s28" style="background: {{s.color}}">{{s.ini}}</span>
+<span style="min-width: 0; flex: 1"><b style="display: block; font-size: 13px">{{s.name}}</b><span style="display: block; font-size: 11.5px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.title}}</span></span>
+<button class="ctl" aria-label="{{s.muteLabel}}" onClick="{{s.toggleMute}}">
+<sc-if value="{{s.muted}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9 5 6M21 9l-5 6"/></svg></sc-if>
+<sc-if value="{{s.notMuted}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></sc-if>
+</button>
+<input type="range" class="rng" min="0" max="100" value="{{s.vol}}" onChange="{{s.setVol}}" aria-label="{{s.name}} stream volume" style="max-width: 80px">
+<button class="ctl" aria-label="Focus {{s.name}}" title="Make primary" onClick="{{s.focusBig}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</section>
+
+<!-- right column: members or docked soundboard -->
+<sc-if value="{{showMembers}}" hint-placeholder-val="{{true}}">
+<aside class="members scroll fade" aria-label="Members" style="width: 248px; flex: none; border-left: 1px solid var(--line); background: var(--bg1); padding: 8px 8px 16px">
+<sc-for list="{{memberGroups}}" as="g" hint-placeholder-count="3">
+<div>
+<div class="grp" style="padding-top: 14px">{{g.label}} — {{g.count}}</div>
+<sc-for list="{{g.people}}" as="p" hint-placeholder-count="4">
+<button onClick="{{p.open}}" onContextMenu="{{p.ctx}}" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: 9px; text-align: left; opacity: {{p.op}}" class="ch">
+<span class="av s32 ring {{p.ring}}" style="background: {{p.color}}">{{p.ini}}<span class="st" style="background: {{p.statusColor}}"></span></span>
+<span style="flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px"><span style="font-weight: 600; font-size: 13.5px; color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.name}}</span><sc-if value="{{p.live}}" hint-placeholder-val="{{false}}"><span class="tag live" style="height: 16px; font-size: 9.5px; padding: 0 5px">LIVE</span></sc-if></span>
+<span style="display: block; font-size: 11.5px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.sub}}</span>
+</span>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</aside>
+</sc-if>
+
+<sc-if value="{{sbDocked}}" hint-placeholder-val="{{false}}">
+<aside class="fade" aria-label="Soundboard (docked)" style="width: 340px; flex: none; border-left: 1px solid var(--line); background: var(--bg1); display: flex; flex-direction: column; min-height: 0">
+<div style="display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px">
+<span style="width: 28px; height: 28px; border-radius: 8px; background: color-mix(in oklab,var(--sb) 22%,transparent); color: var(--sb); display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg></span>
+<b class="disp" style="flex: 1; font-size: 16px">Soundboard</b>
+<button class="ibtn" aria-label="Undock to popover" title="Undock" onClick="{{toggleDock}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M15 5v14"/></svg></button>
+<button class="ibtn" aria-label="Close soundboard" onClick="{{toggleSb}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+<div style="padding: 0 14px 10px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<button class="ibtn {{sbMuteCls}}" aria-label="{{sbMuteLabel}}" aria-pressed="{{soundMuted}}" title="{{sbMuteLabel}}" onClick="{{toggleSoundMute}}" style="width: 28px; height: 28px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></button>
+<input type="range" class="rng sbr" min="0" max="100" value="{{soundVol}}" onChange="{{onSoundVol}}" aria-label="Soundboard volume (only for you)">
+<span class="mono" style="font-size: 11px; color: var(--tx3); width: 34px">{{soundVol}}%</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 9px; background: var(--bg2); border: 1px solid var(--line)">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--tx3)"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+<input aria-label="Search sounds" placeholder="Search sounds" value="{{sbQ}}" onChange="{{onSbQ}}" style="flex: 1; background: none; border: 0; outline: none; height: 30px">
+</div>
+<div class="scroll" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px">
+<sc-for list="{{sbCats}}" as="c" hint-placeholder-count="5"><button class="cat" aria-pressed="{{c.on}}" onClick="{{c.pick}}">{{c.label}}</button></sc-for>
+</div>
+<sc-if value="{{nowPlaying.on}}" hint-placeholder-val="{{false}}"><div class="fade" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; background: color-mix(in oklab,var(--sb) 14%,transparent); font-size: 12.5px"><span class="eq" style="color: var(--sb)"><i></i><i></i><i></i></span><b>{{nowPlaying.name}}</b><span style="color: var(--tx3)">played by {{nowPlaying.by}}</span></div></sc-if>
+<sc-if value="{{cooldown.on}}" hint-placeholder-val="{{false}}"><div style="font-size: 12px; color: var(--warn)">Cooldown — you can play again in {{cooldown.s}}s</div></sc-if>
+</div>
+<div class="scroll" style="flex: 1; min-height: 0; padding: 0 14px 14px">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{sbTiles}}" as="t" hint-placeholder-count="9">
+<div class="stwrap">
+<button class="stile {{t.cls}}" onClick="{{t.play}}" aria-label="Play {{t.name}}" title="{{t.title}}" disabled="{{t.disabled}}">
+<span class="em">{{t.e}}</span><span class="sn">{{t.name}}</span><span class="sd mono">{{t.dur}}</span>
+<sc-if value="{{t.playing}}" hint-placeholder-val="{{false}}"><span class="wv"><i></i><i></i><i></i><i></i></span><span class="prog" style="width: {{t.prog}}%"></span></sc-if>
+</button>
+<button class="fav {{t.favCls}}" aria-label="{{t.favLabel}}" aria-pressed="{{t.fav}}" onClick="{{t.toggleFav}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg></button>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="padding: 10px 14px; border-top: 1px solid var(--line)"><button class="btn sec" style="width: 100%" onClick="{{openUpload}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>Upload a sound</button></div>
+</aside>
+</sc-if>
+</div>
+
+<!-- docked mini player -->
+<sc-if value="{{showMini}}" hint-placeholder-val="{{false}}">
+<div class="fade" style="position: absolute; right: 16px; bottom: 92px; width: {{miniW}}px; border-radius: 14px; overflow: hidden; background: #000; border: 1px solid var(--line2); box-shadow: 0 20px 50px rgba(0,0,0,.5); z-index: 18">
+<div class="scene {{prim.scene}}" style="aspect-ratio: 16/9"><div class="sky"></div><div class="hz drift"></div><div class="orb drift"></div><span class="sim">Simulated</span>
+<div class="top" style="position: absolute; left: 8px; top: 8px; display: flex; gap: 6px"><span class="tag live" style="height: 18px; font-size: 10px">LIVE</span><sc-if value="{{prim.audible}}" hint-placeholder-val="{{true}}"><span class="tag" style="height: 18px; background: var(--accent); color: var(--accent-ink)"><span class="eq"><i></i><i></i><i></i></span></span></sc-if></div>
+</div>
+<div style="display: flex; align-items: center; gap: 6px; padding: 8px; background: var(--bg3)">
+<span class="av s20" style="background: {{prim.color}}">{{prim.ini}}</span>
+<span style="flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{prim.name}} · {{prim.title}}</span>
+<button class="ibtn" style="width: 28px; height: 28px" aria-label="{{prim.muteLabel}}" onClick="{{prim.toggleMute}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></button>
+<button class="ibtn" style="width: 28px; height: 28px" aria-label="Resize player" title="Resize" onClick="{{toggleMiniSize}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+<button class="ibtn" style="width: 28px; height: 28px" aria-label="Back to stream" title="Expand" onClick="{{expandMini}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+<button class="ibtn" style="width: 28px; height: 28px" aria-label="Stop watching" title="Stop watching" onClick="{{stopWatching}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+</div>
+</sc-if>
+</main>
+
+<!-- ============ SOUNDBOARD POPOVER (Concept A) ============ -->
+<sc-if value="{{sbPopover}}" hint-placeholder-val="{{false}}">
+<div class="pop fade" role="dialog" aria-label="Soundboard" style="position: absolute; left: 76px; bottom: 148px; width: 384px; max-height: 600px; display: flex; flex-direction: column; z-index: 25; border-color: color-mix(in oklab,var(--sb) 35%,var(--line2))">
+<div style="display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px">
+<span style="width: 28px; height: 28px; border-radius: 8px; background: color-mix(in oklab,var(--sb) 22%,transparent); color: var(--sb); display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg></span>
+<div style="flex: 1"><b class="disp" style="font-size: 16px">Soundboard</b><div style="font-size: 11.5px; color: var(--tx3)">Plays to everyone in {{voiceChannel.name}}</div></div>
+<button class="ibtn" aria-label="Dock beside the stream" title="Dock to side (Concept B)" onClick="{{toggleDock}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M15 5v14"/></svg></button>
+<button class="ibtn" aria-label="Close soundboard" onClick="{{toggleSb}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+<div style="padding: 0 14px 10px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<button class="ibtn {{sbMuteCls}}" aria-label="{{sbMuteLabel}}" aria-pressed="{{soundMuted}}" title="{{sbMuteLabel}}" onClick="{{toggleSoundMute}}" style="width: 28px; height: 28px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></button>
+<input type="range" class="rng sbr" min="0" max="100" value="{{soundVol}}" onChange="{{onSoundVol}}" aria-label="Soundboard volume (only for you)">
+<span class="mono" style="font-size: 11px; color: var(--tx3); width: 34px">{{soundVol}}%</span>
+</div>
+<sc-if value="{{soundMuted}}" hint-placeholder-val="{{false}}"><div class="note w" style="padding: 8px 10px">Soundboard muted for you. Friends still hear sounds you play.</div></sc-if>
+<div style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 9px; background: var(--bg1); border: 1px solid var(--line)">
+<svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--tx3)"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+<input aria-label="Search sounds" placeholder="Search 15 sounds" value="{{sbQ}}" onChange="{{onSbQ}}" style="flex: 1; background: none; border: 0; outline: none; height: 30px">
+</div>
+<div class="scroll" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px">
+<sc-for list="{{sbCats}}" as="c" hint-placeholder-count="5"><button class="cat" aria-pressed="{{c.on}}" onClick="{{c.pick}}">{{c.label}}</button></sc-for>
+</div>
+<sc-if value="{{nowPlaying.on}}" hint-placeholder-val="{{false}}"><div class="fade" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; background: color-mix(in oklab,var(--sb) 14%,transparent); font-size: 12.5px"><span class="eq" style="color: var(--sb)"><i></i><i></i><i></i></span><b>{{nowPlaying.name}}</b><span style="color: var(--tx3)">played by {{nowPlaying.by}}</span></div></sc-if>
+<sc-if value="{{cooldown.on}}" hint-placeholder-val="{{false}}"><div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--warn)"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>Cooldown — play again in {{cooldown.s}}s</div></sc-if>
+</div>
+<div class="scroll" style="flex: 1; min-height: 0; padding: 0 14px 12px">
+<sc-if value="{{showRecent}}" hint-placeholder-val="{{true}}">
+<div class="lbl" style="margin: 2px 0 8px">Recently played</div>
+<div style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap">
+<sc-for list="{{recentTiles}}" as="t" hint-placeholder-count="3"><button class="chip" onClick="{{t.play}}" disabled="{{t.disabled}}" style="background: var(--bg3); border: 1px solid var(--line)"><span>{{t.e}}</span>{{t.name}}</button></sc-for>
+</div>
+<div class="lbl" style="margin: 0 0 8px">{{sbCatLabel}}</div>
+</sc-if>
+<sc-if value="{{sbNoResults}}" hint-placeholder-val="{{false}}"><div style="padding: 24px 0; text-align: center; color: var(--tx3); font-size: 13px">No sounds match “{{sbQ}}”.</div></sc-if>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{sbTiles}}" as="t" hint-placeholder-count="9">
+<div class="stwrap">
+<button class="stile {{t.cls}}" onClick="{{t.play}}" aria-label="Play {{t.name}}" title="{{t.title}}" disabled="{{t.disabled}}">
+<span class="em">{{t.e}}</span><span class="sn">{{t.name}}</span><span class="sd mono">{{t.dur}}{{t.key}}</span>
+<sc-if value="{{t.playing}}" hint-placeholder-val="{{false}}"><span class="wv"><i></i><i></i><i></i><i></i></span><span class="prog" style="width: {{t.prog}}%"></span></sc-if>
+</button>
+<button class="fav {{t.favCls}}" aria-label="{{t.favLabel}}" aria-pressed="{{t.fav}}" onClick="{{t.toggleFav}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg></button>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line)">
+<button class="btn sec" style="flex: 1" onClick="{{openUpload}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>Upload sound</button>
+<button class="btn ghost" onClick="{{openSbSettings}}">Shortcuts</button>
+</div>
+</div>
+</sc-if>
+
+<!-- ============ CONTEXT MENU ============ -->
+<sc-if value="{{ctx.on}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; z-index: 35" onClick="{{closeCtx}}" onContextMenu="{{closeCtx}}"></div>
+<div class="pop fade" role="menu" aria-label="{{ctx.name}} options" style="position: absolute; left: {{ctx.x}}px; top: {{ctx.y}}px; width: 240px; padding: 6px; z-index: 36">
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 10px"><span class="av s28" style="background: {{ctx.color}}">{{ctx.ini}}</span><b>{{ctx.name}}</b></div>
+<button class="menu-i" role="menuitem" onClick="{{ctx.profile}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profile</button>
+<sc-if value="{{ctx.notMe}}" hint-placeholder-val="{{true}}">
+<button class="menu-i" role="menuitem" onClick="{{ctx.mention}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>Mention in chat</button>
+<sc-if value="{{ctx.live}}" hint-placeholder-val="{{false}}"><button class="menu-i" role="menuitem" onClick="{{ctx.watch}}" style="color: var(--tx)"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>Watch stream</button></sc-if>
+<div style="height: 1px; background: var(--line); margin: 6px 4px"></div>
+<div style="padding: 6px 10px"><div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--tx3); margin-bottom: 6px"><span>User volume</span><span class="mono">{{ctx.vol}}%</span></div><input type="range" class="rng" min="0" max="200" value="{{ctx.vol}}" onChange="{{ctx.setVol}}" aria-label="{{ctx.name}} volume" style="width: 100%"></div>
+<button class="menu-i" role="menuitemcheckbox" aria-checked="{{ctx.localMuted}}" onClick="{{ctx.toggleLocal}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M3 3l18 18"/></svg><span style="flex: 1">Mute for me</span><span class="sw" aria-pressed="{{ctx.localMuted}}" style="transform: scale(.8)"></span></button>
+<button class="menu-i" role="menuitemcheckbox" aria-checked="{{ctx.sbMuted}}" onClick="{{ctx.toggleSb}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--sb)"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg><span style="flex: 1">Mute their sounds</span><span class="sw sbsw" aria-pressed="{{ctx.sbMuted}}" style="transform: scale(.8)"></span></button>
+</sc-if>
+<sc-if value="{{ctx.isMe}}" hint-placeholder-val="{{false}}"><button class="menu-i" role="menuitem" onClick="{{openSettings}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Voice settings</button></sc-if>
+</div>
+</sc-if>
+
+<!-- ============ PROFILE POPOVER ============ -->
+<sc-if value="{{prof.on}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; z-index: 33" onClick="{{closeProfile}}"></div>
+<div class="pop fade" role="dialog" aria-label="{{prof.name}} profile" style="position: absolute; right: 264px; top: 70px; width: 320px; overflow: hidden; z-index: 34">
+<div style="height: 84px; background: {{prof.banner}}"></div>
+<div style="padding: 0 16px 16px; margin-top: -40px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between">
+<span class="av s80" style="background: {{prof.color}}; border: 5px solid var(--bg2)">{{prof.ini}}<span class="st" style="width: 18px; height: 18px; border-width: 4px; border-color: var(--bg2); background: {{prof.statusColor}}"></span></span>
+<div style="display: flex; gap: 6px; padding-bottom: 6px">
+<sc-for list="{{prof.badges}}" as="b" hint-placeholder-count="1"><span style="font-size: 10.5px; font-weight: 600; letter-spacing: .06em; padding: 3px 7px; border-radius: 6px; background: var(--bg4); color: var(--tx2)">{{b}}</span></sc-for>
+</div>
+</div>
+<div class="disp" style="font-size: 20px; font-weight: 700; margin-top: 8px">{{prof.name}}</div>
+<div class="mono" style="font-size: 12px; color: var(--tx3)">@{{prof.handle}} · {{prof.statusLabel}}</div>
+<sc-if value="{{prof.hasCustom}}" hint-placeholder-val="{{true}}"><div style="margin-top: 10px; font-size: 13px">“{{prof.custom}}”</div></sc-if>
+<sc-if value="{{prof.hasActivity}}" hint-placeholder-val="{{true}}">
+<div class="card" style="margin-top: 12px; padding: 12px; display: flex; gap: 12px; align-items: center">
+<div style="width: 40px; height: 40px; border-radius: 10px; background: var(--bg4); display: grid; place-items: center; color: var(--accent-tx)"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 11v3M5.5 12.5h3M15 12h.01M18 12h.01"/></svg></div>
+<div><div class="lbl" style="font-size: 10px">Activity</div><div style="font-weight: 500; font-size: 13px">{{prof.activity}}</div></div>
+</div>
+</sc-if>
+<sc-if value="{{prof.isMe}}" hint-placeholder-val="{{false}}">
+<div class="lbl" style="margin: 14px 0 8px">Set status</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{statusOpts}}" as="o" hint-placeholder-count="4"><button class="menu-i" aria-pressed="{{o.on}}" onClick="{{o.pick}}" style="background: {{o.bg}}"><span style="width: 10px; height: 10px; border-radius: 50%; background: {{o.c}}"></span>{{o.label}}</button></sc-for>
+</div>
+<button class="btn sec" style="width: 100%; margin-top: 12px" onClick="{{openSettings}}">Edit profile</button>
+</sc-if>
+<sc-if value="{{prof.inMyVoice}}" hint-placeholder-val="{{false}}">
+<div style="margin-top: 14px"><div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--tx3); margin-bottom: 6px"><span>Voice volume</span><span class="mono">{{prof.vol}}%</span></div><input type="range" class="rng" min="0" max="200" value="{{prof.vol}}" onChange="{{prof.setVol}}" aria-label="{{prof.name}} volume" style="width: 100%"></div>
+</sc-if>
+<sc-if value="{{prof.notMe}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; gap: 8px; margin-top: 14px">
+<button class="btn pri" style="flex: 1" onClick="{{prof.mention}}">Mention</button>
+<button class="btn sec" aria-pressed="{{prof.localMuted}}" onClick="{{prof.toggleLocal}}">{{prof.muteLabel}}</button>
+<button class="btn sec" aria-pressed="{{prof.sbMuted}}" onClick="{{prof.toggleSb}}" title="Mute their soundboard sounds" style="color: var(--sb)"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M4 12h2M8 8v8M12 5v14M16 9v6M20 11v2"/></svg>{{prof.sbLabel}}</button>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<!-- ============ SHARE SCREEN FLOW ============ -->
+<sc-if value="{{share.setup}}" hint-placeholder-val="{{false}}">
+<div class="scrim" onClick="{{cancelShare}}">
+<div class="pop fade" role="dialog" aria-label="Go live" onClick="{{stop}}" style="width: 520px; padding: 22px">
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 36px; height: 36px; border-radius: 10px; background: var(--live); color: #fff; display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span><div><h2 class="disp" style="margin: 0; font-size: 20px">Go live in {{voiceChannel.name}}</h2><div style="font-size: 12.5px; color: var(--tx3)">{{voiceChannel.count}} friends will be able to watch</div></div></div>
+<div class="lbl" style="margin: 20px 0 8px">Quality</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<button onClick="{{q1080}}" aria-pressed="{{share.is1080}}" class="card" style="text-align: left; border-color: {{share.b1080}}; box-shadow: {{share.s1080}}"><div style="display: flex; justify-content: space-between"><b class="disp" style="font-size: 17px">1080p · 60</b><span style="font-size: 10.5px; font-weight: 600; color: var(--accent-tx)">RECOMMENDED</span></div><div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Crisp game streams. Needs about 6 Mbps upload.</div></button>
+<button onClick="{{q720}}" aria-pressed="{{share.is720}}" class="card" style="text-align: left; border-color: {{share.b720}}; box-shadow: {{share.s720}}"><b class="disp" style="font-size: 17px">720p · 30</b><div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Fallback for weaker connections. About 2.5 Mbps.</div></button>
+</div>
+<div class="srow" style="border-bottom: 0; padding-bottom: 4px"><div><div class="t">Include system audio</div><div class="d">So friends hear the game, not just see it</div></div><button class="sw" aria-pressed="{{shareAudio}}" aria-label="Include system audio" onClick="{{toggleShareAudio}}"></button></div>
+<div class="note" style="margin-top: 8px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--tx3); margin-top: 1px"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg><span>On Windows, Chrome and Edge can capture audio from an <b>entire screen</b> or a <b>browser tab</b>. A single app window shares video only — pick Entire screen if friends should hear the game.</span></div>
+<div class="field" style="margin-top: 16px"><label for="st">Stream title (optional)</label><input id="st" class="inp" placeholder="e.g. NG+ boss run, no healing" value="{{shareTitle}}" onChange="{{onShareTitle}}"></div>
+<div class="note" style="margin-top: 16px; background: transparent"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--accent-tx); margin-top: 1px"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>Next, <b>your browser</b> asks what to share — a screen, a window or a tab. Hangar can't see or pick anything until you choose there.</span></div>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px"><button class="btn ghost" onClick="{{cancelShare}}">Cancel</button><button class="btn pri" onClick="{{toPicker}}">Choose what to share</button></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{share.picker}}" hint-placeholder-val="{{false}}">
+<div class="scrim" style="background: rgba(0,0,0,.5)">
+<div class="fade" role="dialog" aria-label="Simulated browser share picker" style="width: 620px; border-radius: 10px; background: #2b2d31; color: #e8eaed; font-family: 'Segoe UI', system-ui, sans-serif; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden">
+<div style="padding: 8px 14px; background: repeating-linear-gradient(45deg, #3a2a00 0 10px, #4a3500 10px 20px); color: #ffd27a; font: 600 11px 'Geist Mono', monospace; letter-spacing: .06em">SIMULATED · IN THE REAL APP THIS IS CHROME / EDGE'S OWN DIALOG</div>
+<div style="padding: 18px 20px 0"><div style="font-size: 15px">Choose what to share with <b>hangar.app</b></div><div style="font-size: 12.5px; color: #a6a9ad; margin-top: 2px">The site will be able to see the contents of your screen</div></div>
+<div style="display: flex; gap: 18px; padding: 14px 20px 0; border-bottom: 1px solid #3c3f44; font-size: 13px">
+<sc-for list="{{share.tabs}}" as="t" hint-placeholder-count="3"><button onClick="{{t.pick}}" aria-pressed="{{t.on}}" style="padding: 8px 2px; color: {{t.c}}; border-bottom: 2px solid {{t.b}}">{{t.label}}</button></sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px 20px; min-height: 150px">
+<sc-for list="{{share.sources}}" as="s" hint-placeholder-count="2"><button onClick="{{s.pick}}" style="border-radius: 8px; padding: 6px; border: 2px solid {{s.b}}; text-align: left"><div class="scene {{s.scene}}" style="aspect-ratio: 16/10; border-radius: 4px"><div class="sky"></div><div class="hz"></div><div class="orb"></div></div><div style="font-size: 12px; margin-top: 6px">{{s.label}}</div></button></sc-for>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid #3c3f44">
+<button onClick="{{toggleShareAudio}}" style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: {{share.audioColor}}" disabled="{{share.audioDisabled}}"><span style="width: 16px; height: 16px; border-radius: 3px; border: 2px solid #8ab4f8; background: {{share.audioBox}}"></span>{{share.audioLabel}}</button>
+<span style="flex: 1"></span>
+<button onClick="{{denyShare}}" style="height: 34px; padding: 0 16px; border-radius: 17px; border: 1px solid #5f6368; color: #8ab4f8; font-size: 13px">Cancel</button>
+<button onClick="{{startShare}}" style="height: 34px; padding: 0 18px; border-radius: 17px; background: #8ab4f8; color: #202124; font-weight: 600; font-size: 13px">Share</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{share.denied}}" hint-placeholder-val="{{false}}">
+<div class="scrim" onClick="{{cancelShare}}">
+<div class="pop fade" role="alertdialog" aria-label="Screen sharing blocked" onClick="{{stop}}" style="width: 460px; padding: 22px">
+<span style="width: 40px; height: 40px; border-radius: 12px; background: color-mix(in oklab,var(--danger) 20%,transparent); color: var(--danger); display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M3 3l18 18"/></svg></span>
+<h2 class="disp" style="margin: 14px 0 6px; font-size: 20px">Screen sharing didn't start</h2>
+<p style="margin: 0; color: var(--tx2); font-size: 13.5px">The browser dialog was closed or permission was denied. Nothing was shared.</p>
+<ol style="margin: 14px 0 0; padding-left: 18px; color: var(--tx2); font-size: 13px; display: flex; flex-direction: column; gap: 4px"><li>Try again and pick a screen, window or tab.</li><li>If no dialog appears: click the site icon left of the address bar › <b>Screen sharing</b> › Allow.</li><li>On Windows, check Settings › Privacy › Screen capture for your browser.</li></ol>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px"><button class="btn ghost" onClick="{{cancelShare}}">Close</button><button class="btn pri" onClick="{{toPicker}}">Try again</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- ============ UPLOAD SOUND ============ -->
+<sc-if value="{{up.on}}" hint-placeholder-val="{{false}}">
+<div class="scrim" onClick="{{closeUpload}}">
+<div class="pop fade" role="dialog" aria-label="Upload a sound" onClick="{{stop}}" style="width: 500px; padding: 22px">
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 36px; height: 36px; border-radius: 10px; background: var(--sb); color: #1A0A22; display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><div style="flex: 1"><h2 class="disp" style="margin: 0; font-size: 20px">Upload a sound</h2><div style="font-size: 12.5px; color: var(--tx3)">Short effects only — up to 5 seconds, 1 MB</div></div><button class="ibtn" aria-label="Close" onClick="{{closeUpload}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+
+<sc-if value="{{up.drop}}" hint-placeholder-val="{{true}}">
+<label for="sfile" style="margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 34px 20px; border-radius: 14px; border: 2px dashed color-mix(in oklab,var(--sb) 55%,var(--line2)); background: color-mix(in oklab,var(--sb) 6%,var(--bg1)); cursor: pointer; text-align: center">
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="width: 34px; height: 34px; color: var(--sb)"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+<b>Drop an audio file or click to browse</b>
+<span style="font-size: 12px; color: var(--tx3)">MP3, WAV or OGG · max 5 s · max 1 MB</span>
+</label>
+<input id="sfile" type="file" accept="audio/*" onChange="{{onFile}}" style="position: absolute; width: 1px; height: 1px; opacity: 0">
+<div style="display: flex; align-items: center; gap: 10px; margin-top: 12px"><span style="flex: 1; height: 1px; background: var(--line)"></span><span style="font-size: 12px; color: var(--tx3)">or</span><span style="flex: 1; height: 1px; background: var(--line)"></span></div>
+<button class="btn sec" style="width: 100%; margin-top: 12px" onClick="{{useSample}}">Use a sample clip (simulated)</button>
+</sc-if>
+
+<sc-if value="{{up.edit}}" hint-placeholder-val="{{false}}">
+<div class="card" style="margin-top: 18px; padding: 12px; display: flex; align-items: center; gap: 12px">
+<button class="ibtn" style="width: 38px; height: 38px; background: var(--sb); color: #1A0A22; border-radius: 50%" aria-label="Preview trimmed sound" onClick="{{previewUpload}}"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="fill: currentColor"><path d="M7 4v16l13-8z"/></svg></button>
+<div style="flex: 1; min-width: 0"><div style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{up.file}}</div><div class="mono" style="font-size: 11.5px; color: var(--tx3)">{{up.size}} · {{up.total}}s total</div></div>
+<span class="tag" style="background: {{up.badgeBg}}; color: {{up.badgeFg}}">{{up.badge}}</span>
+</div>
+<div style="margin-top: 14px">
+<div style="display: flex; justify-content: space-between" class="lbl"><span>Trim</span><span class="mono" style="text-transform: none; letter-spacing: 0; color: {{up.lenColor}}">{{up.len}}s selected</span></div>
+<div class="wave" style="margin-top: 8px"><sc-for list="{{up.bars}}" as="b" hint-placeholder-count="40"><i class="{{b.cls}}" style="height: {{b.h}}%"></i></sc-for></div>
+<div style="display: flex; gap: 12px; margin-top: 8px; align-items: center">
+<label class="mono" for="ta" style="font-size: 11px; color: var(--tx3); width: 36px">Start</label><input id="ta" type="range" class="rng sbr" min="0" max="100" value="{{up.a}}" onChange="{{onTrimA}}">
+<label class="mono" for="tb" style="font-size: 11px; color: var(--tx3); width: 30px">End</label><input id="tb" type="range" class="rng sbr" min="0" max="100" value="{{up.b}}" onChange="{{onTrimB}}">
+</div>
+<sc-if value="{{up.tooLong}}" hint-placeholder-val="{{false}}"><div style="font-size: 12px; color: var(--danger); margin-top: 6px">Trim to 5.0 s or less to upload.</div></sc-if>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin-top: 16px">
+<div class="field"><label for="sname">Sound name</label><input id="sname" class="inp" maxlength="24" value="{{up.name}}" onChange="{{onUpName}}"></div>
+<div class="field"><span class="lbl">Icon</span><div style="display: flex; gap: 4px">
+<sc-for list="{{up.emojis}}" as="e" hint-placeholder-count="6"><button onClick="{{e.pick}}" aria-pressed="{{e.on}}" aria-label="Icon {{e.e}}" style="width: 38px; height: 38px; border-radius: 9px; font-size: 18px; background: {{e.bg}}; border: 1px solid {{e.b}}">{{e.e}}</button></sc-for>
+</div></div>
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px"><button class="btn ghost" onClick="{{closeUpload}}">Cancel</button><button class="btn sbb" onClick="{{doUpload}}" disabled="{{up.cantSave}}">Upload to {{server.name}}</button></div>
+</sc-if>
+
+<sc-if value="{{up.uploading}}" hint-placeholder-val="{{false}}">
+<div style="margin-top: 22px">
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span>Uploading <b>{{up.name}}</b>…</span><span class="mono">{{up.progress}}%</span></div>
+<div class="meter" style="margin-top: 10px; height: 10px"><i style="width: {{up.progress}}%; background: var(--sb)"></i></div>
+<div style="font-size: 12px; color: var(--tx3); margin-top: 10px">Normalizing loudness so it won't blow out anyone's headphones.</div>
+</div>
+</sc-if>
+
+<sc-if value="{{up.error}}" hint-placeholder-val="{{false}}">
+<div class="note e" style="margin-top: 18px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--danger); margin-top: 1px"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><div><b style="color: var(--tx)">Upload failed</b><div>{{up.err}}</div></div></div>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px"><button class="btn ghost" onClick="{{closeUpload}}">Cancel</button><button class="btn sbb" onClick="{{resetUpload}}">Choose another file</button></div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<!-- ============ SETTINGS ============ -->
+<sc-if value="{{set.on}}" hint-placeholder-val="{{false}}">
+<div class="fade" role="dialog" aria-label="Settings" style="position: absolute; inset: 0; z-index: 45; display: flex; background: var(--bg1)">
+<nav aria-label="Settings sections" style="width: 260px; flex: none; padding: 40px 16px 20px; display: flex; flex-direction: column; gap: 2px; background: var(--bg0); border-right: 1px solid var(--line)">
+<div class="lbl" style="padding: 0 10px 8px">User settings</div>
+<sc-for list="{{set.tabs}}" as="t" hint-placeholder-count="6">
+<button class="snav" aria-pressed="{{t.on}}" onClick="{{t.pick}}"><span style="width: 8px; height: 8px; border-radius: 2px; background: {{t.dot}}"></span>{{t.label}}</button>
+</sc-for>
+<div style="flex: 1"></div>
+<button class="snav" onClick="{{signOut}}" style="color: var(--danger)">Log out</button>
+</nav>
+<div class="scroll" style="flex: 1; min-width: 0; padding: 40px 48px 60px">
+<div style="max-width: 720px">
+
+<sc-if value="{{set.account}}" hint-placeholder-val="{{true}}">
+<h2 class="disp" style="margin: 0 0 20px; font-size: 26px">My account</h2>
+<div class="card" style="padding: 0; overflow: hidden">
+<div style="height: 90px; background: linear-gradient(120deg, var(--accent), color-mix(in oklab,var(--accent) 40%,var(--bg4)))"></div>
+<div style="display: flex; align-items: flex-end; gap: 16px; padding: 0 20px 20px; margin-top: -36px">
+<span class="av s80" style="background: {{me.color}}; border: 5px solid var(--bg3)">{{me.ini}}</span>
+<div style="flex: 1; padding-bottom: 6px"><div class="disp" style="font-size: 20px; font-weight: 700">{{me.name}}</div><div class="mono" style="font-size: 12px; color: var(--tx3)">@tomer · Admin</div></div>
+<button class="btn sec" onClick="{{changeAvatar}}">Change avatar</button>
+</div>
+</div>
+<div class="field" style="margin-top: 22px"><label for="dn">Display name</label><input id="dn" class="inp" value="{{myName}}" onChange="{{onMyName}}" maxlength="32"></div>
+<div class="field" style="margin-top: 14px"><label for="cs">Custom status</label><input id="cs" class="inp" value="{{customStatus}}" onChange="{{onCustom}}" maxlength="60" placeholder="What's up?"></div>
+<div class="lbl" style="margin: 28px 0 4px">Password &amp; sessions</div>
+<div class="srow"><div><div class="t">Password</div><div class="d">Last changed 3 months ago</div></div><button class="btn sec" onClick="{{changePw}}">Change password</button></div>
+<sc-for list="{{sessions}}" as="s" hint-placeholder-count="2">
+<div class="srow"><div><div class="t">{{s.label}}</div><div class="d">{{s.meta}}</div></div><sc-if value="{{s.current}}" hint-placeholder-val="{{true}}"><span style="font-size: 12px; color: var(--accent-tx); font-weight: 600">This device</span></sc-if><sc-if value="{{s.other}}" hint-placeholder-val="{{false}}"><button class="btn ghost" onClick="{{s.revoke}}" style="color: var(--danger)">Sign out</button></sc-if></div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{set.voice}}" hint-placeholder-val="{{false}}">
+<h2 class="disp" style="margin: 0 0 20px; font-size: 26px">Voice &amp; audio</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div class="field"><label for="idev">Microphone</label><select id="idev" class="inp" value="{{inputDev}}" onChange="{{onInputDev}}"><option value="mic1">Headset Mic (USB Audio)</option><option value="mic2">Microphone Array (Realtek)</option><option value="def">Default — Windows</option></select></div>
+<div class="field"><label for="odev">Speakers</label><select id="odev" class="inp" value="{{outputDev}}" onChange="{{onOutputDev}}"><option value="out1">Headset (USB Audio)</option><option value="out2">Speakers (Realtek)</option><option value="def">Default — Windows</option></select></div>
+<div class="field"><label for="iv">Input volume · {{inVol}}%</label><input id="iv" type="range" class="rng" min="0" max="100" value="{{inVol}}" onChange="{{onInVol}}"></div>
+<div class="field"><label for="ov">Output volume · {{outVol}}%</label><input id="ov" type="range" class="rng" min="0" max="200" value="{{outVol}}" onChange="{{onOutVol}}"></div>
+</div>
+<div class="card" style="margin-top: 20px">
+<div style="display: flex; align-items: center; justify-content: space-between"><div><div style="font-weight: 600">Input sensitivity</div><div style="font-size: 12.5px; color: var(--tx3)">Sound above the marker transmits. Lime = you'd be heard.</div></div><button class="btn {{micTestCls}}" onClick="{{toggleMicTest}}">{{micTestLabel}}</button></div>
+<div style="display: flex; align-items: center; gap: 12px; margin-top: 14px"><div class="meter"><i style="width: {{micLevel}}%; background: {{micLevelColor}}"></i><b style="left: {{sens}}%"></b></div></div>
+<input type="range" class="rng" min="0" max="100" value="{{sens}}" onChange="{{onSens}}" aria-label="Input sensitivity threshold" style="width: 100%; margin-top: 10px">
+<sc-if value="{{micTest}}" hint-placeholder-val="{{false}}"><div style="font-size: 12px; color: var(--tx3); margin-top: 6px">Simulated level — the real app reads your mic after the browser grants permission.</div></sc-if>
+</div>
+<div class="srow"><div><div class="t">Noise suppression</div><div class="d">Filters keyboards, fans and that one friend's mechanical switches</div></div><button class="sw" aria-label="Noise suppression" aria-pressed="{{noise}}" onClick="{{toggleNoise}}"></button></div>
+<div class="srow"><div><div class="t">Echo cancellation</div><div class="d">Keep on if you use speakers instead of headphones</div></div><button class="sw" aria-label="Echo cancellation" aria-pressed="{{echo}}" onClick="{{toggleEcho}}"></button></div>
+</sc-if>
+
+<sc-if value="{{set.video}}" hint-placeholder-val="{{false}}">
+<h2 class="disp" style="margin: 0 0 20px; font-size: 26px">Video &amp; streaming</h2>
+<div style="display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start">
+<div style="aspect-ratio: 16/10; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); position: relative; background: {{camPreviewBg}}">
+<sc-if value="{{camOk}}" hint-placeholder-val="{{true}}"><div style="position: absolute; left: 50%; bottom: -14%; width: 46%; aspect-ratio: 1; margin-left: -23%; border-radius: 50% 50% 0 0; background: #4d6079"></div><div style="position: absolute; left: 50%; top: 20%; width: 22%; aspect-ratio: 1; margin-left: -11%; border-radius: 50%; background: #5d7391"></div><span class="tag" style="position: absolute; left: 8px; top: 8px">Preview (simulated)</span></sc-if>
+<sc-if value="{{camNone}}" hint-placeholder-val="{{false}}"><div style="position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--tx2); font-size: 12.5px"><div><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true" style="color: var(--tx3)"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3M3 3l18 18"/></svg><div style="margin-top: 6px">No webcam detected</div></div></div></sc-if>
+</div>
+<div class="field"><label for="cdev">Camera</label><select id="cdev" class="inp" value="{{camDev}}" onChange="{{onCamDev}}"><option value="cam1">Integrated Webcam (simulated)</option><option value="none">No camera detected</option></select>
+<div style="font-size: 12.5px; color: var(--tx3)">Switch to “No camera detected” to see how the app handles a missing device.</div></div>
+</div>
+<div class="lbl" style="margin: 26px 0 4px">Default stream quality</div>
+<div class="srow"><div><div class="t">When you go live</div><div class="d">You can still change it per stream</div></div><div class="seg"><button aria-pressed="{{dq1080}}" onClick="{{setDq1080}}">1080p · 60</button><button aria-pressed="{{dq720}}" onClick="{{setDq720}}">720p · 30</button></div></div>
+<div class="srow"><div><div class="t">Auto-play friends' streams</div><div class="d">Show live previews on voice cards. Audio stays off until you watch.</div></div><button class="sw" aria-label="Auto-play streams" aria-pressed="{{autoplay}}" onClick="{{toggleAutoplay}}"></button></div>
+<div class="note" style="margin-top: 18px"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--tx3); margin-top: 1px"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg><div><b style="color: var(--tx)">Getting game audio into your stream</b><br>Chrome and Edge on Windows: choose <b>Entire screen</b> and tick “Share system audio”, or share a <b>tab</b> with “Share tab audio”. Single windows can't include audio in browsers. Friends hear stream audio on its own volume slider — separate from your voice.</div></div>
+</sc-if>
+
+<sc-if value="{{set.sound}}" hint-placeholder-val="{{false}}">
+<h2 class="disp" style="margin: 0 0 20px; font-size: 26px">Soundboard</h2>
+<div class="srow"><div><div class="t">Soundboard volume</div><div class="d">Only changes what you hear — separate from voice and streams</div></div><div style="display: flex; align-items: center; gap: 10px; width: 260px"><input type="range" class="rng sbr" min="0" max="100" value="{{soundVol}}" onChange="{{onSoundVol}}" aria-label="Soundboard volume"><span class="mono" style="font-size: 12px; width: 36px">{{soundVol}}%</span></div></div>
+<div class="srow"><div><div class="t">Mute all soundboard sounds</div><div class="d">You'll still see who played what</div></div><button class="sw sbsw" aria-label="Mute soundboard" aria-pressed="{{soundMuted}}" onClick="{{toggleSoundMute}}"></button></div>
+<div class="lbl" style="margin: 28px 0 10px">Keyboard shortcuts</div>
+<div class="note w"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true" style="color: var(--warn); margin-top: 1px"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg><div><b style="color: var(--tx)">Shortcuts work while the Hangar tab is focused.</b> Browsers don't let websites listen to keys while you're in a game. System-wide hotkeys would need a desktop app, which Hangar doesn't have yet.</div></div>
+<div class="card" style="margin-top: 12px; padding: 4px 16px">
+<sc-for list="{{shortcutRows}}" as="r" hint-placeholder-count="4">
+<div class="srow" style="padding: 10px 0"><div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 18px">{{r.e}}</span><span class="t">{{r.name}}</span></div><div style="display: flex; align-items: center; gap: 8px"><button class="kbd" onClick="{{r.record}}" onKeyDown="{{r.keydown}}" aria-label="Set shortcut for {{r.name}}" style="min-width: 90px; justify-content: center; height: 30px; cursor: pointer; border-color: {{r.border}}">{{r.label}}</button><button class="ibtn" style="width: 28px; height: 28px" aria-label="Clear shortcut" onClick="{{r.clear}}"><svg viewBox="0 0 24 24" class="ic sm" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div>
+</sc-for>
+<div class="srow" style="padding: 10px 0; border-bottom: 0; opacity: .55"><div><div class="t">System-wide shortcuts (while gaming)</div><div class="d">Requires a desktop app · not available in the browser</div></div><span class="kbd">Unavailable</span></div>
+</div>
+<div class="lbl" style="margin: 28px 0 4px">Mute sounds from specific friends</div>
+<sc-for list="{{sbUserRows}}" as="u" hint-placeholder-count="4">
+<div class="srow" style="padding: 10px 0"><div style="display: flex; align-items: center; gap: 10px"><span class="av s28" style="background: {{u.color}}">{{u.ini}}</span><span class="t">{{u.name}}</span></div><button class="sw sbsw" aria-label="Mute {{u.name}} sounds" aria-pressed="{{u.muted}}" onClick="{{u.toggle}}"></button></div>
+</sc-for>
+<div class="lbl" style="margin: 28px 0 4px">Manage server sounds · Admin</div>
+<div style="font-size: 12.5px; color: var(--tx3); margin-bottom: 6px">Members can upload. Admins can remove any sound. Cooldown between plays: 3 s per person.</div>
+<sc-for list="{{manageRows}}" as="r" hint-placeholder-count="4">
+<div class="srow" style="padding: 8px 0"><div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 18px">{{r.e}}</span><span class="t">{{r.name}}</span><span class="mono" style="font-size: 11px; color: var(--tx3)">{{r.meta}}</span></div><button class="btn ghost" onClick="{{r.del}}" style="color: var(--danger); height: 30px">Delete</button></div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{set.look}}" hint-placeholder-val="{{false}}">
+<h2 class="disp" style="margin: 0 0 20px; font-size: 26px">Appearance</h2>
+<div class="srow"><div><div class="t">Theme</div><div class="d">Dark is tuned for long sessions on a second monitor</div></div><div class="seg"><button aria-pressed="{{isDark}}" onClick="{{setDark}}">Dark</button><button aria-pressed="{{isLight}}" onClick="{{setLight}}">Light</button></div></div>
+<div class="srow"><div><div class="t">Accent color</div><div class="d">Used for speaking rings, focus and primary actions</div></div><div style="display: flex; gap: 8px"><sc-for list="{{accentOpts}}" as="a" hint-placeholder-count="4"><button onClick="{{a.pick}}" aria-label="{{a.label}}" aria-pressed="{{a.on}}" style="width: 30px; height: 30px; border-radius: 50%; background: {{a.c}}; box-shadow: {{a.ring}}"></button></sc-for></div></div>
+<div class="srow"><div><div class="t">Message text size</div><div class="d">{{fontScale}}%</div></div><input type="range" class="rng" min="85" max="130" step="5" value="{{fontScale}}" onChange="{{onFontScale}}" aria-label="Message text size" style="max-width: 240px"></div>
+<div class="srow"><div><div class="t">Message density</div><div class="d">Compact hides avatars and fits more chat on screen</div></div><div class="seg"><button aria-pressed="{{isCozy}}" onClick="{{setCozy}}">Cozy</button><button aria-pressed="{{isCompact}}" onClick="{{setCompact}}">Compact</button></div></div>
+<div class="srow"><div><div class="t">Reduce motion</div><div class="d">Turns off speaking pulses, waveforms and stream drift</div></div><button class="sw" aria-label="Reduce motion" aria-pressed="{{reduceMotion}}" onClick="{{toggleReduce}}"></button></div>
+</sc-if>
+
+<sc-if value="{{set.notif}}" hint-placeholder-val="{{false}}">
+<h2 class="disp" style="margin: 0 0 20px; font-size: 26px">Notifications</h2>
+<div class="card" style="display: flex; align-items: center; gap: 14px"><div style="flex: 1"><div style="font-weight: 600">Browser notifications</div><div style="font-size: 12.5px; color: var(--tx3)">Status: {{notifLabel}}</div></div><button class="btn pri" onClick="{{askNotif}}" disabled="{{notifGranted}}">{{notifBtn}}</button></div>
+<div class="srow"><div><div class="t">Message notifications</div><div class="d">Which messages pop up when Hangar is in the background</div></div><div class="seg"><button aria-pressed="{{nAll}}" onClick="{{setNAll}}">All</button><button aria-pressed="{{nMentions}}" onClick="{{setNMentions}}">Mentions</button><button aria-pressed="{{nNone}}" onClick="{{setNNone}}">None</button></div></div>
+<div class="srow"><div><div class="t">Mention alerts during voice</div><div class="d">Still notify when you're in a voice channel</div></div><button class="sw" aria-label="Mention alerts in voice" aria-pressed="{{notifSounds}}" onClick="{{toggleNotifSounds}}"></button></div>
+<div class="srow"><div><div class="t">Join &amp; leave chimes</div><div class="d">A soft cue when friends enter or leave your voice channel</div></div><button class="sw" aria-label="Join and leave chimes" aria-pressed="{{chimes}}" onClick="{{toggleChimes}}"></button></div>
+</sc-if>
+</div>
+</div>
+<button onClick="{{closeSettings}}" aria-label="Close settings" style="position: absolute; right: 28px; top: 32px; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--tx3); font-size: 11px"><span style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line2); display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span>ESC</button>
+</div>
+</sc-if>
+
+<!-- ============ IMAGE VIEWER ============ -->
+<sc-if value="{{viewer.on}}" hint-placeholder-val="{{false}}">
+<div class="scrim" style="background: rgba(0,0,0,.86)" onClick="{{closeViewer}}">
+<div class="fade" style="width: min(1000px, 86%); display: flex; flex-direction: column; gap: 12px" onClick="{{stop}}">
+<div class="scene {{viewer.scene}}" style="aspect-ratio: 16/9; border-radius: 12px"><div class="sky"></div><div class="hz"></div><div class="orb"></div><div class="map"></div><span class="sim">Image placeholder</span></div>
+<div style="display: flex; align-items: center; gap: 10px; color: #fff"><b>{{viewer.title}}</b><span style="opacity: .6; font-size: 12.5px">shared by {{viewer.by}}</span><span style="flex: 1"></span><button class="btn sec" onClick="{{closeViewer}}">Close</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- ============ HOME / WELCOME ============ -->
+<sc-if value="{{welcome}}" hint-placeholder-val="{{false}}">
+<div class="fade" style="position: absolute; inset: 0; z-index: 50; background: var(--bg0); display: flex; align-items: center; justify-content: center; padding: 24px">
+<div style="width: 560px; max-width: 100%">
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 44px; height: 44px; border-radius: 14px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic lg" aria-hidden="true" style="stroke-width: 2.2"><path d="M3 11 12 4l9 7"/><path d="M6 10v9h4v-5h4v5h4v-9"/></svg></span><span class="disp" style="font-size: 26px; font-weight: 700">Hangar</span></div>
+<h1 class="disp" style="font-size: 44px; line-height: 1.05; margin: 34px 0 10px; font-weight: 700">Welcome back, {{me.name}}.</h1>
+<p style="margin: 0 0 28px; color: var(--tx2); font-size: 16px">Where are we hanging out tonight?</p>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{serverCards}}" as="s" hint-placeholder-count="2">
+<button onClick="{{s.pick}}" class="card" style="display: flex; align-items: center; gap: 16px; text-align: left; padding: 16px 18px">
+<span class="srv" style="background: {{s.bg}}; color: {{s.fg}}; width: 52px; height: 52px"><span class="disp" style="font-size: 18px; font-weight: 700">{{s.short}}</span></span>
+<span style="flex: 1"><b class="disp" style="font-size: 18px">{{s.name}}</b><span style="display: block; font-size: 13px; color: var(--tx3)">{{s.meta}}</span></span>
+<span style="display: flex">
+<sc-for list="{{s.faces}}" as="f" hint-placeholder-count="3"><span class="av s28" style="background: {{f.color}}; margin-left: -8px; border: 2px solid var(--bg3)">{{f.ini}}</span></sc-for>
+</span>
+<svg viewBox="0 0 24 24" class="ic" aria-hidden="true" style="color: var(--tx3)"><path d="m9 6 6 6-6 6"/></svg>
+</button>
+</sc-for>
+</div>
+<p style="margin: 24px 0 0; font-size: 12.5px; color: var(--tx3)">Invite-only · 15 members · Prototype with simulated voice, video and streams.</p>
+</div>
+</div>
+</sc-if>
+
+<!-- ============ TOASTS ============ -->
+<div aria-live="polite" style="position: absolute; left: 50%; top: 66px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 60; pointer-events: none">
+<sc-for list="{{toasts}}" as="t" hint-placeholder-count="0">
+<div class="toast" style="pointer-events: auto"><span class="dotc" style="background: {{t.c}}"></span><span style="flex: 1">{{t.text}}</span></div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#C8F05A&quot;,&quot;options&quot;:[&quot;#C8F05A&quot;,&quot;#5CE1E6&quot;,&quot;#FF8A65&quot;,&quot;#A78BFA&quot;]},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;chat&quot;,&quot;voice&quot;,&quot;stream&quot;,&quot;multi&quot;,&quot;soundboard&quot;,&quot;welcome&quot;],&quot;default&quot;:&quot;voice&quot;},&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+const USERS = {
+  tomer: { name: 'Tomer', handle: 'tomer', c: '#C8F05A', status: 'online', role: 'Admin', custom: '', activity: '' },
+  maya: { name: 'Maya', handle: 'mayaparry', c: '#F59BC4', status: 'online', role: 'Admin', custom: 'parry or perish', activity: 'Playing Elden Ring' },
+  jonah: { name: 'Jonah', handle: 'jonah.gg', c: '#8FB8FF', status: 'online', role: 'Member', custom: 'one more match. trust', activity: 'Playing Rocket League' },
+  ari: { name: 'Ari', handle: 'arifarms', c: '#7FD8C3', status: 'online', role: 'Member', custom: 'melon economist', activity: 'Playing Stardew Valley' },
+  noa: { name: 'Noa', handle: 'noa', c: '#F2C46D', status: 'online', role: 'Member', custom: 'brb snacks', activity: '' },
+  gal: { name: 'Gal', handle: 'galgal', c: '#B7A1FF', status: 'online', role: 'Member', custom: '', activity: 'Listening to lo-fi beats' },
+  eitan: { name: 'Eitan', handle: 'eitan', c: '#FF9E7A', status: 'dnd', role: 'Member', custom: 'ranked. do not disturb', activity: 'Playing Valorant — Competitive' },
+  dana: { name: 'Dana', handle: 'danaa', c: '#9AD27A', status: 'online', role: 'Member', custom: '', activity: 'Playing Valorant' },
+  shira: { name: 'Shira', handle: 'shira', c: '#E8A0FF', status: 'idle', role: 'Member', custom: 'exam week, pls no pings', activity: '' },
+  leo: { name: 'Leo', handle: 'leo', c: '#7CC6F0', status: 'idle', role: 'Member', custom: '', activity: 'Idle for 20 min' },
+  omer: { name: 'Omer', handle: 'omer', c: '#FFB38A', status: 'offline', role: 'Member', custom: '', activity: 'Last seen 2 h ago' },
+  yuval: { name: 'Yuval', handle: 'yuval', c: '#A5B4FC', status: 'offline', role: 'Member', custom: '', activity: 'Last seen yesterday' },
+  roni: { name: 'Roni', handle: 'roni', c: '#86EFAC', status: 'offline', role: 'Member', custom: '', activity: 'Last seen 5 h ago' },
+  ben: { name: 'Ben', handle: 'benny', c: '#FCA5A5', status: 'offline', role: 'Member', custom: '', activity: 'Last seen 3 d ago' },
+  tal: { name: 'Tal', handle: 'tal', c: '#99F6E4', status: 'offline', role: 'Member', custom: '', activity: 'Last seen 1 h ago' }
+};
+const STATUS_C = { online: '#4ADE80', idle: '#F5B544', dnd: '#FF6B6B', offline: '#6B7280', invisible: '#6B7280' };
+const SERVERS = [
+  { id: 'hangar', name: 'The Hangar', short: 'H', bg: '#23262C', fg: '#ECEEF1',
+    text: [
+      { id: 'general', name: 'general', topic: 'Anything goes. Game night is Thursday 21:00.' },
+      { id: 'clips', name: 'clips', topic: 'Proof or it did not happen.' },
+      { id: 'memes', name: 'memes', topic: 'Quality not guaranteed.' },
+      { id: 'game-night', name: 'game-night', topic: 'Vote for Thursday’s game.' },
+      { id: 'dev-log', name: 'dev-log', topic: 'Updates on the app you are using right now.' }
+    ],
+    voice: [ { id: 'lounge', name: 'Lounge' }, { id: 'ranked', name: 'Ranked Grind' }, { id: 'movie', name: 'Movie Night' }, { id: 'afk', name: 'AFK' } ] },
+  { id: 'raid', name: 'Weekend Raid', short: 'WR', bg: '#2B2140', fg: '#E3D6FF',
+    text: [ { id: 'lfg', name: 'lfg', topic: 'Looking for group.' }, { id: 'builds', name: 'builds', topic: 'Share loadouts.' } ],
+    voice: [ { id: 'comms', name: 'Raid Comms' } ] }
+];
+const VOICE_BASE = { lounge: ['maya', 'jonah', 'ari', 'noa', 'gal'], ranked: ['eitan', 'dana'], movie: [], afk: [], comms: [] };
+const MUTED_BASE = { noa: true };
+const DEAF_BASE = {};
+const STREAMS = {
+  maya: { title: 'NG+ boss run, no summons', quality: '1080p · 60', scene: 's-ember', viewers: 3 },
+  jonah: { title: 'Ranked 2v2 — road to Diamond', quality: '1080p · 60', scene: 's-arena', viewers: 2 },
+  ari: { title: 'Farm tour + melon economics', quality: '720p · 30', scene: 's-farm', viewers: 1 },
+  tomer: { title: 'My screen', quality: '1080p · 60', scene: 's-desk', viewers: 0 }
+};
+const MSGS = {
+  general: [
+    { id: 'g0', user: 'ari', day: 'Monday', time: '18:30', text: 'Weekly reminder: game night is Thursday 21:00. Vote for the game in #game-night', pinned: true },
+    { id: 'g1', user: 'maya', day: 'Today', time: '19:58', text: 'ok who’s on tonight? I need two for the NG+ run' },
+    { id: 'g2', user: 'jonah', day: 'Today', time: '19:59', text: 'me after this ranked match. one more. trust' },
+    { id: 'g3', user: 'ari', day: 'Today', time: '20:01', text: 'he has said “one more” four times since 6pm', reactions: [ { e: '😂', u: ['maya', 'noa', 'tomer'] }, { e: '💀', u: ['gal'] } ] },
+    { id: 'g4', user: 'noa', day: 'Today', time: '20:04', text: 'caught this yesterday. phase 2 does not forgive', image: { title: 'phase2_wipe.png', scene: 's-ember' } },
+    { id: 'g5', user: 'tomer', day: 'Today', time: '20:06', text: '@Maya I’m in. jumping in Lounge in 5' },
+    { id: 'g6', user: 'maya', day: 'Today', time: '20:12', text: 'perfect. bring snacks and patience', replyTo: 'g5' },
+    { id: 'g7', user: 'gal', day: 'Today', time: '20:13', text: '@Tomer did the sound upload thing ship yet? I have a crickets clip that needs to be heard' },
+    { id: 'g8', user: 'jonah', day: 'Today', time: '20:14', text: 'WON. ok ok I’m coming', reactions: [ { e: '🏆', u: ['maya', 'ari'] }, { e: '🎉', u: ['noa'] } ] }
+  ],
+  clips: [
+    { id: 'c1', user: 'jonah', day: 'Today', time: '18:20', text: 'ceiling shot from midfield. I will be taking questions', image: { title: 'ceiling_shot.mp4', scene: 's-arena' } },
+    { id: 'c2', user: 'maya', day: 'Today', time: '18:24', text: 'that should be illegal', reactions: [ { e: '🔥', u: ['ari', 'dana'] } ] },
+    { id: 'c3', user: 'dana', day: 'Today', time: '19:02', text: '1v4 clutch, defuse with 0.3 s left', image: { title: 'clutch_defuse.mp4', scene: 's-desk' } },
+    { id: 'c4', user: 'eitan', day: 'Today', time: '19:05', text: 'I was there. I did nothing. I take full credit' },
+    { id: 'c5', user: 'ari', day: 'Today', time: '19:40', text: 'farm tour tonight. my melons are award-winning', image: { title: 'melon_field.png', scene: 's-farm' } }
+  ],
+  memes: [
+    { id: 'm1', user: 'leo', day: 'Today', time: '14:10', text: 'when the teammate says “trust me”', image: { title: 'trust_me.gif', scene: 's-arena' } },
+    { id: 'm2', user: 'shira', day: 'Today', time: '15:33', text: '@Tomer this is you every ranked game', reactions: [ { e: '😭', u: ['leo', 'gal', 'noa'] } ] }
+  ],
+  'game-night': [
+    { id: 'n1', user: 'ari', day: 'Monday', time: '18:31', text: 'Thursday 21:00 — what are we playing?\n1️⃣ Lethal Company\n2️⃣ Deep Rock Galactic\n3️⃣ Jackbox night', pinned: true, reactions: [ { e: '1️⃣', u: ['jonah', 'eitan', 'dana', 'leo'] }, { e: '2️⃣', u: ['maya', 'tomer', 'gal'] }, { e: '3️⃣', u: ['noa', 'shira', 'roni', 'ben', 'tal', 'yuval'] } ] },
+    { id: 'n2', user: 'noa', day: 'Monday', time: '18:40', text: 'three forever. I need to win at least one thing this week' }
+  ],
+  'dev-log': [],
+  lfg: [
+    { id: 'r1', user: 'omer', day: 'Yesterday', time: '22:10', text: 'need 2 for the raid Saturday 22:00. bring flasks' },
+    { id: 'r2', user: 'tal', day: 'Yesterday', time: '22:14', text: 'in. carrying snacks, not the team' },
+    { id: 'r3', user: 'yuval', day: 'Today', time: '09:02', text: 'same. @Tomer you in?' }
+  ],
+  builds: []
+};
+const UNREAD_FROM = { clips: 'c2', memes: 'm1', lfg: 'r3' };
+function chirps() { const n = []; for (let i = 0; i < 8; i++) { n.push([4200, i * 0.28, 0.05, 'sine', 4600]); n.push([4300, i * 0.28 + 0.08, 0.05, 'sine', 4700]); } return n; }
+function laughs() { const n = []; for (let i = 0; i < 10; i++) n.push([480 + (i % 3) * 70, i * 0.24, 0.18, 'triangle', 380]); return n; }
+const SOUNDS0 = [
+  { id: 'bruh', name: 'Bruh', e: '😐', dur: 0.8, cat: 'Reactions', by: 'Noa', notes: [[180, 0, 0.32, 'sawtooth', 130], [150, 0.3, 0.45, 'sawtooth', 95]] },
+  { id: 'airhorn', name: 'Airhorn', e: '📯', dur: 1.6, cat: 'Classics', by: 'Jonah', notes: [[466, 0, 0.22, 'sawtooth'], [587, 0, 0.22, 'sawtooth'], [466, 0.28, 0.22, 'sawtooth'], [587, 0.28, 0.22, 'sawtooth'], [466, 0.56, 1.0, 'sawtooth'], [587, 0.56, 1.0, 'sawtooth']] },
+  { id: 'vineboom', name: 'Vine Boom', e: '💥', dur: 1.1, cat: 'Classics', by: 'Gal', notes: [[120, 0, 1.05, 'sine', 38], [60, 0, 0.9, 'triangle', 30]] },
+  { id: 'trombone', name: 'Sad Trombone', e: '🎺', dur: 2.4, cat: 'Reactions', by: 'Ari', notes: [[392, 0, 0.5, 'triangle', 370], [370, 0.55, 0.5, 'triangle', 349], [349, 1.1, 0.5, 'triangle', 330], [330, 1.65, 0.75, 'triangle', 290]] },
+  { id: 'victory', name: 'Victory', e: '🏆', dur: 1.6, cat: 'Gaming', by: 'Maya', notes: [[523, 0, 0.16, 'square'], [659, 0.18, 0.16, 'square'], [784, 0.36, 0.16, 'square'], [1047, 0.54, 1.0, 'square']] },
+  { id: 'mission', name: 'Mission Failed', e: '💀', dur: 2.2, cat: 'Gaming', by: 'Eitan', notes: [[330, 0, 0.6, 'sawtooth', 300], [262, 0.65, 0.6, 'sawtooth', 240], [196, 1.3, 0.9, 'sawtooth', 140]] },
+  { id: 'laugh', name: 'Laugh Track', e: '😂', dur: 2.6, cat: 'Reactions', by: 'Noa', notes: laughs() },
+  { id: 'entrance', name: 'Dramatic Entrance', e: '🎭', dur: 2.4, cat: 'Classics', by: 'Maya', notes: [[147, 0, 0.4, 'sawtooth'], [156, 0.45, 0.4, 'sawtooth'], [147, 0.9, 1.4, 'sawtooth', 98]] },
+  { id: 'applause', name: 'Applause', e: '👏', dur: 2.6, cat: 'Reactions', by: 'Dana', noise: true },
+  { id: 'error', name: 'Error', e: '❌', dur: 0.8, cat: 'Gaming', by: 'Leo', notes: [[220, 0, 0.2, 'square'], [220, 0.3, 0.4, 'square']] },
+  { id: 'boot', name: 'Retro Boot', e: '💿', dur: 2.0, cat: 'Classics', by: 'Ari', notes: [[392, 0, 0.6, 'sine'], [523, 0.3, 0.7, 'sine'], [659, 0.6, 0.8, 'sine'], [784, 0.9, 1.1, 'sine']] },
+  { id: 'gg', name: 'GG', e: '🤝', dur: 0.9, cat: 'Gaming', by: 'Jonah', notes: [[784, 0, 0.2, 'triangle'], [988, 0.22, 0.6, 'triangle']] },
+  { id: 'bonk', name: 'Bonk', e: '🔨', dur: 0.6, cat: 'Reactions', by: 'Gal', notes: [[700, 0, 0.1, 'square', 220], [180, 0.08, 0.4, 'sine', 90]] },
+  { id: 'crickets', name: 'Crickets', e: '🦗', dur: 2.3, cat: 'Reactions', by: 'Gal', notes: chirps() },
+  { id: 'clutch', name: 'Clutch', e: '⚡', dur: 1.2, cat: 'Gaming', by: 'Dana', notes: [[440, 0, 0.15, 'sawtooth', 880], [880, 0.18, 0.9, 'square', 1320]] }
+];
+const EMOJIS = ['😂', '💀', '🔥', '👀', '🎉', '😭', '👍', '❤️', '🫡', '🤝', '😤', '🏆', '🍿', '🤡', '😎', '🙏', '💯', '🥲', '🤯', '👏', '😐', '🫠', '⚡', '🎮'];
+const QUICK = ['😂', '🔥', '💀', '👀', '🎉', '👍'];
+const ACCENTS = [ { c: '#C8F05A', label: 'Volt', tx: '#4F6B00' }, { c: '#5CE1E6', label: 'Glacier', tx: '#00727A' }, { c: '#FF8A65', label: 'Ember', tx: '#B23F14' }, { c: '#A78BFA', label: 'Iris', tx: '#5B3FC4' } ];
+const UP_EMOJI = ['🦗', '📣', '🐐', '🫡', '🎯', '🌀'];
+
+function ini(n) { return (n || '?').slice(0, 2).toUpperCase().slice(0, 1) + ((n || '').length > 1 ? (n[1] || '').toLowerCase() : ''); }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const sv = (props && props.startView) || 'chat';
+    const inV = ['voice', 'stream', 'multi', 'soundboard'].indexOf(sv) >= 0;
+    const watch = sv === 'stream' || sv === 'multi';
+    this.state = {
+      entered: sv !== 'welcome', server: 'hangar', channel: 'general',
+      view: watch ? 'stream' : (inV ? 'voice' : 'text'),
+      voice: inV ? 'lounge' : null, joinAt: inV ? Date.now() - 30000 : 0,
+      muted: false, deafened: false, camera: false, sharing: false,
+      shareFlow: null, shareQ: '1080', shareAudio: true, shareTitle: '', shareTab: 'screen', shareSrc: 0,
+      watching: watch ? 'maya' : null, layout: sv === 'multi' ? 'grid' : 'focus',
+      sMute: { maya: false, jonah: true, ari: true, tomer: true }, sVol: { maya: 80, jonah: 70, ari: 65, tomer: 0 },
+      fit: 'fit', theater: false, loading: false, miniBig: false,
+      sbOpen: sv === 'soundboard', sbDock: false, sbCat: 'All', sbQ: '', favs: ['airhorn', 'vineboom', 'gg', 'bruh'], recent: ['vineboom', 'gg', 'bruh'],
+      playing: null, coolUntil: 0, soundVol: 70, soundMuted: false, sounds: SOUNDS0.slice(), sbMutedUsers: [],
+      upload: null, settings: null, profile: null, ctx: null, userVol: {}, localMuted: [],
+      messages: clone(MSGS), draft: '', replyTo: null, editing: null, editText: '', reactFor: null, emojiOpen: false, attachments: [], dragOver: false, highlight: null,
+      panel: null, searchQ: '', members: true, toasts: [], viewer: null,
+      speaking: [], now: Date.now(), recon: [], textOpen: true, voiceOpen: true,
+      myName: 'Tomer', myStatus: 'online', customStatus: 'shipping the soundboard', accent: null, theme: 'dark', density: 'cozy', fontScale: 100, reduceMotion: false,
+      inputDev: 'mic1', outputDev: 'out1', inVol: 80, outVol: 100, sens: 38, noise: true, echo: true, micTest: false, camDev: 'cam1', autoplay: true,
+      notifMode: 'mentions', notifSounds: true, chimes: true, notifPerm: 'default', defQ: '1080',
+      recording: null, shortcuts: { airhorn: 'Alt+1', vineboom: 'Alt+2', gg: 'Alt+3', bruh: 'Alt+4' },
+      navOpen: false, unread: { clips: 4, memes: 2, lfg: 1 }, mentions: { memes: 1, lfg: 1 },
+      sessions: [ { id: 's1', label: 'Chrome on Windows 11', meta: 'Tel Aviv · active now', current: true }, { id: 's2', label: 'Edge on Windows 10', meta: 'Haifa · 3 days ago' }, { id: 's3', label: 'Safari on iPhone', meta: 'Tel Aviv · yesterday' } ],
+      friendFired: false, galDropped: false, galBack: false
+    };
+    this.scrollBottom = true;
+  }
+  componentDidMount() {
+    this.iv = setInterval(() => this.tick(), 250);
+    this.scrollToEnd();
+  }
+  componentWillUnmount() { clearInterval(this.iv); (this.timers || []).forEach(clearTimeout); }
+  componentDidUpdate() { if (this.scrollBottom) { this.scrollBottom = false; this.scrollToEnd(); } }
+  later(fn, ms) { this.timers = this.timers || []; this.timers.push(setTimeout(fn, ms)); }
+  scrollToEnd() { setTimeout(() => { const el = document.getElementById('chat-scroll'); if (el) el.scrollTop = el.scrollHeight; }, 30); }
+  tick() {
+    const s = this.state; const now = Date.now(); const patch = { now };
+    this.n = (this.n || 0) + 1;
+    if (this.n % 3 === 0) {
+      const sp = [];
+      Object.keys(VOICE_BASE).forEach((ch) => VOICE_BASE[ch].forEach((u) => { if (!MUTED_BASE[u] && s.recon.indexOf(u) < 0 && Math.random() < (u === 'maya' || u === 'jonah' ? 0.42 : 0.24)) sp.push(u); }));
+      if (s.voice && !s.muted && !s.deafened && Math.random() < 0.3) sp.push('tomer');
+      patch.speaking = sp;
+    }
+    if (s.playing && now > s.playing.end) patch.playing = null;
+    if (s.micTest) patch.now = now;
+    if (s.upload && s.upload.step === 'uploading') {
+      const p = Math.min(100, (s.upload.progress || 0) + 6 + Math.random() * 8);
+      if (p >= 100) { this.finishUpload(); } else patch.upload = Object.assign({}, s.upload, { progress: Math.round(p) });
+    }
+    if (s.voice === 'lounge' && s.joinAt) {
+      const t = now - s.joinAt;
+      if (!s.friendFired && t > 9000) { patch.friendFired = true; this.later(() => this.friendPlay('jonah', 'vineboom'), 10); }
+      if (!s.galDropped && t > 22000) { patch.galDropped = true; patch.recon = s.recon.concat(['gal']); this.toast('Gal disconnected unexpectedly — reconnecting…', 'var(--warn)'); }
+      if (s.galDropped && !s.galBack && t > 29000) { patch.galBack = true; patch.recon = s.recon.filter((x) => x !== 'gal'); this.toast('Gal is back in Lounge', 'var(--accent)'); }
+    }
+    this.setState(patch);
+  }
+  toast(text, c) {
+    const id = Math.random().toString(36).slice(2);
+    this.setState((s) => ({ toasts: s.toasts.concat([{ id, text, c: c || 'var(--accent)' }]).slice(-3) }));
+    this.later(() => this.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 3600);
+  }
+  audio() { try { const AC = window.AudioContext || window.webkitAudioContext; if (!this.ac) this.ac = new AC(); if (this.ac.state === 'suspended') this.ac.resume(); return this.ac; } catch (e) { return null; } }
+  synth(snd, force) {
+    const s = this.state; if (!force && (s.soundMuted || s.deafened)) return;
+    const ac = this.audio(); if (!ac) return;
+    try {
+      const t0 = ac.currentTime + 0.02; const master = ac.createGain(); master.gain.value = 0.16 * (s.soundVol / 100); master.connect(ac.destination);
+      if (snd.noise) {
+        const len = Math.floor(ac.sampleRate * snd.dur); const buf = ac.createBuffer(1, len, ac.sampleRate); const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) { const t = i / ac.sampleRate; const env = Math.min(1, t * 5) * Math.max(0, 1 - t / snd.dur); d[i] = (Math.random() * 2 - 1) * env * (0.4 + 0.6 * Math.abs(Math.sin(t * 41 + Math.sin(t * 7)))); }
+        const src = ac.createBufferSource(); src.buffer = buf; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1700; f.Q.value = 0.7; src.connect(f); f.connect(master); src.start(t0); return;
+      }
+      (snd.notes || []).forEach((n) => {
+        const o = ac.createOscillator(); const g = ac.createGain(); o.type = n[3] || 'sine';
+        o.frequency.setValueAtTime(n[0], t0 + n[1]); if (n[4]) o.frequency.exponentialRampToValueAtTime(n[4], t0 + n[1] + n[2]);
+        g.gain.setValueAtTime(0.0001, t0 + n[1]); g.gain.exponentialRampToValueAtTime(0.9, t0 + n[1] + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + n[1] + n[2]);
+        o.connect(g); g.connect(master); o.start(t0 + n[1]); o.stop(t0 + n[1] + n[2] + 0.05);
+      });
+    } catch (e) {}
+  }
+  blip(up) { this.synth({ notes: up ? [[523, 0, 0.12, 'sine'], [784, 0.1, 0.18, 'sine']] : [[784, 0, 0.12, 'sine'], [523, 0.1, 0.18, 'sine']] }, true); }
+  playSound(id) {
+    const s = this.state; const snd = s.sounds.find((x) => x.id === id); if (!snd) return;
+    if (!s.voice) { this.toast('Join a voice channel to play sounds'); return; }
+    if (Date.now() < s.coolUntil) return;
+    this.synth(snd);
+    this.setState({ playing: { id, by: 'tomer', start: Date.now(), end: Date.now() + snd.dur * 1000 }, coolUntil: Date.now() + 3000, recent: [id].concat(s.recent.filter((r) => r !== id)).slice(0, 4) });
+  }
+  friendPlay(user, id) {
+    const s = this.state; const snd = s.sounds.find((x) => x.id === id); if (!snd || !s.voice) return;
+    if (s.sbMutedUsers.indexOf(user) < 0) this.synth(snd);
+    this.setState({ playing: { id, by: user, start: Date.now(), end: Date.now() + snd.dur * 1000 } });
+    this.toast(USERS[user].name + ' played ' + snd.name + (s.sbMutedUsers.indexOf(user) >= 0 ? ' (muted for you)' : ''), 'var(--sb)');
+  }
+  joinVoice(id) {
+    const s = this.state;
+    if (s.voice === id) { this.setState({ view: 'voice', navOpen: false }); return; }
+    const ch = this.findVoice(id);
+    this.blip(true);
+    this.setState({ voice: id, joinAt: Date.now(), view: 'voice', watching: null, sharing: false, camera: false, friendFired: false, galDropped: false, galBack: false, recon: [], navOpen: false });
+    this.toast('Connected to ' + (ch ? ch.name : 'voice') + ' — mic is ' + (s.muted ? 'muted' : 'live'));
+  }
+  disconnect() {
+    const s = this.state; const ch = this.findVoice(s.voice);
+    this.blip(false);
+    this.setState({ voice: null, watching: null, sharing: false, camera: false, sbOpen: false, view: 'text', theater: false, playing: null });
+    this.toast('Disconnected from ' + (ch ? ch.name : 'voice'), 'var(--tx3)');
+  }
+  findVoice(id) { for (const sv of SERVERS) { const v = sv.voice.find((x) => x.id === id); if (v) return Object.assign({ server: sv.id }, v); } return null; }
+  watch(id, layout) {
+    const sMute = Object.assign({}, this.state.sMute); Object.keys(sMute).forEach((k) => { sMute[k] = k !== id; });
+    this.setState({ watching: id, view: 'stream', layout: layout || 'focus', loading: true, sMute });
+    this.later(() => this.setState({ loading: false }), 900);
+  }
+  pickChannel(id) {
+    const s = this.state; const unread = Object.assign({}, s.unread); const mentions = Object.assign({}, s.mentions);
+    const hadMention = mentions[id]; delete unread[id]; delete mentions[id];
+    this.scrollBottom = true;
+    this.setState({ channel: id, view: 'text', unread, mentions, panel: null, replyTo: null, editing: null, emojiOpen: false, navOpen: false });
+    if (hadMention) { const m = (s.messages[id] || []).find((x) => this.mentionsMe(x.text)); if (m) this.later(() => this.jump(id, m.id), 120); }
+  }
+  mentionsMe(text) { return (text || '').toLowerCase().indexOf('@' + this.state.myName.toLowerCase()) >= 0 || (text || '').toLowerCase().indexOf('@tomer') >= 0; }
+  jump(ch, id) {
+    if (this.state.channel !== ch || this.state.view !== 'text') this.setState({ channel: ch, view: 'text' });
+    this.setState({ highlight: id, panel: null });
+    this.later(() => { const el = document.getElementById('msg-' + id); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 80);
+    this.later(() => this.setState((s) => (s.highlight === id ? { highlight: null } : {})), 2200);
+  }
+  updateMsgs(ch, fn) { this.setState((s) => { const all = Object.assign({}, s.messages); all[ch] = fn((all[ch] || []).slice()); return { messages: all }; }); }
+  send() {
+    const s = this.state; const text = s.draft.trim(); if (!text && !s.attachments.length) return;
+    const d = new Date(); const time = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    const m = { id: 'x' + Date.now(), user: 'tomer', day: 'Today', time, text };
+    if (s.replyTo) m.replyTo = s.replyTo;
+    if (s.attachments.length) { const a = s.attachments[0]; if (/\.(png|jpe?g|gif|webp|mp4)$/i.test(a.name)) m.image = { title: a.name, scene: 's-desk' }; else m.file = a; }
+    this.scrollBottom = true;
+    this.updateMsgs(s.channel, (l) => l.concat([m]));
+    this.setState({ draft: '', replyTo: null, attachments: [], emojiOpen: false });
+  }
+  openUpload() { this.setState({ upload: { step: 'drop' } }); }
+  finishUpload() {
+    const s = this.state; const u = s.upload; if (!u) return;
+    const id = 'u' + Date.now(); const len = Math.round(((u.b - u.a) / 100) * u.total * 10) / 10;
+    const snd = { id, name: u.name || 'My sound', e: u.emoji, dur: Math.max(0.5, len), cat: 'Uploaded', by: s.myName, notes: [[1800, 0, 0.06, 'sine', 2100], [1900, 0.3, 0.06, 'sine', 2200], [1800, 0.6, 0.06, 'sine', 2100], [1900, 0.9, 0.06, 'sine', 2200]] };
+    this.setState({ sounds: s.sounds.concat([snd]), upload: null, sbCat: 'Uploaded' });
+    this.toast('“' + snd.name + '” added to the soundboard', 'var(--sb)');
+  }
+
+  renderVals() {
+    const s = this.state; const self = this;
+    const accentC = s.accent || this.props.accent || '#C8F05A';
+    const acc = ACCENTS.find((a) => a.c.toLowerCase() === accentC.toLowerCase()) || { c: accentC, tx: '#4F6B00' };
+    const dark = s.theme === 'dark';
+    const T = dark
+      ? { bg0: '#0A0B0D', bg1: '#101215', bg2: '#15171B', bg3: '#1C1F24', bg4: '#252930', line: '#262A31', line2: '#353A43', tx: '#ECEEF1', tx2: '#AEB4BE', tx3: '#868D99', sb: '#D98BFF', live: '#F0484E', warn: '#F5B544', danger: '#FF6B6B', atx: acc.c }
+      : { bg0: '#E6E8EC', bg1: '#F2F3F5', bg2: '#FFFFFF', bg3: '#F4F5F7', bg4: '#E7E9ED', line: '#DDE0E5', line2: '#C9CED6', tx: '#121417', tx2: '#454C57', tx3: '#5E6672', sb: '#9437C9', live: '#D42F35', warn: '#A86400', danger: '#C42F2F', atx: acc.tx };
+    const rootStyle = '--accent: ' + acc.c + '; --accent-ink: #0E1104; --accent-tx: ' + T.atx + '; --bg0: ' + T.bg0 + '; --bg1: ' + T.bg1 + '; --bg2: ' + T.bg2 + '; --bg3: ' + T.bg3 + '; --bg4: ' + T.bg4 + '; --line: ' + T.line + '; --line2: ' + T.line2 + '; --tx: ' + T.tx + '; --tx2: ' + T.tx2 + '; --tx3: ' + T.tx3 + '; --sb: ' + T.sb + '; --live: ' + T.live + '; --warn: ' + T.warn + '; --danger: ' + T.danger + '; --msg: ' + (15 * s.fontScale / 100).toFixed(1) + 'px;';
+    const U = Object.assign({}, USERS); U.tomer = Object.assign({}, USERS.tomer, { name: s.myName || 'Tomer', status: s.myStatus, custom: s.customStatus });
+    const server = SERVERS.find((x) => x.id === s.server);
+    const textCh = server.text.find((c) => c.id === s.channel) || server.text[0];
+    const inVoice = !!s.voice;
+    const vInfo = this.findVoice(s.voice);
+    const speaking = s.speaking;
+    const voiceMembers = (id) => { const base = (VOICE_BASE[id] || []).slice(); if (s.voice === id) base.push('tomer'); return base; };
+    const isLive = (u) => (u === 'tomer' ? s.sharing : !!STREAMS[u] && (VOICE_BASE.lounge.indexOf(u) >= 0));
+    const isMuted = (u) => (u === 'tomer' ? s.muted || s.deafened : !!MUTED_BASE[u]);
+    const isDeaf = (u) => (u === 'tomer' ? s.deafened : !!DEAF_BASE[u]);
+    const talk = (u) => speaking.indexOf(u) >= 0 && !isMuted(u) && s.localMuted.indexOf(u) < 0;
+    const openUser = (u) => (e) => { if (e && e.stopPropagation) e.stopPropagation(); self.setState({ profile: u, ctx: null }); };
+    const ctxUser = (u) => (e) => { e.preventDefault(); e.stopPropagation(); const W = window.innerWidth || 1440; const H = window.innerHeight || 900; self.setState({ ctx: { id: u, x: Math.min(e.clientX, W - 250), y: Math.min(e.clientY, H - 320) }, profile: null }); };
+
+    const servers = SERVERS.map((sv) => {
+      const badge = sv.id === 'raid' ? (s.mentions.lfg || 0) : 0;
+      return { name: sv.name, short: sv.short, bg: sv.bg, fg: sv.fg, cls: (s.server === sv.id && s.entered ? 'on' : ''), hasBadge: badge > 0, badge, pick: () => { self.scrollBottom = true; self.setState({ server: sv.id, channel: sv.text[0].id, view: 'text', entered: true, panel: null }); } };
+    });
+    const serverCards = SERVERS.map((sv) => {
+      const faces = sv.id === 'hangar' ? ['maya', 'jonah', 'ari', 'noa'] : ['omer', 'tal'];
+      return { name: sv.name, short: sv.short, bg: sv.bg, fg: sv.fg, meta: sv.id === 'hangar' ? '9 online · 5 in Lounge · 3 live now' : '2 online · raid Saturday 22:00', faces: faces.map((f) => ({ color: U[f].c, ini: ini(U[f].name) })), pick: () => { self.scrollBottom = true; self.setState({ server: sv.id, channel: sv.text[0].id, entered: true, view: s.voice ? s.view : 'text' }); } };
+    });
+
+    const textChannels = server.text.map((c) => {
+      const on = s.view === 'text' && s.channel === c.id; const un = s.unread[c.id] || 0; const me = s.mentions[c.id] || 0;
+      return { name: c.name, cls: (on ? 'on' : '') + (un ? ' unread' : ''), current: on ? 'page' : 'false', hasUnread: un > 0 && !me, unread: un, hasMention: me > 0, mention: me, pick: () => self.pickChannel(c.id) };
+    });
+    const voiceChannels = server.voice.map((v) => {
+      const mem = voiceMembers(v.id); const live = mem.filter(isLive).length; const connected = s.voice === v.id;
+      return {
+        name: v.name, hint: connected ? 'Open voice view' : 'Click to join', cls: (connected && s.view !== 'text' ? 'on' : '') + (connected ? ' unread' : ''),
+        hasLive: live > 0, live, hasPeople: mem.length > 0 && !connected, count: mem.length,
+        pick: () => self.joinVoice(v.id),
+        people: mem.map((u) => ({ name: U[u].name, ini: ini(U[u].name), color: U[u].c, ring: talk(u) ? 'talk' : '', muted: isMuted(u) && !isDeaf(u), deaf: isDeaf(u), live: isLive(u), cam: u === 'tomer' && s.camera, nameColor: talk(u) ? 'var(--tx)' : 'var(--tx2)', open: openUser(u), ctx: ctxUser(u) }))
+      };
+    });
+
+    // connection
+    const conn = s.recon.indexOf('tomer') >= 0 ? { label: 'Reconnecting…', c: 'var(--warn)', c3: 'var(--line2)', title: 'Reconnecting to voice' } : { label: 'Voice connected', c: 'var(--accent-tx)', c3: 'var(--accent-tx)', title: 'Excellent · 24 ms ping · 0% loss' };
+
+    // messages
+    const raw = s.messages[textCh.id] || [];
+    const mkParts = (text) => text.split(/(@[A-Za-z]+)/).filter((p) => p !== '').map((p) => {
+      const isM = /^@[A-Za-z]+$/.test(p); const uid = isM ? Object.keys(U).find((k) => U[k].name.toLowerCase() === p.slice(1).toLowerCase()) : null;
+      return { text: p, isMention: !!uid, isText: !uid, open: uid ? openUser(uid) : null };
+    });
+    const unreadFrom = UNREAD_FROM[textCh.id] || (textCh.id === 'general' ? 'g6' : null);
+    const msgs = raw.map((m, i) => {
+      const prev = raw[i - 1]; const u = U[m.user] || { name: m.user, c: '#999' };
+      const showDay = !prev || prev.day !== m.day; const showUnread = m.id === unreadFrom;
+      const grouped = !!prev && !showDay && !showUnread && prev.user === m.user && !m.replyTo && !m.image && s.density === 'cozy';
+      const compact = s.density === 'compact';
+      const mine = m.user === 'tomer'; const mm = !mine && self.mentionsMe(m.text);
+      const ref = m.replyTo ? raw.find((x) => x.id === m.replyTo) : null;
+      const isEditing = s.editing === m.id;
+      return {
+        domId: 'msg-' + m.id, aria: u.name + ' at ' + m.time,
+        cls: (grouped ? 'grouped' : '') + (mm ? ' me-mention' : '') + (s.highlight === m.id ? ' hl' : ''),
+        showDay, day: m.day, showUnread, grouped, showHead: !grouped && !compact,
+        name: u.name, color: u.c, ini: ini(u.name), time: m.time, isAdmin: u.role === 'Admin', pinned: !!m.pinned,
+        openUser: openUser(m.user),
+        parts: compact ? [{ text: u.name + '  ', isText: true, isMention: false }].concat(mkParts(m.text)) : mkParts(m.text),
+        edited: !!m.edited, notEditing: !isEditing, isEditing,
+        hasReply: !!ref, reply: ref ? { name: U[ref.user].name, ini: ini(U[ref.user].name), color: U[ref.user].c, text: ref.text, jump: () => self.jump(textCh.id, ref.id) } : {},
+        hasImage: !!m.image, image: m.image || {}, openImage: () => self.setState({ viewer: { title: m.image.title, scene: m.image.scene, by: u.name } }),
+        hasFile: !!m.file, file: m.file || {},
+        hasReactions: !!(m.reactions && m.reactions.length),
+        reactions: (m.reactions || []).map((r, ri) => ({ e: r.e, count: r.u.length, mine: r.u.indexOf('tomer') >= 0, cls: r.u.indexOf('tomer') >= 0 ? 'mine' : '', who: r.u.map((x) => U[x] ? U[x].name : x).join(', '), aria: r.e + ' ' + r.u.length + ' reactions', toggle: () => self.updateMsgs(textCh.id, (l) => l.map((x) => { if (x.id !== m.id) return x; const rs = clone(x.reactions); const rr = rs[ri]; const k = rr.u.indexOf('tomer'); if (k >= 0) rr.u.splice(k, 1); else rr.u.push('tomer'); return Object.assign({}, x, { reactions: rs.filter((y) => y.u.length) }); })) })),
+        reactOpen: s.reactFor === m.id, actsCls: s.reactFor === m.id ? 'open' : '',
+        openReact: () => self.setState({ reactFor: s.reactFor === m.id ? null : m.id }),
+        quick: QUICK.map((e) => ({ e, pick: () => { self.updateMsgs(textCh.id, (l) => l.map((x) => { if (x.id !== m.id) return x; const rs = clone(x.reactions || []); const ex = rs.find((y) => y.e === e); if (ex) { if (ex.u.indexOf('tomer') < 0) ex.u.push('tomer'); } else rs.push({ e, u: ['tomer'] }); return Object.assign({}, x, { reactions: rs }); })); self.setState({ reactFor: null }); } })),
+        onReply: () => { self.setState({ replyTo: m.id, reactFor: null }); self.later(() => { const el = document.getElementById('composer'); if (el) el.focus(); }, 30); },
+        mine, onEdit: () => self.setState({ editing: m.id, editText: m.text, reactFor: null }),
+        onDelete: () => { const backup = m; self.updateMsgs(textCh.id, (l) => l.filter((x) => x.id !== m.id)); self.toast('Message deleted', 'var(--danger)'); },
+        pinLabel: m.pinned ? 'Unpin' : 'Pin message',
+        onPin: () => { self.updateMsgs(textCh.id, (l) => l.map((x) => (x.id === m.id ? Object.assign({}, x, { pinned: !x.pinned }) : x))); self.toast(m.pinned ? 'Unpinned' : 'Pinned to #' + textCh.name); }
+      };
+    });
+    const replyMsg = s.replyTo ? raw.find((x) => x.id === s.replyTo) : null;
+    const pins = raw.filter((m) => m.pinned).map((m) => ({ name: U[m.user].name, color: U[m.user].c, time: m.day + ' ' + m.time, text: m.text, jump: () => self.jump(textCh.id, m.id) }));
+
+    // search
+    const q = s.searchQ.trim().toLowerCase();
+    const results = [];
+    if (s.panel === 'search') {
+      server.text.forEach((c) => (s.messages[c.id] || []).forEach((m) => {
+        const from = q.indexOf('from:') === 0 ? q.slice(5).trim() : null;
+        const hit = from ? U[m.user].name.toLowerCase().indexOf(from) === 0 : (q && m.text.toLowerCase().indexOf(q) >= 0);
+        if (hit) results.push({ name: U[m.user].name, color: U[m.user].c, ini: ini(U[m.user].name), ch: c.name, time: m.time, text: m.text, jump: () => self.jump(c.id, m.id) });
+      }));
+    }
+
+    // voice view
+    const viewVoiceId = s.voice || 'lounge';
+    const vv = this.findVoice(viewVoiceId) || { name: 'Lounge' };
+    const vMembers = voiceMembers(viewVoiceId);
+    const liveList = vMembers.filter(isLive);
+    const pl = s.playing; const plSnd = pl ? s.sounds.find((x) => x.id === pl.id) : null;
+    const participants = vMembers.map((u) => {
+      const live = isLive(u); const cam = u === 'tomer' && s.camera; const rec = s.recon.indexOf(u) >= 0;
+      return {
+        name: u === 'tomer' ? U[u].name + ' (you)' : U[u].name, ini: ini(U[u].name), color: U[u].c,
+        cls: (talk(u) ? 'talk' : '') + (rec ? ' recon' : ''), muted: isMuted(u) && !isDeaf(u), deaf: isDeaf(u), live, recon: rec, poor: u === 'noa' && !rec,
+        showCam: cam, showLive: live && !cam && s.autoplay, showAvatar: !cam, scene: STREAMS[u] ? STREAMS[u].scene : '',
+        hasSound: !!(pl && pl.by === u && plSnd), sound: plSnd ? plSnd.name : '',
+        canWatch: live && u !== 'tomer', watch: () => self.watch(u),
+        aria: U[u].name + (talk(u) ? ', speaking' : '') + (isMuted(u) ? ', muted' : '') + (live ? ', live' : ''),
+        open: openUser(u), ctx: ctxUser(u)
+      };
+    });
+
+    // streams
+    const streamIds = liveList.slice();
+    const prim = s.watching && streamIds.indexOf(s.watching) >= 0 ? s.watching : streamIds[0];
+    const mkStream = (u) => {
+      const st = STREAMS[u]; const muted = !!s.sMute[u]; const vol = s.sVol[u] == null ? 70 : s.sVol[u];
+      return {
+        id: u, name: u === 'tomer' ? 'You' : U[u].name, ini: ini(U[u].name), color: U[u].c, title: u === 'tomer' && s.shareTitle ? s.shareTitle : st.title, quality: u === 'tomer' ? (s.shareQ === '1080' ? '1080p · 60' : '720p · 30') : st.quality, scene: st.scene, viewers: st.viewers + 1,
+        muted, notMuted: !muted, vol, audible: !muted && vol > 0 && !s.deafened, isPrim: u === prim,
+        cls: u === prim ? 'prim' : '', muteLabel: muted ? 'Unmute ' + U[u].name + ' stream' : 'Mute ' + U[u].name + ' stream',
+        toggleMute: (e) => { if (e && e.stopPropagation) e.stopPropagation(); const m = Object.assign({}, s.sMute); m[u] = !m[u]; self.setState({ sMute: m }); },
+        setVol: (e) => { const v = Object.assign({}, s.sVol); v[u] = +e.target.value; const m = Object.assign({}, s.sMute); if (+e.target.value > 0) m[u] = false; self.setState({ sVol: v, sMute: m }); },
+        focus: () => { if (u !== prim) { self.setState({ watching: u, loading: true }); self.later(() => self.setState({ loading: false }), 700); } },
+        focusBig: () => self.setState({ watching: u, layout: 'focus' })
+      };
+    };
+    const streams = streamIds.map(mkStream);
+    const primS = prim ? mkStream(prim) : { name: '', ini: '', color: '#888', title: '', quality: '', scene: 's-desk', viewers: 0, audible: false, muted: true, notMuted: false, vol: 0 };
+
+    // soundboard
+    const now = s.now; const cool = Math.max(0, s.coolUntil - now);
+    const qq = s.sbQ.trim().toLowerCase();
+    const sbList = s.sounds.filter((x) => (s.sbCat === 'All' || (s.sbCat === 'Favorites' ? s.favs.indexOf(x.id) >= 0 : x.cat === s.sbCat)) && (!qq || x.name.toLowerCase().indexOf(qq) >= 0));
+    const tile = (x) => {
+      const playing = !!(pl && pl.id === x.id); const fav = s.favs.indexOf(x.id) >= 0;
+      const prog = playing ? Math.min(100, Math.round(((now - pl.start) / (pl.end - pl.start)) * 100)) : 0;
+      const sc = s.shortcuts[x.id];
+      return {
+        e: x.e, name: x.name, dur: x.dur.toFixed(1) + 's', key: sc ? ' · ' + sc : '', playing, prog,
+        cls: playing ? 'play' : (cool > 0 ? 'cool' : ''), disabled: cool > 0 && !playing, fav, favCls: fav ? 'on' : '', favLabel: fav ? 'Remove ' + x.name + ' from favorites' : 'Add ' + x.name + ' to favorites',
+        title: x.name + ' · uploaded by ' + x.by,
+        play: () => self.playSound(x.id),
+        toggleFav: (e) => { if (e && e.stopPropagation) e.stopPropagation(); const f = fav ? s.favs.filter((y) => y !== x.id) : s.favs.concat([x.id]); self.setState({ favs: f }); if (!fav) self.toast(x.name + ' added to favorites', 'var(--sb)'); }
+      };
+    };
+    const sbTiles = sbList.map(tile);
+    const recentTiles = s.recent.map((id) => s.sounds.find((x) => x.id === id)).filter(Boolean).map(tile);
+    const cats = ['All', 'Favorites', 'Reactions', 'Gaming', 'Classics', 'Uploaded'];
+
+    // members
+    const all = Object.keys(U);
+    const inVoiceSet = {}; Object.keys(VOICE_BASE).forEach((ch) => voiceMembers(ch).forEach((u) => { inVoiceSet[u] = vMembers.indexOf(u) >= 0 ? (this.findVoice(viewVoiceId) || {}).name : (this.findVoice(ch) || {}).name; }));
+    const mp = (u) => ({
+      name: U[u].name, ini: ini(U[u].name), color: U[u].c, statusColor: STATUS_C[U[u].status], ring: talk(u) ? 'talk' : '', live: isLive(u), op: U[u].status === 'offline' ? '.5' : '1',
+      sub: isLive(u) ? 'Streaming · ' + STREAMS[u].title : (U[u].activity || U[u].custom || (inVoiceSet[u] ? 'In ' + inVoiceSet[u] : (U[u].status === 'idle' ? 'Idle' : ''))),
+      open: openUser(u), ctx: ctxUser(u)
+    });
+    const onlineIds = all.filter((u) => U[u].status !== 'offline');
+    const memberGroups = [
+      { label: 'Admins', people: onlineIds.filter((u) => U[u].role === 'Admin').map(mp) },
+      { label: 'Online', people: onlineIds.filter((u) => U[u].role !== 'Admin').map(mp) },
+      { label: 'Offline', people: all.filter((u) => U[u].status === 'offline').map(mp) }
+    ].map((g) => Object.assign(g, { count: g.people.length }));
+
+    // ctx menu
+    let ctx = { on: false };
+    if (s.ctx) {
+      const u = s.ctx.id; const lm = s.localMuted.indexOf(u) >= 0; const sm = s.sbMutedUsers.indexOf(u) >= 0;
+      ctx = {
+        on: true, x: s.ctx.x, y: s.ctx.y, name: U[u].name, ini: ini(U[u].name), color: U[u].c, isMe: u === 'tomer', notMe: u !== 'tomer', live: isLive(u) && u !== 'tomer',
+        vol: s.userVol[u] == null ? 100 : s.userVol[u], localMuted: lm, sbMuted: sm,
+        profile: () => self.setState({ profile: u, ctx: null }),
+        mention: () => { self.setState({ ctx: null, draft: (s.draft ? s.draft + ' ' : '') + '@' + U[u].name + ' ', view: 'text' }); self.later(() => { const el = document.getElementById('composer'); if (el) el.focus(); }, 40); },
+        watch: () => { self.setState({ ctx: null }); self.watch(u); },
+        setVol: (e) => { const v = Object.assign({}, s.userVol); v[u] = +e.target.value; self.setState({ userVol: v }); },
+        toggleLocal: () => self.setState({ localMuted: lm ? s.localMuted.filter((x) => x !== u) : s.localMuted.concat([u]) }),
+        toggleSb: () => self.setState({ sbMutedUsers: sm ? s.sbMutedUsers.filter((x) => x !== u) : s.sbMutedUsers.concat([u]) })
+      };
+    }
+    // profile
+    let prof = { on: false };
+    if (s.profile) {
+      const u = s.profile; const P = U[u]; const lm = s.localMuted.indexOf(u) >= 0; const sm = s.sbMutedUsers.indexOf(u) >= 0;
+      const statusLabel = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Offline', invisible: 'Invisible' }[P.status];
+      prof = {
+        on: true, name: P.name, handle: P.handle, ini: ini(P.name), color: P.c, banner: 'linear-gradient(120deg, ' + P.c + ', ' + T.bg4 + ')', statusColor: STATUS_C[P.status], statusLabel,
+        badges: [P.role === 'Admin' ? 'ADMIN' : 'MEMBER'].concat(isLive(u) ? ['LIVE'] : []),
+        hasCustom: !!P.custom, custom: P.custom, hasActivity: !!(P.activity && P.activity.indexOf('Last seen') < 0 && P.activity.indexOf('Idle') < 0), activity: P.activity,
+        isMe: u === 'tomer', notMe: u !== 'tomer', inMyVoice: u !== 'tomer' && !!s.voice && voiceMembers(s.voice).indexOf(u) >= 0,
+        vol: s.userVol[u] == null ? 100 : s.userVol[u], setVol: (e) => { const v = Object.assign({}, s.userVol); v[u] = +e.target.value; self.setState({ userVol: v }); },
+        localMuted: lm, muteLabel: lm ? 'Unmute' : 'Mute', sbMuted: sm, sbLabel: sm ? 'Sounds off' : 'Sounds',
+        mention: () => { self.setState({ profile: null, draft: (s.draft ? s.draft + ' ' : '') + '@' + P.name + ' ', view: 'text' }); self.later(() => { const el = document.getElementById('composer'); if (el) el.focus(); }, 40); },
+        toggleLocal: () => self.setState({ localMuted: lm ? s.localMuted.filter((x) => x !== u) : s.localMuted.concat([u]) }),
+        toggleSb: () => self.setState({ sbMutedUsers: sm ? s.sbMutedUsers.filter((x) => x !== u) : s.sbMutedUsers.concat([u]) })
+      };
+    }
+    const statusOpts = [['online', 'Online'], ['idle', 'Idle'], ['dnd', 'Do not disturb'], ['invisible', 'Invisible']].map((o) => ({ label: o[1], c: STATUS_C[o[0]], on: s.myStatus === o[0], bg: s.myStatus === o[0] ? 'var(--bg4)' : 'transparent', pick: () => self.setState({ myStatus: o[0] }) }));
+
+    // share flow
+    const tabs = [['screen', 'Entire screen'], ['window', 'Window'], ['tab', 'Chrome tab']];
+    const srcs = { screen: [['s-desk', 'Screen 1 (primary)'], ['s-ember', 'Screen 2']], window: [['s-ember', 'ELDEN RING™'], ['s-desk', 'Visual Studio Code'], ['s-farm', 'Spotify']], tab: [['s-desk', 'Hangar — #general'], ['s-arena', 'YouTube — patch notes']] };
+    const audioOk = s.shareTab !== 'window';
+    const share = {
+      setup: s.shareFlow === 'setup', picker: s.shareFlow === 'picker', denied: s.shareFlow === 'denied',
+      is1080: s.shareQ === '1080', is720: s.shareQ === '720',
+      b1080: s.shareQ === '1080' ? 'var(--accent)' : 'var(--line)', s1080: s.shareQ === '1080' ? '0 0 0 1px var(--accent)' : 'none',
+      b720: s.shareQ === '720' ? 'var(--accent)' : 'var(--line)', s720: s.shareQ === '720' ? '0 0 0 1px var(--accent)' : 'none',
+      tabs: tabs.map((t) => ({ label: t[1], on: s.shareTab === t[0], c: s.shareTab === t[0] ? '#8ab4f8' : '#c4c7c5', b: s.shareTab === t[0] ? '#8ab4f8' : 'transparent', pick: () => self.setState({ shareTab: t[0], shareSrc: 0 }) })),
+      sources: srcs[s.shareTab].map((x, i) => ({ scene: x[0], label: x[1], b: s.shareSrc === i ? '#8ab4f8' : 'transparent', pick: () => self.setState({ shareSrc: i }) })),
+      audioDisabled: !audioOk, audioColor: audioOk ? '#e8eaed' : '#7c7f83', audioBox: audioOk && s.shareAudio ? '#8ab4f8' : 'transparent',
+      audioLabel: audioOk ? (s.shareTab === 'tab' ? 'Also share tab audio' : 'Also share system audio') : 'Audio isn’t available when sharing a window'
+    };
+
+    // upload
+    let up = { on: false };
+    if (s.upload) {
+      const u = s.upload; const total = u.total || 6.8; const len = Math.round(((u.b - u.a) / 100) * total * 10) / 10; const tooLong = len > 5;
+      const bars = []; for (let i = 0; i < 48; i++) { const h = 20 + Math.abs(Math.sin(i * 0.9) * 60 + Math.sin(i * 2.3) * 20); const pct = (i / 47) * 100; bars.push({ h: Math.min(100, Math.round(h)), cls: pct >= u.a && pct <= u.b ? 'in' : '' }); }
+      up = {
+        on: true, drop: u.step === 'drop', edit: u.step === 'edit', uploading: u.step === 'uploading', error: u.step === 'error',
+        file: u.file, size: u.size, total: total.toFixed(1), a: u.a, b: u.b, len: len.toFixed(1), tooLong, lenColor: tooLong ? 'var(--danger)' : 'var(--tx2)',
+        badge: tooLong ? 'Too long' : 'Ready', badgeBg: tooLong ? 'var(--danger)' : 'var(--accent)', badgeFg: tooLong ? '#fff' : 'var(--accent-ink)',
+        bars, name: u.name || '', progress: u.progress || 0, err: u.err,
+        cantSave: tooLong || !(u.name || '').trim(),
+        emojis: UP_EMOJI.map((e) => ({ e, on: u.emoji === e, bg: u.emoji === e ? 'color-mix(in oklab,var(--sb) 22%,transparent)' : 'var(--bg1)', b: u.emoji === e ? 'var(--sb)' : 'var(--line)', pick: () => self.setState({ upload: Object.assign({}, s.upload, { emoji: e }) }) }))
+      };
+    }
+
+    // settings
+    const tabsS = [['account', 'My account', 'var(--tx3)'], ['voice', 'Voice & audio', 'var(--accent)'], ['video', 'Video & streaming', 'var(--live)'], ['sound', 'Soundboard', 'var(--sb)'], ['look', 'Appearance', 'var(--tx3)'], ['notif', 'Notifications', 'var(--warn)']];
+    const set = { on: !!s.settings, tabs: tabsS.map((t) => ({ label: t[1], dot: t[2], on: s.settings === t[0], pick: () => self.setState({ settings: t[0] }) })) };
+    tabsS.forEach((t) => { set[t[0]] = s.settings === t[0]; });
+    const micLevel = s.micTest ? Math.round(18 + Math.random() * 70) : (talk('tomer') ? 60 : 6);
+    const favSounds = s.sounds.filter((x) => s.favs.indexOf(x.id) >= 0);
+    const shortcutRows = favSounds.map((x) => ({
+      e: x.e, name: x.name, label: s.recording === x.id ? 'Press keys…' : (s.shortcuts[x.id] || 'Set shortcut'), border: s.recording === x.id ? 'var(--sb)' : 'var(--line2)',
+      record: () => self.setState({ recording: x.id }),
+      keydown: (e) => { if (s.recording !== x.id) return; if (['Alt', 'Control', 'Shift', 'Meta'].indexOf(e.key) >= 0) return; e.preventDefault(); if (e.key === 'Escape') { self.setState({ recording: null }); return; } const combo = (e.ctrlKey ? 'Ctrl+' : '') + (e.altKey ? 'Alt+' : '') + (e.shiftKey ? 'Shift+' : '') + (e.key.length === 1 ? e.key.toUpperCase() : e.key); const sc = Object.assign({}, s.shortcuts); sc[x.id] = combo; self.setState({ shortcuts: sc, recording: null }); },
+      clear: () => { const sc = Object.assign({}, s.shortcuts); delete sc[x.id]; self.setState({ shortcuts: sc }); }
+    }));
+    const sbUserRows = ['jonah', 'gal', 'maya', 'noa'].map((u) => ({ name: U[u].name, ini: ini(U[u].name), color: U[u].c, muted: s.sbMutedUsers.indexOf(u) >= 0, toggle: () => self.setState({ sbMutedUsers: s.sbMutedUsers.indexOf(u) >= 0 ? s.sbMutedUsers.filter((x) => x !== u) : s.sbMutedUsers.concat([u]) }) }));
+    const manageRows = s.sounds.slice().reverse().slice(0, 6).map((x) => ({ e: x.e, name: x.name, meta: x.dur.toFixed(1) + 's · by ' + x.by, del: () => { self.setState({ sounds: s.sounds.filter((y) => y.id !== x.id), favs: s.favs.filter((y) => y !== x.id) }); self.toast('Deleted “' + x.name + '”', 'var(--danger)'); } }));
+
+    const setK = (k, num) => (e) => { const o = {}; o[k] = num ? +e.target.value : e.target.value; self.setState(o); };
+    const tog = (k) => () => self.setState((st) => { const o = {}; o[k] = !st[k]; return o; });
+    const isText = s.view === 'text'; const isVoice = s.view === 'voice'; const isStream = s.view === 'stream' && streams.length > 0;
+    const sbAvail = inVoice;
+    const typingOn = isText && textCh.id === 'general' && (Math.floor(now / 5000) % 3 !== 2);
+
+    return {
+      rootStyle, rootClass: s.reduceMotion ? 'reduce' : '',
+      homeCls: s.entered ? '' : 'on', goHome: () => self.setState({ entered: false }),
+      welcome: !s.entered, serverCards, servers,
+      addServer: () => self.toast('Create or join a server — invite links only (not in this prototype)', 'var(--tx3)'),
+      createChannel: () => self.toast('Admins can create channels here (mocked)', 'var(--tx3)'),
+      sideCls: s.navOpen ? 'open' : '', toggleNav: tog('navOpen'),
+      server: { name: server.name, online: server.id === 'hangar' ? 9 : 2 },
+      textOpen: s.textOpen, voiceOpen: s.voiceOpen, toggleText: tog('textOpen'), toggleVoice: tog('voiceOpen'),
+      textChevron: s.textOpen ? 'none' : 'rotate(-90deg)', voiceChevron: s.voiceOpen ? 'none' : 'rotate(-90deg)',
+      textChannels, voiceChannels,
+      inVoice, conn, voiceChannel: { name: vInfo ? vInfo.name : '', count: vInfo ? voiceMembers(s.voice).length - 1 : 0 },
+      openVoiceView: () => self.setState({ view: 'voice', theater: false }),
+      userPanelRadius: inVoice ? '0 0 12px 12px' : '12px',
+      me: { name: U.tomer.name, ini: ini(U.tomer.name), color: U.tomer.c, statusColor: STATUS_C[s.myStatus], sub: s.deafened ? 'Deafened' : (s.muted ? 'Muted' : (inVoice ? 'In ' + vInfo.name : (s.customStatus || 'Online'))) },
+      meRing: talk('tomer') ? 'talk' : '', openMe: openUser('tomer'),
+      muted: s.muted, deafened: s.deafened, notDeaf: !s.deafened, micOff: s.muted || s.deafened, micOn: !(s.muted || s.deafened),
+      micCls: s.muted || s.deafened ? 'bad' : '', deafCls: s.deafened ? 'bad' : '',
+      micLabel: s.muted ? 'Unmute microphone' : 'Mute microphone', deafLabel: s.deafened ? 'Undeafen' : 'Deafen',
+      toggleMute: () => { if (s.deafened) { self.setState({ deafened: false, muted: false }); self.blip(true); return; } self.setState({ muted: !s.muted }); self.blip(s.muted); },
+      toggleDeaf: () => { self.setState({ deafened: !s.deafened }); self.blip(s.deafened); },
+      camera: s.camera, camCls: s.camera ? 'on' : '', dockCamCls: s.camera ? 'on' : '',
+      toggleCamera: () => { if (!s.camera && s.camDev === 'none') { self.toast('No webcam detected — connect one or pick a device in Settings › Video', 'var(--danger)'); return; } self.setState({ camera: !s.camera }); },
+      sharing: s.sharing, shareCls: s.sharing ? 'on' : '', dockShareCls: s.sharing ? 'on' : '',
+      shareBtn: () => { if (s.sharing) { self.setState({ sharing: false, watching: s.watching === 'tomer' ? null : s.watching }); self.toast('You stopped streaming', 'var(--tx3)'); } else self.setState({ shareFlow: 'setup', shareQ: s.defQ }); },
+      sbOpen: s.sbOpen, sbCls: s.sbOpen ? 'on' : '', dockSbCls: s.sbOpen ? 'on' : '',
+      toggleSb: () => self.setState({ sbOpen: !s.sbOpen }),
+      dockMicCls: s.muted || s.deafened ? 'bad' : '', dockDeafCls: s.deafened ? 'bad' : '',
+      openVoiceSettings: () => self.setState({ settings: 'voice' }), openSettings: () => self.setState({ settings: 'account', ctx: null, profile: null }),
+      disconnect: () => self.disconnect(),
+      isText, isVoice, isStream,
+      channel: { name: textCh.name, topic: textCh.topic },
+      pinsOpen: s.panel === 'pins', searchOpen: s.panel === 'search', pinsCls: s.panel === 'pins' ? 'on' : '',
+      togglePins: () => self.setState({ panel: s.panel === 'pins' ? null : 'pins' }),
+      toggleSearch: () => { self.setState({ panel: s.panel === 'search' ? null : 'search' }); self.later(() => { const el = document.getElementById('search-input'); if (el) el.focus(); }, 40); },
+      members: s.members, membersCls: s.members ? 'on' : '', toggleMembers: tog('members'),
+      chatEmpty: raw.length === 0, msgs, focusComposer: () => { const el = document.getElementById('composer'); if (el) el.focus(); },
+      editText: s.editText, onEditText: setK('editText'),
+      saveEdit: () => { const t = s.editText.trim(); if (t) self.updateMsgs(textCh.id, (l) => l.map((x) => (x.id === s.editing ? Object.assign({}, x, { text: t, edited: true }) : x))); self.setState({ editing: null }); },
+      cancelEdit: () => self.setState({ editing: null }),
+      onEditKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); const t = s.editText.trim(); if (t) self.updateMsgs(textCh.id, (l) => l.map((x) => (x.id === s.editing ? Object.assign({}, x, { text: t, edited: true }) : x))); self.setState({ editing: null }); } if (e.key === 'Escape') self.setState({ editing: null }); },
+      showTyping: typingOn, typingName: 'Jonah',
+      hasReplyTo: !!replyMsg, replyTo: replyMsg ? { name: U[replyMsg.user].name, color: U[replyMsg.user].c, text: replyMsg.text } : {}, cancelReply: () => self.setState({ replyTo: null }),
+      hasAttach: s.attachments.length > 0, attachList: s.attachments.map((a, i) => ({ name: a.name, size: a.size, remove: () => self.setState({ attachments: s.attachments.filter((_, j) => j !== i) }) })),
+      attachMock: () => self.setState({ attachments: s.attachments.concat([{ name: 'screenshot_2026-10-17.png', size: '1.2 MB' }]) }),
+      draft: s.draft, onDraft: setK('draft'),
+      onDraftKey: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); self.send(); } if (e.key === 'Escape') self.setState({ replyTo: null, emojiOpen: false }); },
+      send: () => self.send(), cantSend: !s.draft.trim() && !s.attachments.length,
+      emojiOpen: s.emojiOpen, emojiCls: s.emojiOpen ? 'on' : '', toggleEmoji: tog('emojiOpen'),
+      emojis: EMOJIS.map((e) => ({ e, pick: () => { self.setState({ draft: s.draft + e }); const el = document.getElementById('composer'); if (el) el.focus(); } })),
+      dragOver: s.dragOver,
+      onDragOver: (e) => { e.preventDefault(); if (!s.dragOver) self.setState({ dragOver: true }); },
+      onDragLeave: (e) => { if (e.currentTarget.contains(e.relatedTarget)) return; self.setState({ dragOver: false }); },
+      onDrop: (e) => { e.preventDefault(); const fs = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || []); const add = fs.length ? fs.map((f) => ({ name: f.name, size: (f.size / 1048576).toFixed(1) + ' MB' })) : [{ name: 'dropped_file.png', size: '0.8 MB' }]; self.setState({ dragOver: false, attachments: s.attachments.concat(add) }); },
+      noPins: pins.length === 0, pins,
+      searchQ: s.searchQ, onSearch: setK('searchQ'),
+      searchHints: [['from: maya', 'from: maya'], ['clip', 'clip'], ['game night', 'game night']].map((h) => ({ label: h[0], pick: () => self.setState({ searchQ: h[1] }) })),
+      searchResults: results, searchSummary: q ? results.length + ' result' + (results.length === 1 ? '' : 's') : 'Type to search messages, or try a filter',
+      voiceView: {
+        name: vv.name, count: vMembers.length, hasLive: liveList.length > 0 && !!s.voice, liveCount: liveList.length, liveNames: liveList.map((u) => (u === 'tomer' ? 'You' : U[u].name) + ' — ' + (u === 'tomer' ? 'your screen' : STREAMS[u].title)).join(' · '),
+        joined: !!s.voice, notJoined: !s.voice, alone: !!s.voice && vMembers.length === 1, join: () => self.joinVoice(viewVoiceId)
+      },
+      streams, streamCount: streams.length, firstLive: liveList[0] ? (liveList[0] === 'tomer' ? 'yours' : U[liveList[0]].name) : '',
+      watchFirst: () => self.watch(liveList.filter((u) => u !== 'tomer')[0] || liveList[0]),
+      watchAll: () => self.watch(liveList.filter((u) => u !== 'tomer')[0] || liveList[0], 'grid'),
+      participants, onlineFriends: onlineIds.length - 1,
+      pingFriends: () => self.toast('Pinged ' + (onlineIds.length - 1) + ' online friends with a join link'),
+      prim: primS, loading: s.loading,
+      layoutFocus: s.layout === 'focus', layoutGrid: s.layout === 'grid',
+      setFocus: () => self.setState({ layout: 'focus' }), setGrid: () => self.setState({ layout: 'grid' }),
+      gridCols: streams.length <= 1 ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))',
+      stageStyle: s.fit === 'fit' ? 'aspect-ratio: 16/9; height: 100%; max-width: 100%; max-height: 100%;' : 'position: absolute; inset: 0;',
+      fitOn: s.fit === 'fit', fillOn: s.fit === 'fill', setFit: () => self.setState({ fit: 'fit' }), setFill: () => self.setState({ fit: 'fill' }),
+      theater: s.theater, theaterCls: s.theater ? 'on' : '', toggleTheater: tog('theater'), chromeCls: s.theater && isStream ? 'th-hide' : '',
+      fullscreen: () => { const el = document.getElementById('stage'); try { if (el && el.requestFullscreen) el.requestFullscreen().catch(() => self.setState({ theater: true })); else self.setState({ theater: true }); } catch (e) { self.setState({ theater: true }); } },
+      popOut: () => { self.scrollBottom = true; self.setState({ view: 'text' }); self.toast('Stream docked — keep chatting, it follows you'); },
+      showMini: !!s.watching && s.view !== 'stream' && streams.length > 0, miniW: s.miniBig ? 420 : 300,
+      toggleMiniSize: tog('miniBig'), expandMini: () => self.setState({ view: 'stream' }), stopWatching: () => self.setState({ watching: null }),
+      showMembers: s.members && !s.theater && !(s.sbOpen && s.sbDock && sbAvail) && !(isStream),
+      memberGroups,
+      sbPopover: s.sbOpen && !s.sbDock && sbAvail, sbDocked: s.sbOpen && s.sbDock && sbAvail,
+      toggleDock: () => self.setState({ sbDock: !s.sbDock }),
+      soundMuted: s.soundMuted, sbMuteCls: s.soundMuted ? 'bad' : '', sbMuteLabel: s.soundMuted ? 'Unmute soundboard for me' : 'Mute soundboard for me', toggleSoundMute: tog('soundMuted'),
+      soundVol: s.soundVol, onSoundVol: setK('soundVol', true),
+      sbQ: s.sbQ, onSbQ: setK('sbQ'),
+      sbCats: cats.map((c) => ({ label: c === 'Favorites' ? '★ Favorites' : c, on: s.sbCat === c, pick: () => self.setState({ sbCat: c }) })),
+      sbCatLabel: s.sbCat === 'All' ? 'All sounds' : s.sbCat,
+      sbTiles, recentTiles, showRecent: !qq && s.sbCat === 'All', sbNoResults: sbTiles.length === 0 && !!qq,
+      nowPlaying: pl && plSnd ? { on: true, name: plSnd.e + ' ' + plSnd.name, by: pl.by === 'tomer' ? 'you' : U[pl.by].name } : { on: false },
+      cooldown: { on: cool > 0, s: (cool / 1000).toFixed(1) },
+      openUpload: () => self.openUpload(), openSbSettings: () => self.setState({ settings: 'sound' }),
+      ctx, closeCtx: (e) => { if (e && e.preventDefault) e.preventDefault(); self.setState({ ctx: null }); },
+      prof, closeProfile: () => self.setState({ profile: null }), statusOpts,
+      share, shareAudio: s.shareAudio && audioOk, shareTitle: s.shareTitle, onShareTitle: setK('shareTitle'),
+      stop: (e) => e.stopPropagation(),
+      q1080: () => self.setState({ shareQ: '1080' }), q720: () => self.setState({ shareQ: '720' }),
+      toggleShareAudio: () => self.setState({ shareAudio: !s.shareAudio }),
+      cancelShare: () => self.setState({ shareFlow: null }), toPicker: () => self.setState({ shareFlow: 'picker' }),
+      denyShare: () => self.setState({ shareFlow: 'denied' }),
+      startShare: () => { const sm = Object.assign({}, s.sMute); self.setState({ shareFlow: null, sharing: true, sMute: sm }); self.toast('You’re live in ' + (vInfo ? vInfo.name : 'voice') + ' · ' + (s.shareQ === '1080' ? '1080p 60' : '720p 30'), 'var(--live)'); if (s.shareAudio && !audioOk) self.later(() => self.toast('System audio isn’t available for a single window — friends see video only', 'var(--warn)'), 600); },
+      up, closeUpload: () => self.setState({ upload: null }), resetUpload: () => self.setState({ upload: { step: 'drop' } }),
+      useSample: () => self.setState({ upload: { step: 'edit', file: 'crickets_late_night.wav', size: '0.6 MB', total: 6.8, a: 0, b: 100, name: 'Crickets 2', emoji: '🦗' } }),
+      onFile: (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const mb = f.size / 1048576; const okType = /audio/.test(f.type) || /\.(mp3|wav|ogg)$/i.test(f.name); if (!okType) { self.setState({ upload: { step: 'error', err: '“' + f.name + '” isn’t an audio file. Use MP3, WAV or OGG.' } }); return; } if (mb > 1) { self.setState({ upload: { step: 'error', err: '“' + f.name + '” is ' + mb.toFixed(1) + ' MB — the limit is 1 MB. Trim it or export at a lower bitrate.' } }); return; } self.setState({ upload: { step: 'edit', file: f.name, size: mb.toFixed(2) + ' MB', total: 4.2, a: 0, b: 100, name: f.name.replace(/\.[^.]+$/, '').slice(0, 24), emoji: '📣' } }); },
+      onTrimA: (e) => self.setState({ upload: Object.assign({}, s.upload, { a: Math.min(+e.target.value, s.upload.b - 5) }) }),
+      onTrimB: (e) => self.setState({ upload: Object.assign({}, s.upload, { b: Math.max(+e.target.value, s.upload.a + 5) }) }),
+      onUpName: (e) => self.setState({ upload: Object.assign({}, s.upload, { name: e.target.value }) }),
+      previewUpload: () => self.synth({ notes: chirps().slice(0, 8) }, true),
+      doUpload: () => self.setState({ upload: Object.assign({}, s.upload, { step: 'uploading', progress: 4 }) }),
+      set, closeSettings: () => self.setState({ settings: null, micTest: false, recording: null }),
+      signOut: () => self.setState({ settings: null, entered: false }),
+      myName: s.myName, onMyName: setK('myName'), customStatus: s.customStatus, onCustom: setK('customStatus'),
+      changeAvatar: () => self.toast('Avatar upload opens a file picker in the real app', 'var(--tx3)'),
+      changePw: () => self.toast('Password reset link sent (simulated)', 'var(--tx3)'),
+      sessions: s.sessions.map((x) => ({ label: x.label, meta: x.meta, current: !!x.current, other: !x.current, revoke: () => { self.setState({ sessions: s.sessions.filter((y) => y.id !== x.id) }); self.toast('Signed out ' + x.label, 'var(--tx3)'); } })),
+      inputDev: s.inputDev, onInputDev: setK('inputDev'), outputDev: s.outputDev, onOutputDev: setK('outputDev'),
+      inVol: s.inVol, onInVol: setK('inVol', true), outVol: s.outVol, onOutVol: setK('outVol', true),
+      sens: s.sens, onSens: setK('sens', true), micTest: s.micTest, toggleMicTest: tog('micTest'),
+      micTestLabel: s.micTest ? 'Stop test' : 'Test mic', micTestCls: s.micTest ? 'dng' : 'sec',
+      micLevel, micLevelColor: micLevel > s.sens ? 'var(--accent)' : 'var(--tx3)',
+      noise: s.noise, toggleNoise: tog('noise'), echo: s.echo, toggleEcho: tog('echo'),
+      camDev: s.camDev, onCamDev: (e) => self.setState({ camDev: e.target.value, camera: e.target.value === 'none' ? false : s.camera }),
+      camOk: s.camDev !== 'none', camNone: s.camDev === 'none', camPreviewBg: s.camDev === 'none' ? 'var(--bg3)' : 'radial-gradient(60% 70% at 50% 75%, #3b4a5e 0%, #1a212b 70%)',
+      dq1080: s.defQ === '1080', dq720: s.defQ === '720', setDq1080: () => self.setState({ defQ: '1080' }), setDq720: () => self.setState({ defQ: '720' }),
+      autoplay: s.autoplay, toggleAutoplay: tog('autoplay'),
+      shortcutRows, sbUserRows, manageRows,
+      isDark: dark, isLight: !dark, setDark: () => self.setState({ theme: 'dark' }), setLight: () => self.setState({ theme: 'light' }),
+      accentOpts: ACCENTS.map((a) => ({ c: a.c, label: a.label + ' accent', on: acc.c === a.c, ring: acc.c === a.c ? '0 0 0 2px var(--bg1), 0 0 0 4px ' + a.c : 'none', pick: () => self.setState({ accent: a.c }) })),
+      fontScale: s.fontScale, onFontScale: setK('fontScale', true),
+      isCozy: s.density === 'cozy', isCompact: s.density === 'compact', setCozy: () => self.setState({ density: 'cozy' }), setCompact: () => self.setState({ density: 'compact' }),
+      reduceMotion: s.reduceMotion, toggleReduce: tog('reduceMotion'),
+      notifLabel: { default: 'Not asked yet', granted: 'Allowed (simulated)', denied: 'Blocked' }[s.notifPerm], notifGranted: s.notifPerm === 'granted',
+      notifBtn: s.notifPerm === 'granted' ? 'Allowed' : 'Ask browser for permission',
+      askNotif: () => { self.setState({ notifPerm: 'granted' }); self.toast('Browser would show its permission prompt here — marked allowed (simulated)', 'var(--tx3)'); },
+      nAll: s.notifMode === 'all', nMentions: s.notifMode === 'mentions', nNone: s.notifMode === 'none',
+      setNAll: () => self.setState({ notifMode: 'all' }), setNMentions: () => self.setState({ notifMode: 'mentions' }), setNNone: () => self.setState({ notifMode: 'none' }),
+      notifSounds: s.notifSounds, toggleNotifSounds: tog('notifSounds'), chimes: s.chimes, toggleChimes: tog('chimes'),
+      viewer: s.viewer ? Object.assign({ on: true }, s.viewer) : { on: false }, closeViewer: () => self.setState({ viewer: null }),
+      toasts: s.toasts
+    };
+  }
+}
+</script>
+</body>
+</html>

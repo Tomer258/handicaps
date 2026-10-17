@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hangar UX states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#C8F05A}a:hover{color:#ECEEF1}
+.st *{box-sizing:border-box}
+.disp{font-family:'Bricolage Grotesque',sans-serif;letter-spacing:-.01em}
+.mono{font-family:'Geist Mono',ui-monospace,monospace}
+.box{border-radius:16px;background:#15171B;border:1px solid #262A31;overflow:hidden;display:flex;flex-direction:column}
+.hd{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #262A31;font-size:12px;color:#AEB4BE}
+.hd b{color:#ECEEF1;font-weight:600;font-size:13px}
+.n{font:500 10.5px 'Geist Mono',monospace;color:#868D99}
+.bd{flex:1;padding:16px;display:flex;flex-direction:column;justify-content:center;gap:10px;position:relative}
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.av{border-radius:50%;display:grid;place-items:center;color:#0B0C0E;font-weight:600;flex:none}
+.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:600}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 14px;border-radius:10px;font:600 13px 'Geist',sans-serif;border:0}
+.note{display:flex;gap:10px;padding:12px;border-radius:12px;font-size:12.5px;line-height:1.5;color:#AEB4BE}
+.sk{border-radius:6px;background:linear-gradient(90deg,#1C1F24 0%,#252930 50%,#1C1F24 100%);background-size:200% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.spin{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scene{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:16/9;background:linear-gradient(180deg,#071528 0%,#0d3350 60%,#13627a 100%)}
+.p15{border-radius:12px;background:#1C1F24;border:1px solid #262A31;aspect-ratio:16/10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;position:relative}
+.p15.talk{border-color:#C8F05A;box-shadow:0 0 0 1px #C8F05A}
+.p15.talk .av{box-shadow:0 0 0 2px #1C1F24,0 0 0 4px #C8F05A}
+</style>
+</helmet>
+<div class="st" style="width: 1440px; height: 1960px; box-sizing: border-box; padding: 56px 64px; background: #0E0F12; color: #ECEEF1; font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-size: 14px; display: flex; flex-direction: column; gap: 28px">
+<div><div class="mono" style="font-size: 12px; letter-spacing: .12em; color: #868D99">SECTION 10</div><h1 class="disp" style="margin: 6px 0 0; font-size: 44px; font-weight: 700">Beyond the happy path</h1></div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+
+<!-- 15 participants (span 2) -->
+<div class="box" style="grid-column: span 2">
+<div class="hd"><span class="n">01</span><b>Voice with 15 participants</b><span style="flex: 1"></span>auto-fill grid · min 150 px · cards shrink, never scroll horizontally</div>
+<div class="bd" style="padding: 14px">
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{fifteen}}" as="p" hint-placeholder-count="15">
+<div class="p15 {{p.cls}}"><span class="av" style="width: 40px; height: 40px; font-size: 14px; background: {{p.c}}">{{p.i}}</span><span style="font-size: 11.5px; font-weight: 600">{{p.n}}</span>
+<sc-if value="{{p.muted}}" hint-placeholder-val="{{false}}"><span style="position: absolute; right: 6px; bottom: 6px; color: #FF6B6B"><svg viewBox="0 0 24 24" class="ic" style="width: 14px; height: 14px" aria-label="Muted" role="img"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M3 3l18 18"/></svg></span></sc-if>
+<sc-if value="{{p.live}}" hint-placeholder-val="{{false}}"><span class="tag" style="position: absolute; left: 6px; top: 6px; height: 16px; font-size: 9.5px; background: #F0484E; color: #fff">LIVE</span></sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<!-- one person -->
+<div class="box">
+<div class="hd"><span class="n">02</span><b>Voice channel with one person</b></div>
+<div class="bd" style="align-items: center; text-align: center">
+<div style="width: 140px; aspect-ratio: 16/10; border-radius: 14px; background: #1C1F24; border: 1px solid #262A31; display: grid; place-items: center"><span class="av" style="width: 48px; height: 48px; font-size: 16px; background: #C8F05A">To</span></div>
+<b>It’s just you in here</b>
+<span style="font-size: 12.5px; color: #868D99">8 friends are online. A ping sends a one-tap join link.</span>
+<button class="btn" style="background: #C8F05A; color: #0E1104">Ping online friends</button>
+</div>
+</div>
+
+<!-- empty channel -->
+<div class="box">
+<div class="hd"><span class="n">03</span><b>Empty text channel</b></div>
+<div class="bd" style="align-items: center; text-align: center">
+<div style="width: 64px; height: 64px; border-radius: 20px; background: #1C1F24; border: 1px solid #262A31; display: grid; place-items: center; color: #C8F05A"><svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px" aria-hidden="true"><path d="M5 9h14M4 15h14M10 3 8 21M16 3l-2 18"/></svg></div>
+<b class="disp" style="font-size: 18px">This is the start of #dev-log</b>
+<span style="font-size: 12.5px; color: #868D99">Drop a file, share a link, or write the first message.</span>
+</div>
+</div>
+
+<!-- no friends online -->
+<div class="box">
+<div class="hd"><span class="n">04</span><b>No friends online</b></div>
+<div class="bd" style="align-items: center; text-align: center">
+<div style="display: flex"><span class="av" style="width: 36px; height: 36px; font-size: 12px; background: #8FB8FF; opacity: .4; border: 2px solid #15171B">Jo</span><span class="av" style="width: 36px; height: 36px; font-size: 12px; background: #F59BC4; opacity: .4; margin-left: -10px; border: 2px solid #15171B">Ma</span><span class="av" style="width: 36px; height: 36px; font-size: 12px; background: #7FD8C3; opacity: .4; margin-left: -10px; border: 2px solid #15171B">Ar</span></div>
+<b>Quiet hangar tonight</b>
+<span style="font-size: 12.5px; color: #868D99">Nobody’s online. Maya was last here 40 min ago. Hop in Lounge — friends see you there when they arrive.</span>
+<button class="btn" style="background: #252930; color: #ECEEF1">Wait in Lounge</button>
+</div>
+</div>
+
+<!-- unread -->
+<div class="box">
+<div class="hd"><span class="n">05</span><b>Unread messages</b></div>
+<div class="bd" style="gap: 6px; justify-content: flex-start">
+<div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 8px; color: #ECEEF1; font-weight: 600"><span style="color: #868D99">#</span><span style="flex: 1">clips</span><span style="min-width: 18px; height: 18px; padding: 0 6px; border-radius: 9px; background: #252930; font-size: 11px; display: grid; place-items: center">4</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 8px; color: #ECEEF1; font-weight: 600"><span style="color: #868D99">#</span><span style="flex: 1">memes</span><span style="height: 18px; padding: 0 6px; border-radius: 9px; background: #F0484E; color: #fff; font-size: 11px; display: grid; place-items: center">@1</span></div>
+<div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; color: #868D99; font-weight: 500"><span>#</span><span>game-night</span></div>
+<div style="display: flex; align-items: center; gap: 10px; margin-top: 8px; color: #F0484E; font-size: 11px; font-weight: 600; letter-spacing: .06em"><span>NEW MESSAGES</span><span style="flex: 1; height: 1px; background: rgba(240,72,78,.55)"></span></div>
+<div style="font-size: 13px; padding: 6px 8px; border-radius: 8px; background: rgba(245,181,68,.09); box-shadow: inset 2px 0 0 #F5B544"><b style="color: #E8A0FF">Shira</b> <span style="padding: 0 3px; border-radius: 4px; background: rgba(200,240,90,.18); color: #C8F05A">@Tomer</span> this is you every ranked game</div>
+</div>
+</div>
+
+<!-- loading -->
+<div class="box">
+<div class="hd"><span class="n">06</span><b>Loading content</b></div>
+<div class="bd" style="gap: 14px; justify-content: flex-start">
+<div style="display: flex; gap: 12px"><div class="sk" style="width: 40px; height: 40px; border-radius: 50%"></div><div style="flex: 1; display: flex; flex-direction: column; gap: 8px"><div class="sk" style="width: 30%; height: 10px"></div><div class="sk" style="width: 85%; height: 10px"></div></div></div>
+<div style="display: flex; gap: 12px"><div class="sk" style="width: 40px; height: 40px; border-radius: 50%"></div><div style="flex: 1; display: flex; flex-direction: column; gap: 8px"><div class="sk" style="width: 22%; height: 10px"></div><div class="sk" style="width: 60%; height: 10px"></div><div class="sk" style="width: 70%; height: 90px; border-radius: 10px"></div></div></div>
+</div>
+</div>
+
+<!-- speaking/muted/deafened -->
+<div class="box">
+<div class="hd"><span class="n">07</span><b>Speaking · muted · deafened</b></div>
+<div class="bd" style="gap: 8px; justify-content: flex-start">
+<div style="display: flex; align-items: center; gap: 10px; padding: 6px 8px"><span class="av" style="width: 24px; height: 24px; font-size: 10px; background: #F59BC4; box-shadow: 0 0 0 2px #15171B, 0 0 0 4px #C8F05A">Ma</span><span style="flex: 1; font-weight: 600">Maya</span><span style="font-size: 11.5px; color: #C8F05A">speaking</span></div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 6px 8px"><span class="av" style="width: 24px; height: 24px; font-size: 10px; background: #8FB8FF; box-shadow: 0 0 0 2px #15171B, 0 0 0 4px #C8F05A">Jo</span><span style="flex: 1; font-weight: 600">Jonah</span><span style="font-size: 11.5px; color: #C8F05A">speaking</span></div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 6px 8px; color: #AEB4BE"><span class="av" style="width: 24px; height: 24px; font-size: 10px; background: #F2C46D">No</span><span style="flex: 1">Noa</span><span style="color: #FF6B6B"><svg viewBox="0 0 24 24" class="ic" style="width: 15px; height: 15px" aria-label="Muted" role="img"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M3 3l18 18"/></svg></span></div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 6px 8px; color: #AEB4BE"><span class="av" style="width: 24px; height: 24px; font-size: 10px; background: #C8F05A">To</span><span style="flex: 1">Tomer</span><span style="color: #FF6B6B"><svg viewBox="0 0 24 24" class="ic" style="width: 15px; height: 15px" aria-label="Deafened" role="img"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/><path d="M3 3l18 18"/></svg></span></div>
+<div style="font-size: 12px; color: #868D99; padding: 0 8px">Multiple rings can pulse at once. Muted users never ring.</div>
+</div>
+</div>
+
+<!-- stream starting -->
+<div class="box">
+<div class="hd"><span class="n">08</span><b>Stream starting</b></div>
+<div class="bd">
+<div class="scene" style="background: #0b0c0e; display: grid; place-items: center"><div style="display: flex; flex-direction: column; align-items: center; gap: 10px; color: #fff"><span class="tag" style="background: #F0484E; color: #fff">GOING LIVE · 3</span><span style="font-size: 12.5px; opacity: .8">Negotiating 1080p · 60 with 4 viewers…</span></div></div>
+</div>
+</div>
+
+<!-- buffering -->
+<div class="box">
+<div class="hd"><span class="n">09</span><b>Stream buffering</b></div>
+<div class="bd">
+<div class="scene"><div style="position: absolute; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center"><div style="display: flex; flex-direction: column; align-items: center; gap: 10px; color: #fff"><div class="spin"></div><span style="font-size: 12.5px">Buffering — dropping to 720p to keep up</span></div></div><span class="tag" style="position: absolute; left: 8px; top: 8px; background: #F5B544; color: #1D1300">Weak connection</span></div>
+</div>
+</div>
+
+<!-- stream disconnected -->
+<div class="box">
+<div class="hd"><span class="n">10</span><b>Stream disconnected</b></div>
+<div class="bd">
+<div class="scene" style="background: #0b0c0e; display: grid; place-items: center; text-align: center"><div style="color: #fff; display: flex; flex-direction: column; align-items: center; gap: 8px"><svg viewBox="0 0 24 24" class="ic" style="width: 28px; height: 28px; color: #FF6B6B" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M3 3l18 18"/></svg><b>Jonah’s stream ended</b><span style="font-size: 12px; opacity: .7">Lost connection to the streamer · 20:41</span><span style="display: flex; gap: 6px"><button class="btn" style="height: 28px; background: #252930; color: #fff">Back to Lounge</button><button class="btn" style="height: 28px; background: #C8F05A; color: #0E1104">Watch Maya</button></span></div></div>
+</div>
+</div>
+
+<!-- permission denied -->
+<div class="box">
+<div class="hd"><span class="n">11</span><b>Screen-share permission denied</b></div>
+<div class="bd">
+<div class="note" style="background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.4)"><svg viewBox="0 0 24 24" class="ic" style="color: #FF6B6B" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><div><b style="color: #ECEEF1">Screen sharing didn’t start</b><br>The browser dialog was closed or blocked. Nothing was shared. Click the site icon in the address bar › Screen sharing › Allow.</div></div>
+<div style="display: flex; gap: 8px; justify-content: flex-end"><button class="btn" style="background: transparent; color: #AEB4BE">Close</button><button class="btn" style="background: #C8F05A; color: #0E1104">Try again</button></div>
+</div>
+</div>
+
+<!-- system audio unavailable -->
+<div class="box">
+<div class="hd"><span class="n">12</span><b>System audio unavailable</b></div>
+<div class="bd">
+<div class="note" style="background: rgba(245,181,68,.1); border: 1px solid rgba(245,181,68,.4)"><svg viewBox="0 0 24 24" class="ic" style="color: #F5B544" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9 5 6M21 9l-5 6"/></svg><div><b style="color: #ECEEF1">You’re live — video only</b><br>Browsers can’t capture audio from a single window. To share game sound, restart the stream with <b>Entire screen</b> and tick “Share system audio”.</div></div>
+<div style="display: flex; gap: 8px; justify-content: flex-end"><button class="btn" style="background: transparent; color: #AEB4BE">Keep video only</button><button class="btn" style="background: #252930; color: #ECEEF1">Restart with audio</button></div>
+</div>
+</div>
+
+<!-- no webcam -->
+<div class="box">
+<div class="hd"><span class="n">13</span><b>No webcam detected</b></div>
+<div class="bd" style="align-items: center; text-align: center">
+<div style="display: flex; gap: 8px"><span style="width: 48px; height: 48px; border-radius: 14px; background: #252930; display: grid; place-items: center; color: #868D99; opacity: .6"><svg viewBox="0 0 24 24" class="ic" style="width: 22px; height: 22px" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3M3 3l18 18"/></svg></span></div>
+<b>No camera found</b>
+<span style="font-size: 12.5px; color: #868D99">Plug one in, or check Windows Settings › Privacy › Camera for your browser. Voice and streaming keep working.</span>
+<button class="btn" style="background: #252930; color: #ECEEF1">Open video settings</button>
+</div>
+</div>
+
+<!-- reconnecting voice -->
+<div class="box">
+<div class="hd"><span class="n">14</span><b>Reconnecting to voice</b></div>
+<div class="bd">
+<div style="padding: 10px; border-radius: 12px; background: #1C1F24; border: 1px solid rgba(245,181,68,.5)">
+<div style="display: flex; align-items: center; gap: 10px"><span style="display: flex; align-items: flex-end; gap: 2px; height: 14px"><i style="width: 3px; height: 5px; background: #F5B544"></i><i style="width: 3px; height: 9px; background: #F5B544"></i><i style="width: 3px; height: 14px; background: #353A43"></i></span><div style="flex: 1"><div style="font-size: 12.5px; font-weight: 600; color: #F5B544">Reconnecting… attempt 2</div><div style="font-size: 12px; color: #868D99">Lounge / The Hangar · audio paused</div></div></div>
+</div>
+<span style="font-size: 12px; color: #868D99">Mic and deafen stay usable; state is re-applied the moment the socket returns. After 30 s: “Couldn’t reconnect — Rejoin”.</span>
+</div>
+</div>
+
+<!-- friend disconnected -->
+<div class="box">
+<div class="hd"><span class="n">15</span><b>Friend disconnected unexpectedly</b></div>
+<div class="bd">
+<div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: #252930; border: 1px solid #353A43; font-size: 13px"><i style="width: 8px; height: 8px; border-radius: 50%; background: #F5B544"></i>Gal disconnected unexpectedly — reconnecting…</div>
+<div style="width: 180px; aspect-ratio: 16/10; border-radius: 14px; background: #1C1F24; border: 1px solid #262A31; display: grid; place-items: center; opacity: .6; position: relative"><span class="av" style="width: 44px; height: 44px; font-size: 15px; background: #B7A1FF">Ga</span><span class="tag" style="position: absolute; right: 8px; bottom: 8px; background: #F5B544; color: #1D1300">Reconnecting…</span></div>
+<span style="font-size: 12px; color: #868D99">Card stays for 60 s so the grid doesn’t jump, then leaves with a soft chime.</span>
+</div>
+</div>
+
+<!-- upload failed -->
+<div class="box">
+<div class="hd"><span class="n">16</span><b>Upload failed</b></div>
+<div class="bd">
+<div class="note" style="background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.4)"><svg viewBox="0 0 24 24" class="ic" style="color: #FF6B6B" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><div><b style="color: #ECEEF1">Upload failed</b><br>“full_song_remix.mp3” is 3.4 MB — the limit is 1 MB. Trim it or export at a lower bitrate.</div></div>
+<div style="display: flex; gap: 8px; justify-content: flex-end"><button class="btn" style="background: transparent; color: #AEB4BE">Cancel</button><button class="btn" style="background: #D98BFF; color: #1A0A22">Choose another file</button></div>
+</div>
+</div>
+
+<!-- cooldown -->
+<div class="box">
+<div class="hd"><span class="n">17</span><b>Soundboard cooldown active</b></div>
+<div class="bd">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #F5B544"><svg viewBox="0 0 24 24" class="ic" style="width: 15px; height: 15px" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>Cooldown — play again in 2.1s</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div style="padding: 10px; border-radius: 12px; background: #2a2033; border: 1px solid #D98BFF; position: relative; overflow: hidden"><div style="font-size: 20px">📯</div><div style="font-size: 12px; font-weight: 600">Airhorn</div><span style="position: absolute; left: 0; bottom: 0; height: 3px; width: 70%; background: #D98BFF"></span></div>
+<div style="padding: 10px; border-radius: 12px; background: #1C1F24; border: 1px solid #262A31; opacity: .5"><div style="font-size: 20px">🤝</div><div style="font-size: 12px; font-weight: 600">GG</div></div>
+<div style="padding: 10px; border-radius: 12px; background: #1C1F24; border: 1px solid #262A31; opacity: .5"><div style="font-size: 20px">😐</div><div style="font-size: 12px; font-weight: 600">Bruh</div></div>
+</div>
+<span style="font-size: 12px; color: #868D99">3 s per person, enforced server-side too. Stops one friend from spamming the room.</span>
+</div>
+</div>
+
+<!-- no permission -->
+<div class="box">
+<div class="hd"><span class="n">18</span><b>No soundboard permissions</b></div>
+<div class="bd" style="align-items: center; text-align: center">
+<span style="width: 48px; height: 48px; border-radius: 14px; background: rgba(217,139,255,.14); color: #D98BFF; display: grid; place-items: center"><svg viewBox="0 0 24 24" class="ic" style="width: 22px; height: 22px" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+<b>Soundboard is admin-only in this server</b>
+<span style="font-size: 12.5px; color: #868D99">You can still hear sounds. Ask Maya or Tomer for the “Use soundboard” role.</span>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const P = [['Tomer', '#C8F05A'], ['Maya', '#F59BC4'], ['Jonah', '#8FB8FF'], ['Ari', '#7FD8C3'], ['Noa', '#F2C46D'], ['Gal', '#B7A1FF'], ['Eitan', '#FF9E7A'], ['Dana', '#9AD27A'], ['Shira', '#E8A0FF'], ['Leo', '#7CC6F0'], ['Omer', '#FFB38A'], ['Yuval', '#A5B4FC'], ['Roni', '#86EFAC'], ['Ben', '#FCA5A5'], ['Tal', '#99F6E4']];
+    const talk = { Maya: 1, Jonah: 1, Dana: 1 }; const muted = { Noa: 1, Leo: 1, Ben: 1 }; const live = { Maya: 1, Jonah: 1, Ari: 1 };
+    return { fifteen: P.map((p) => ({ n: p[0], c: p[1], i: p[0].slice(0, 2), cls: talk[p[0]] ? 'talk' : '', muted: !!muted[p[0]], live: !!live[p[0]] })) };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+flowchart TB
+    Shell["Persistent AppShell"] --> Router["Lazy route outlet"]
+    Shell --> Dock["Voice dock and playback host"]
+    Router --> Chat["Messages and channel UI"]
+    Router --> Settings["Settings and administration"]
+    Dock --> Panel["Soundboard panel"]
+    Chat --> AppState["Session and channel stores"]
+    Settings --> AppState
+    Panel --> Sounds["Root soundboard store"]
+    Dock --> Media["Root MediaSessionService"]
+    Sounds --> HTTP["Typed HTTP and SignalR adapters"]
+    AppState --> HTTP
+    Media --> SDK["LiveKit and capture adapter"]
+    SDK --> Mixer["Root audio output and track registry"]
+    Sounds --> Mixer
+    Mixer --> Dock

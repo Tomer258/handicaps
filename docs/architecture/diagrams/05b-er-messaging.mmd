@@ -1,0 +1,35 @@
+erDiagram
+    direction TB
+    Channel ||--o{ Message : contains
+    Channel ||--o{ ChannelEvent : orders
+    Channel ||--o{ ChannelReadPosition : tracks
+    User ||--o{ Message : authors
+    User ||--o{ ChannelReadPosition : reads
+    Message o|--o{ Message : replies
+    Message ||--o{ MessageReaction : receives
+    Message ||--o{ MessageAttachment : attaches
+    FileAsset ||--o| MessageAttachment : backs
+    Message ||--o{ MessageMention : mentions
+    Message ||--o{ Notification : triggers
+    User ||--o{ Notification : receives
+    Message {
+        uuid id PK
+        uuid channelId FK
+        uuid authorUserId FK
+        bigint messageSequence
+        uuid clientMessageId
+        bigint version
+    }
+    ChannelEvent {
+        uuid eventId PK
+        uuid channelId FK
+        bigint eventSequence
+        string type
+        datetime dispatchedAt
+    }
+    FileAsset {
+        uuid id PK
+        string storageKey UK
+        string state
+        bigint sizeBytes
+    }

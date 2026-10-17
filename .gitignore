@@ -1,0 +1,44 @@
+# local tooling / caches (workspace-local by policy)
+.cache/
+.tmp/
+.tools/
+.data/
+
+# inputs are kept as zips; extracted copies are working references
+_inputs/
+
+# node / angular
+node_modules/
+dist/
+.angular/
+coverage/
+test-results/
+playwright-report/
+
+# dotnet
+bin/
+obj/
+*.user
+TestResults/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+infra/secrets/*
+!infra/secrets/README.md
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vs/
+.idea/
+
+# original input archives
+*.zip

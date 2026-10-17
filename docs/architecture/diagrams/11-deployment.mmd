@@ -1,0 +1,19 @@
+flowchart TB
+    Internet["Friends on Israeli networks"] -->|"TCP 443"| Edge["Caddy Layer 4 and HTTP"]
+    Internet <-->|"UDP 7882 or TCP 7881"| Media["LiveKit host-network media"]
+    Internet <-->|"UDP 3478"| Turn["Embedded TURN"]
+    subgraph VPS["Single Ubuntu VPS"]
+        Edge -->|"App HTTPS and SignalR"| API["Private API listener"]
+        Edge -->|"RTC handshake"| Gate["Application admission check"]
+        Gate -->|"Authorized signaling"| Media
+        Edge <-->|"TURN hostname on TCP 443"| Turn
+        Turn <--> Media
+        API --> DB[("Private PostgreSQL")]
+        API --> Disk[("Persistent files and keys")]
+        API --> Worker["Sound publisher"]
+        Disk --> Worker
+        Worker -->|"Local RTC audio"| Media
+        Validate["Validator without network"] <--> Disk
+    end
+    Disk -->|"Encrypted scheduled backup"| Backup["Independent backup destination"]
+    DB -->|"Consistent dump"| Backup

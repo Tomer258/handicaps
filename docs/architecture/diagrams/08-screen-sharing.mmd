@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant U as User and browser picker
+    participant A as Angular capture service
+    participant P as API policy
+    participant L as LiveKit
+    participant V as Remote viewers
+    U->>A: Click share
+    A->>U: getDisplayMedia with source and audio hints
+    U-->>A: User-selected video and optional audio
+    A->>A: Inspect tracks and check feedback-safe mode
+    A->>P: Reserve allowed screen publication
+    P-->>A: Allow or deny
+    alt Audio captured and safe mode certified
+        A->>L: Publish screen video and separate screen audio
+        L->>V: Forward selected video layer and real audio
+    else Audio unavailable or unsafe
+        A-->>U: Offer video-only or explicit fallback
+        A->>L: Publish video only after consent
+        L->>V: Forward selected video layer
+    end
+    U->>A: Stop sharing or revoke capture
+    A->>L: Unpublish screen video and audio
+    A->>P: Release publication reservation

@@ -1,0 +1,94 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Handoff.dc.html": {
+      "h": 2640,
+      "title": "Angular handoff — component specs",
+      "w": 1440,
+      "x": 1520,
+      "y": 3840
+    },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 900,
+      "is_interactive": true,
+      "title": "Interactive prototype — 1440 × 900",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Responsive.dc.html": {
+      "h": 1640,
+      "title": "Responsive behavior",
+      "w": 1440,
+      "x": 0,
+      "y": 3840
+    },
+    "Soundboard.dc.html": {
+      "h": 1040,
+      "title": "Soundboard placement — Concept A vs B",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "States.dc.html": {
+      "h": 1960,
+      "title": "UX states",
+      "w": 1440,
+      "x": 1520,
+      "y": 1440
+    },
+    "System.dc.html": {
+      "h": 2000,
+      "title": "Design system & tokens",
+      "w": 1440,
+      "x": 0,
+      "y": 1440
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-17T17:55:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "t1": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "Hangar — prototype & signature soundboard",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "t2": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "System & states",
+      "w": 240,
+      "x": 0,
+      "y": 1180
+    },
+    "t3": {
+      "kind": "title1",
+      "maxW": 2960,
+      "text": "Responsive & Angular handoff",
+      "w": 240,
+      "x": 0,
+      "y": 3580
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Soundboard.dc.html",
+    "System.dc.html",
+    "States.dc.html",
+    "Responsive.dc.html",
+    "Handoff.dc.html"
+  ],
+  "pages": [],
+  "title": "Hangar — private voice, streams & soundboard"
+}

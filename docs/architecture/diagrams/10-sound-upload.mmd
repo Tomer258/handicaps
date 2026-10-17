@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant B as Angular upload dialog
+    participant A as API and database
+    participant F as Private file volumes
+    participant V as Isolated validator
+    B->>B: Local preview when decoding is supported
+    B->>A: Upload bounded sound and metadata
+    A->>A: Authorize upload and reserve quota
+    A->>F: Write quarantine file and trusted job descriptor
+    A-->>B: Pending asset ID
+    V->>F: Read next job and input
+    V->>V: Bounded decode, normalize and verify
+    alt Valid sound
+        V->>F: Atomically write canonical WAV and result
+        A->>F: Verify output path, hash and limits
+        A->>A: Mark immutable version ready
+        A-->>B: Ready event and normalized preview
+    else Invalid or timed out
+        V->>F: Failure result and cleanup
+        A->>A: Mark rejected and release quota
+        A-->>B: Clear validation error
+    end

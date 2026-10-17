@@ -1,0 +1,10 @@
+flowchart TB
+    Friends["15 invited friends"] --> Browser["Browser application"]
+    Admin["Community administrator"] --> Browser
+    Browser -->|"Text and account actions"| Platform["Private communication platform"]
+    Browser <-->|"Voice, screens, cameras and effects"| Platform
+    Admin -->|"Operate and restore"| Host["One VPS"]
+    Host -->|"Runs"| Platform
+    Platform -->|"Encrypted backup"| Backup["Independent backup destination"]
+    DNS["DNS and certificate authority"] -->|"Name and TLS trust"| Browser
+    DNS -->|"Certificate issuance"| Host

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hangar responsive behavior</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#C8F05A}a:hover{color:#ECEEF1}
+.rs *{box-sizing:border-box}
+.disp{font-family:'Bricolage Grotesque',sans-serif;letter-spacing:-.01em}
+.mono{font-family:'Geist Mono',ui-monospace,monospace}
+.fr{border-radius:12px;overflow:hidden;background:#0A0B0D;border:1px solid #353A43;display:flex;position:relative}
+.r{width:22px;background:#0A0B0D;display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:6px;flex:none}
+.r i{width:14px;height:14px;border-radius:5px;background:#252930}.r i.a{background:#C8F05A}
+.s{background:#101215;border-left:1px solid #262A31;display:flex;flex-direction:column;padding:6px 5px;gap:4px;flex:none}
+.l{height:5px;border-radius:2px;background:#252930}
+.l.on{background:#353A43}
+.m{flex:1;background:#15171B;display:flex;flex-direction:column;min-width:0;position:relative}
+.hdr{height:16px;border-bottom:1px solid #262A31;flex:none}
+.msg{display:flex;gap:5px;padding:4px 7px}
+.msg b{width:11px;height:11px;border-radius:50%;flex:none}
+.msg span{flex:1;display:flex;flex-direction:column;gap:3px}
+.cmp{margin:5px 7px 7px;height:13px;border-radius:5px;background:#1C1F24;border:1px solid #262A31}
+.mem{background:#101215;border-left:1px solid #262A31;padding:6px 5px;display:flex;flex-direction:column;gap:5px;flex:none}
+.mem i{display:flex;gap:4px;align-items:center}
+.mem i b{width:9px;height:9px;border-radius:50%}
+.vp{margin-top:auto;height:24px;border-radius:5px;background:#15171B;border:1px solid #262A31}
+.st{border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#1b0f1f 0%,#4a1d1f 55%,#c2572b 100%)}
+.st.b{background:linear-gradient(180deg,#071528 0%,#0d3350 60%,#13627a 100%)}
+.st.g{background:linear-gradient(180deg,#8fd0ff 0%,#c9ecff 60%,#9fd486 100%)}
+.st.d{background:#2b3038}
+.prim{outline:1.5px solid #C8F05A}
+.sbp{background:#15171B;border:1px solid rgba(217,139,255,.55);border-radius:7px;padding:5px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+.sbp i{height:13px;border-radius:3px;background:#1C1F24}
+.sbp i.p{background:#D98BFF}
+.cap{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+.cap b{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:700}
+.cap span{font-size:12.5px;color:#AEB4BE;line-height:1.5}
+.bp{display:grid;grid-template-columns:150px 120px 1fr;gap:20px;padding:12px 0;border-bottom:1px solid #262A31;font-size:13px;color:#AEB4BE}
+.bp b{color:#ECEEF1;font-weight:600}
+</style>
+</helmet>
+<div class="rs" style="width: 1440px; height: 1640px; box-sizing: border-box; padding: 56px 64px; background: #0E0F12; color: #ECEEF1; font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 40px">
+<div><div class="mono" style="font-size: 12px; letter-spacing: .12em; color: #868D99">SECTION 11 · SCALE 0.36</div><h1 class="disp" style="margin: 6px 0 0; font-size: 44px; font-weight: 700">One layout, five widths</h1></div>
+
+<div style="display: flex; gap: 40px; align-items: flex-start">
+<!-- 1920 -->
+<div>
+<div class="fr" style="width: 691px; height: 389px">
+<div class="r"><i class="a"></i><i></i><i></i></div>
+<div class="s" style="width: 90px"><div class="l on"></div><div class="l"></div><div class="l"></div><div class="l" style="width: 70%"></div><div class="l"></div><div class="vp"></div></div>
+<div class="m"><div class="hdr"></div>
+<div style="flex: 1; padding: 7px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; align-content: center">
+<div class="st prim" style="aspect-ratio: 16/9"></div><div class="st b" style="aspect-ratio: 16/9"></div><div class="st g" style="aspect-ratio: 16/9"></div><div class="st d" style="aspect-ratio: 16/9"></div>
+</div></div>
+<div class="mem" style="width: 122px; border-color: rgba(217,139,255,.4)"><div style="font-size: 7px; color: #D98BFF; font-weight: 600">SOUNDBOARD · DOCKED</div><div class="sbp" style="border: 0; padding: 0"><i></i><i class="p"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+</div>
+<div class="cap"><b>1920 × 1080 · second monitor</b><span>Multi-stream 2×2 with room to spare, so the docked soundboard (Concept B) can stay pinned. Member list toggles on top of it.</span></div>
+</div>
+<!-- 1440 -->
+<div>
+<div class="fr" style="width: 518px; height: 324px">
+<div class="r"><i class="a"></i><i></i><i></i></div>
+<div class="s" style="width: 91px"><div class="l on"></div><div class="l"></div><div class="l"></div><div class="l" style="width: 70%"></div><div class="l"></div><div class="vp"></div></div>
+<div class="m"><div class="hdr"></div>
+<div class="msg"><b style="background: #F59BC4"></b><span><i class="l" style="width: 30%"></i><i class="l"></i></span></div>
+<div class="msg"><b style="background: #8FB8FF"></b><span><i class="l" style="width: 24%"></i><i class="l" style="width: 70%"></i></span></div>
+<div class="msg"><b style="background: #F2C46D"></b><span><i class="l" style="width: 26%"></i><i class="st" style="height: 40px; width: 70%"></i></span></div>
+<div style="flex: 1"></div><div class="cmp"></div>
+<div class="st b prim" style="position: absolute; right: 6px; bottom: 26px; width: 92px; height: 52px"></div>
+</div>
+<div class="mem" style="width: 89px"><i><b style="background: #F59BC4"></b><span class="l" style="flex: 1"></span></i><i><b style="background: #8FB8FF"></b><span class="l" style="flex: 1"></span></i><i><b style="background: #7FD8C3"></b><span class="l" style="flex: 1"></span></i><i><b style="background: #F2C46D"></b><span class="l" style="flex: 1"></span></i></div>
+<div class="sbp" style="position: absolute; left: 28px; bottom: 34px; width: 92px"><i></i><i class="p"></i><i></i><i></i><i></i><i></i></div>
+</div>
+<div class="cap"><b>1440 × 900 · reference</b><span>Rail 68 · sidebar 252 · members 248. Popover soundboard over the sidebar; stream follows you as a docked player.</span></div>
+</div>
+</div>
+
+<div style="display: flex; gap: 40px; align-items: flex-start">
+<!-- 1366 -->
+<div>
+<div class="fr" style="width: 492px; height: 276px">
+<div class="r"><i class="a"></i><i></i><i></i></div>
+<div class="s" style="width: 76px"><div class="l on"></div><div class="l"></div><div class="l"></div><div class="l"></div><div class="vp"></div></div>
+<div class="m"><div class="hdr"></div>
+<div style="flex: 1; padding: 6px; display: flex; flex-direction: column; gap: 5px"><div class="st prim" style="flex: 1"></div><div style="display: flex; gap: 4px; height: 26px"><div class="st b" style="width: 46px"></div><div class="st g" style="width: 46px"></div></div></div>
+</div>
+</div>
+<div class="cap"><b>1366 × 768 · laptop</b><span>Member list hidden below 1280 (toggle overlays it). Multi-stream defaults to Focus + thumbnails instead of a 2×2 grid.</span></div>
+</div>
+<!-- narrow -->
+<div>
+<div class="fr" style="width: 300px; height: 276px">
+<div class="m"><div class="hdr" style="display: flex; align-items: center; padding-left: 5px"><span style="width: 9px; height: 6px; border-top: 1.5px solid #AEB4BE; border-bottom: 1.5px solid #AEB4BE"></span></div>
+<div style="padding: 6px"><div class="st prim" style="aspect-ratio: 16/9"></div></div>
+<div class="msg"><b style="background: #8FB8FF"></b><span><i class="l" style="width: 30%"></i><i class="l"></i></span></div>
+<div style="flex: 1"></div>
+<div style="margin: 0 6px 4px; height: 18px; border-radius: 6px; background: #1C1F24; border: 1px solid #262A31; display: flex; align-items: center; gap: 4px; padding: 0 5px"><i style="width: 6px; height: 6px; border-radius: 50%; background: #C8F05A"></i><span class="l" style="width: 40px"></span><span style="flex: 1"></span><i style="width: 10px; height: 10px; border-radius: 3px; background: rgba(255,107,107,.4)"></i><i style="width: 10px; height: 10px; border-radius: 3px; background: rgba(217,139,255,.5)"></i></div>
+<div class="cmp" style="margin-top: 0"></div>
+</div>
+<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 110px; display: flex; box-shadow: 8px 0 20px rgba(0,0,0,.5)"><div class="s" style="width: 110px; opacity: .97"><div class="l on"></div><div class="l"></div><div class="l"></div><div class="vp"></div></div></div>
+</div>
+<div class="cap"><b>Narrow window · &lt; 820</b><span>Rail and sidebar become a drawer. Voice controls collapse into a pill above the composer; one stream only.</span></div>
+</div>
+<!-- mobile -->
+<div>
+<div class="fr" style="width: 140px; height: 304px; border-radius: 20px">
+<div class="m"><div class="hdr" style="height: 22px"></div>
+<div class="msg"><b style="background: #F59BC4"></b><span><i class="l" style="width: 40%"></i><i class="l"></i></span></div>
+<div class="msg"><b style="background: #8FB8FF"></b><span><i class="l" style="width: 30%"></i><i class="l" style="width: 80%"></i></span></div>
+<div style="flex: 1"></div>
+<div style="margin: 0 5px; background: #15171B; border: 1px solid rgba(217,139,255,.55); border-radius: 9px 9px 0 0; padding: 5px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px"><i style="height: 16px; border-radius: 4px; background: #1C1F24"></i><i style="height: 16px; border-radius: 4px; background: #D98BFF"></i><i style="height: 16px; border-radius: 4px; background: #1C1F24"></i><i style="height: 16px; border-radius: 4px; background: #1C1F24"></i><i style="height: 16px; border-radius: 4px; background: #1C1F24"></i><i style="height: 16px; border-radius: 4px; background: #1C1F24"></i></div>
+<div style="height: 26px; margin: 0 5px 8px; border-radius: 0 0 9px 9px; background: #1C1F24; border: 1px solid #262A31; display: flex; align-items: center; justify-content: space-around"><i style="width: 10px; height: 10px; border-radius: 3px; background: #353A43"></i><i style="width: 10px; height: 10px; border-radius: 3px; background: #353A43"></i><i style="width: 10px; height: 10px; border-radius: 3px; background: #D98BFF"></i><i style="width: 10px; height: 10px; border-radius: 3px; background: rgba(255,107,107,.6)"></i></div>
+</div>
+</div>
+<div class="cap" style="width: 220px"><b>Mobile · 390 × 844</b><span>Chat, listening, mute and soundboard (as a bottom sheet). No streaming out; watching is single-stream only.</span></div>
+</div>
+</div>
+
+<div>
+<div class="mono" style="font-size: 12px; letter-spacing: .12em; color: #868D99; margin-bottom: 6px">BREAKPOINTS</div>
+<div class="bp"><b>≥ 1600</b><span class="mono">xl</span><span>Members + docked soundboard can coexist. Multi-stream grid up to 2×2 with chat docked.</span></div>
+<div class="bp"><b>1280 – 1599</b><span class="mono">lg · reference</span><span>Default layout. Docked soundboard replaces the member list when pinned.</span></div>
+<div class="bp"><b>1080 – 1279</b><span class="mono">md</span><span>Members hidden by default (toggle overlays). Grid of 3–4 streams switches to Focus + strip.</span></div>
+<div class="bp"><b>820 – 1079</b><span class="mono">sm</span><span>Sidebar 212 px. Soundboard always popover, never docked.</span></div>
+<div class="bp"><b>&lt; 820</b><span class="mono">xs / mobile</span><span>Drawer navigation, voice pill, bottom-sheet soundboard, single stream, 44 px touch targets.</span></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

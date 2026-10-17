@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant B as Angular browser
+    participant A as ASP.NET API
+    participant D as PostgreSQL
+    participant H as SignalR
+    participant M as Media coordinator
+    B->>A: Get antiforgery bootstrap
+    A-->>B: XSRF token
+    B->>A: Login with credentials and XSRF
+    A->>D: Verify account and create session
+    D-->>A: Active session ID
+    A-->>B: Secure HttpOnly cookie
+    B->>H: Connect using same-origin cookie
+    H->>D: Validate session
+    H-->>B: Connected
+    B->>A: Revoke session
+    A->>D: Mark revoked and revoke voice leases
+    A->>H: Remove recipients and close connection
+    A->>M: Remove live media participant
+    A-->>B: Clear cookie

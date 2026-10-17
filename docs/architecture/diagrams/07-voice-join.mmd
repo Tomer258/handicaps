@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant B as Angular media service
+    participant A as API and database
+    participant G as Caddy admission gate
+    participant L as LiveKit
+    participant W as Sound publisher
+    B->>A: Join channel with session and request ID
+    A->>A: Check policy and reserve voice lease
+    A->>L: Ensure room exists
+    A-->>B: Scoped JWT and lease
+    B->>G: Open RTC signaling with JWT
+    G->>A: Verify token, session, lease and current grants
+    A-->>G: Allow or deny
+    G->>L: Forward authorized signaling
+    L-->>B: Establish ICE and DTLS-SRTP
+    B->>L: Publish authorized microphone
+    L->>A: Verified participant event
+    A->>W: Ensure publish-only room participant
+    Note over B,L: Reconnect signaling passes admission again

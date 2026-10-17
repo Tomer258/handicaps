@@ -1,0 +1,14 @@
+flowchart TB
+    Web["Angular browser"] -->|"HTTPS and WSS"| Edge["Caddy HTTP and Layer 4"]
+    Edge -->|"API and SignalR"| API["ASP.NET modular monolith"]
+    Edge -->|"Static build"| SPA["Angular assets"]
+    Edge -->|"Gated signaling or TURN"| LK["LiveKit SFU and TURN"]
+    Web <-->|"WebRTC media"| LK
+    API --> DB[("PostgreSQL")]
+    API --> Files[("Private files and job spool")]
+    Validator["Restricted asset validator"] <-->|"Jobs and validated files"| Files
+    API -->|"Authorized play or stop"| Publisher["Sound RTC publisher"]
+    Files -->|"Ready PCM only"| Publisher
+    Publisher -->|"Real Opus audio tracks"| LK
+    API <-->|"RoomService and verified webhooks"| LK
+    API -->|"Track registry and UI events"| Web
