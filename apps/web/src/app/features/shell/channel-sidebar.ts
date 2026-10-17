@@ -1,0 +1,96 @@
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { WorkspaceStore } from '../workspaces/workspace.store';
+import { Icon } from '../../shared/ui/icon';
+import { UserPanel } from './user-panel';
+import { LayoutService } from './layout.service';
+import { Channel } from '../../core/api/models';
+import { ChannelBadges } from './channel-badges.service';
+import { VoiceRoster } from './voice-roster';
+import { VoicePanel } from './voice-panel';
+import { CreateChannelDialog } from './create-channel.dialog';
+import { Dialog } from '@angular/cdk/dialog';
+
+/** ChannelSidebar (hx-channel-sidebar): header, text/voice groups, persistent voice panel, user panel. */
+@Component({
+  selector: 'hx-channel-sidebar',
+  imports: [RouterLink, RouterLinkActive, Icon, UserPanel, VoiceRoster, VoicePanel],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    class: 'side',
+    'aria-label': 'Channels',
+    role: 'navigation',
+    style: 'width: 252px; flex: none; display: flex; flex-direction: column; background: var(--bg1); border-radius: 14px 0 0 0; border-left: 1px solid var(--line); border-top: 1px solid var(--line); margin-top: 8px',
+  },
+  template: `
+    <div style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line)">
+      <span class="disp" style="flex: 1; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ store.server()?.name }}</span>
+      <span class="mono" style="font-size: 11px; color: var(--tx3)">{{ store.members().length }} members</span>
+    </div>
+
+    <div class="scroll" style="flex: 1; padding: 4px 8px 12px">
+      <div style="display: flex; align-items: center">
+        <button class="grp" (click)="textOpen.set(!textOpen())" [attr.aria-expanded]="textOpen()">
+          <span [style.transform]="textOpen() ? 'none' : 'rotate(-90deg)'" style="display: inline-flex; width: 12px; height: 12px"><hx-icon name="chevron-down" size="sm" /></span>
+          Text channels
+        </button>
+        @if (store.canManageChannels()) {
+          <button class="ibtn" aria-label="Create text channel" title="Create channel" (click)="create('text')" style="width: 24px; height: 24px; margin-top: 10px; flex: none"><hx-icon name="plus" size="sm" /></button>
+        }
+      </div>
+      @if (textOpen()) {
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          @for (c of store.textChannels(); track c.id) {
+            <a class="ch" [class.unread]="badges.unread(c.id) > 0" [routerLink]="['/s', c.serverId, 'c', c.id]" routerLinkActive="on"
+               ariaCurrentWhenActive="page" (click)="layout.navOpen.set(false)">
+              <hx-icon name="hash" size="sm" />
+              <span class="nm" dir="auto">{{ c.name }}</span>
+              @if (badges.mentions(c.id); as m) {
+                <span class="cnt m" [attr.aria-label]="m + ' mentions'">&#64;{{ m }}</span>
+              } @else if (badges.unread(c.id); as u) {
+                <span class="cnt" [attr.aria-label]="u + ' unread'">{{ u > 99 ? '99+' : u }}</span>
+              }
+            </a>
+          }
+        </div>
+      }
+
+      <div style="display: flex; align-items: center">
+        <button class="grp" (click)="voiceOpen.set(!voiceOpen())" [attr.aria-expanded]="voiceOpen()">
+          <span [style.transform]="voiceOpen() ? 'none' : 'rotate(-90deg)'" style="display: inline-flex; width: 12px; height: 12px"><hx-icon name="chevron-down" size="sm" /></span>
+          Voice channels
+        </button>
+        @if (store.canManageChannels()) {
+          <button class="ibtn" aria-label="Create voice channel" title="Create channel" (click)="create('voice')" style="width: 24px; height: 24px; margin-top: 10px; flex: none"><hx-icon name="plus" size="sm" /></button>
+        }
+      </div>
+      @if (voiceOpen()) {
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          @for (v of store.voiceChannels(); track v.id) {
+            <hx-voice-roster [channel]="v" (picked)="layout.navOpen.set(false)" />
+          }
+        </div>
+      }
+    </div>
+
+    <hx-voice-panel />
+    <hx-user-panel />
+  `,
+})
+export class ChannelSidebar {
+  readonly store = inject(WorkspaceStore);
+  readonly layout = inject(LayoutService);
+  readonly badges = inject(ChannelBadges);
+  private readonly dialog = inject(Dialog);
+  private readonly router = inject(Router);
+
+  readonly textOpen = signal(true);
+  readonly voiceOpen = signal(true);
+
+  create(type: Channel['type']): void {
+    const ref = this.dialog.open<Channel>(CreateChannelDialog, { data: { type }, ariaLabel: 'Create channel' });
+    ref.closed.subscribe((ch) => {
+      if (ch && ch.type === 'text') void this.router.navigate(['/s', ch.serverId, 'c', ch.id]);
+    });
+  }
+}
