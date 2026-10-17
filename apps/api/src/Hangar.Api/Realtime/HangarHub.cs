@@ -1,5 +1,6 @@
 using Hangar.Api.Infrastructure;
 using Hangar.Core.Channels;
+using Hangar.Core.Media;
 using Hangar.Core.Permissions;
 using Hangar.Core.Persistence;
 using Hangar.Core.Users;
@@ -20,6 +21,7 @@ public sealed class HangarHub(
     ConnectionRegistry registry,
     PresenceBroadcaster presence,
     PermissionService permissions,
+    VoiceService voice,
     HangarDbContext db) : Hub
 {
     public const string Path = "/hubs/realtime";
@@ -94,4 +96,12 @@ public sealed class HangarHub(
     }
 
     public Dictionary<Guid, string> GetPresence() => registry.Snapshot();
+
+    /// <summary>Self-reported mute/deafen for roster display (ephemeral; media enforcement is LiveKit's).</summary>
+    public async Task UpdateVoiceState(Guid leaseId, bool muted, bool deafened)
+    {
+        var info = registry.Get(Context.ConnectionId);
+        if (info is null) return;
+        await voice.UpdateStateAsync(info.UserId, leaseId, new VoiceStateUpdate(muted, deafened), Context.ConnectionAborted);
+    }
 }

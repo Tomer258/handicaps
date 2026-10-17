@@ -19,5 +19,17 @@ services:
       timeout: 3s
       retries: 20
 
+  livekit:
+    image: livekit/livekit-server:v1.9.1
+    command: ["--config", "/etc/livekit.yaml", "--node-ip", "127.0.0.1"]
+    volumes:
+      - ./livekit.dev.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "127.0.0.1:7882:7882/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   pgdata:

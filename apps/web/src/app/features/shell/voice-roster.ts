@@ -59,6 +59,9 @@ export class VoiceRoster {
 
   open(): void {
     this.picked.emit();
-    void this.router.navigate(['/s', this.channel().serverId, 'v', this.channel().id]);
+    const ch = this.channel();
+    void this.router.navigate(['/s', ch.serverId, 'v', ch.id]);
+    // Clicking a voice channel joins it (switching from another one), like the desktop clients.
+    if (!this.isCurrent()) void this.media.join(ch.id);
   }
 }

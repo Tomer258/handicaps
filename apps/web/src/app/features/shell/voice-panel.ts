@@ -46,6 +46,6 @@ export class VoicePanel {
   }
 
   leave(): void {
-    // Implemented with the LiveKit session in S4.
+    void this.media.leave();
   }
 }

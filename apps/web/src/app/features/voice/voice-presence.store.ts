@@ -1,6 +1,10 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ApiService } from '../../core/api/api.service';
+import { SessionService } from '../../core/auth/session.service';
+import { RealtimeService } from '../../core/realtime/realtime.service';
+import { WorkspaceStore } from '../workspaces/workspace.store';
 
-/** Server-reported voice membership (who is in which room), from REST snapshot + SignalR VoiceStateChanged. */
+/** Server-reported voice membership (who is in which room), from REST snapshot + SignalR voiceStateChanged. */
 export interface VoiceMember {
   userId: string;
   channelId: string;
@@ -14,8 +18,14 @@ export interface VoiceMember {
 
 @Injectable({ providedIn: 'root' })
 export class VoicePresenceStore {
+  private readonly api = inject(ApiService);
+  private readonly realtime = inject(RealtimeService);
+  private readonly workspace = inject(WorkspaceStore);
+  private readonly session = inject(SessionService);
+
   private readonly _members = signal<VoiceMember[]>([]);
   readonly members = this._members.asReadonly();
+  private loadSeq = 0;
 
   readonly byChannel = computed(() => {
     const map = new Map<string, VoiceMember[]>();
@@ -28,6 +38,24 @@ export class VoicePresenceStore {
   });
 
   readonly byUser = computed(() => new Map(this._members().map((m) => [m.userId, m])));
+
+  constructor() {
+    effect(() => {
+      const serverId = this.workspace.serverId();
+      untracked(() => (serverId ? void this.load(serverId) : this._members.set([])));
+    });
+    // Snapshot after reconnect/policy change: pushes may have been missed meanwhile.
+    this.realtime.onResubscribe(() => {
+      const id = this.workspace.serverId();
+      if (id) void this.load(id);
+    });
+    this.realtime.onVoiceState((v) => {
+      if (v.serverId !== this.workspace.serverId()) return;
+      if (v.state) this.upsert(v.state);
+      else this.remove(v.userId);
+    });
+    this.session.onTeardown(() => this._members.set([]));
+  }
 
   inChannel(channelId: string): VoiceMember[] {
     return this.byChannel().get(channelId) ?? [];
@@ -43,5 +71,15 @@ export class VoicePresenceStore {
 
   remove(userId: string): void {
     this._members.update((list) => list.filter((x) => x.userId !== userId));
+  }
+
+  private async load(serverId: string): Promise<void> {
+    const seq = ++this.loadSeq;
+    try {
+      const list = await this.api.get<VoiceMember[]>(`/servers/${serverId}/voice`);
+      if (seq === this.loadSeq && this.workspace.serverId() === serverId) this._members.set(list);
+    } catch {
+      /* roster is best effort; the next push or reconnect refreshes it */
+    }
   }
 }

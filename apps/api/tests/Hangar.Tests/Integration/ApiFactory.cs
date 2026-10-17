@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using Hangar.Core.Media;
 using Hangar.Core.Workspaces;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -32,7 +34,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Hangar:MigrateOnStartup", "true");
         builder.UseSetting("Hangar:AllowedOrigins:0", "http://localhost");
         builder.UseSetting("Hangar:AuthRequestsPerMinute", "10000");
+        builder.UseSetting("Hangar:LiveKit:MaxHumans", MaxHumans.ToString());
+        // Tests drive reconciliation explicitly; the background loop must not race them.
+        builder.UseSetting("Hangar:LiveKit:ReconcileInterval", "01:00:00");
+        builder.ConfigureTestServices(s => s.AddSingleton<ILiveKitRooms>(LiveKit));
     }
+
+    public const int MaxHumans = 6;
+    public FakeLiveKitRooms LiveKit { get; } = new();
 
     /// <summary>Re-issues the owner bootstrap invitation (only possible while no owner exists) and returns its secret.</summary>
     public async Task<string> OwnerBootstrapSecretAsync()

@@ -28,6 +28,23 @@ export interface NotificationSignal {
   actorUserId: string | null;
 }
 
+export interface VoiceStateSignal {
+  serverId: string;
+  channelId: string;
+  userId: string;
+  /** Null when the user left voice. */
+  state: {
+    userId: string;
+    channelId: string;
+    muted: boolean;
+    deafened: boolean;
+    serverMuted: boolean;
+    camera: boolean;
+    screen: boolean;
+    joinedAt: string;
+  } | null;
+}
+
 type Handler<T> = (value: T) => void;
 
 const HEARTBEAT_MS = 25_000;
@@ -58,6 +75,7 @@ export class RealtimeService {
   private readonly typingHandlers = new Set<Handler<TypingSignal>>();
   private readonly notificationHandlers = new Set<Handler<NotificationSignal>>();
   private readonly resubscribeHandlers = new Set<() => void>();
+  private readonly voiceHandlers = new Set<Handler<VoiceStateSignal>>();
 
   constructor() {
     effect(() => {
@@ -109,6 +127,14 @@ export class RealtimeService {
     if (this.connected) void this.conn!.invoke('Typing', channelId).catch(() => undefined);
   }
 
+  updateVoiceState(leaseId: string, muted: boolean, deafened: boolean): void {
+    if (this.connected) void this.conn!.invoke('UpdateVoiceState', leaseId, muted, deafened).catch(() => undefined);
+  }
+
+  onVoiceState(h: Handler<VoiceStateSignal>): void {
+    this.voiceHandlers.add(h);
+  }
+
   private async start(): Promise<void> {
     if (this.conn) return;
     const conn = new HubConnectionBuilder()
@@ -124,6 +150,7 @@ export class RealtimeService {
     conn.on('channelEvent', (e: ChannelEvent) => this.channelEventHandlers.forEach((h) => h(e)));
     conn.on('typingChanged', (t: TypingSignal) => this.typingHandlers.forEach((h) => h(t)));
     conn.on('notificationCreated', (n: NotificationSignal) => this.notificationHandlers.forEach((h) => h(n)));
+    conn.on('voiceStateChanged', (v: VoiceStateSignal) => this.voiceHandlers.forEach((h) => h(v)));
     conn.on('presenceChanged', (p: { userId: string; status: PresenceStatus }) => this.presence.set(p.userId, p.status));
     conn.on('memberUpdated', (m: { userId: string; displayName: string; avatarHue: number; avatarAssetId: string | null }) => {
       this.workspace.patchMember(m.userId, { displayName: m.displayName, avatarHue: m.avatarHue, avatarAssetId: m.avatarAssetId });

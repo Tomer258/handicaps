@@ -15,3 +15,7 @@
 - Dev topology: API runs on host (`dotnet run`), Angular `ng serve` with proxy (same-origin /api, /hubs). Postgres + LiveKit + workers in Docker compose (infra/compose.dev.yml). Shared files via bind mount ./.data.
 - LiveKit in Docker Desktop: `--node-ip 127.0.0.1`; sound-publisher shares livekit's network namespace (network_mode: service:livekit) so 127.0.0.1 works for both. Fallback: native livekit-server.exe in ./.tools.
 - Python workers: Python 3.13 in Docker images.
+- LiveKit pinned livekit/livekit-server:v1.9.1 (dev compose, config infra/livekit.dev.yaml, auto_create=false; API creates rooms with 16 slots). Dev keys hangar-dev/… are local-only.
+- Lease id = LiveKit identity; participant metadata {"userId"}. Join token grants microphone only; camera/screen sources added per publication reservation (S5) via RoomService UpdateParticipant.
+- Roster visibility = lease Active, or Joining after having been confirmed (reconnect grace 45s). Confirmation is server-verified (webhook, POST /voice/{id}/confirm → ListParticipants, or reconciler).
+- /internal/livekit/{webhook,admission} live outside /api/v1 (no cookie/CSRF). S8 Caddy: block /internal publicly; forward_auth admission on ALL signaling routes: /rtc, /rtc/v1 (livekit-client 2.23 tries it first, falls back on 404), /rtc/validate.

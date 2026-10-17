@@ -1,6 +1,7 @@
 using Hangar.Core.Audit;
 using Hangar.Core.Channels;
 using Hangar.Core.Identity;
+using Hangar.Core.Media;
 using Hangar.Core.Messaging;
 using Hangar.Core.Permissions;
 using Hangar.Core.Persistence;
@@ -35,6 +36,9 @@ public static class CoreServices
         services.AddScoped<UserService>();
         services.AddScoped<MessageService>();
         services.AddScoped<RetentionService>();
+        services.AddSingleton<VoiceStateCache>();
+        services.AddScoped<VoiceService>();
+        services.AddScoped<ISessionRevocationListener, VoiceRevocationListener>();
         return services;
     }
 }

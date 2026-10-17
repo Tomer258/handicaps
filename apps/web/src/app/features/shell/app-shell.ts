@@ -5,6 +5,7 @@ import { WorkspaceStore } from '../workspaces/workspace.store';
 import { Icon } from '../../shared/ui/icon';
 import { ToastHost } from './toast-host';
 import { ChatStore } from '../messages/chat.store';
+import { VoicePresenceStore } from '../voice/voice-presence.store';
 
 /**
  * Top-level authenticated layout: server rail + routed content + toasts + session recovery.
@@ -60,6 +61,7 @@ export class AppShell {
   readonly store = inject(WorkspaceStore);
   /** Eager: starts realtime + unread tracking for the session, independent of the routed view. */
   private readonly chat = inject(ChatStore);
+  private readonly voiceRoster = inject(VoicePresenceStore);
 
   readonly atHome = computed(() => this.store.serverId() === null);
 

@@ -1,0 +1,19 @@
+# LiveKit for local development only (keys match apps/api appsettings.Development.json).
+# Browsers on this PC reach signaling at ws://localhost:7880 and media at 127.0.0.1:7881/tcp, 7882/udp.
+port: 7880
+log_level: info
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  # node_ip is passed on the command line (--node-ip 127.0.0.1) so ICE candidates point at the host loopback.
+keys:
+  hangar-dev: hangar-dev-secret-local-only-0123456789abcdef
+room:
+  # Rooms are created by the API (CreateRoom) with 16 slots; clients cannot create them by joining.
+  auto_create: false
+  empty_timeout: 300
+webhook:
+  api_key: hangar-dev
+  urls:
+    - http://host.docker.internal:5080/internal/livekit/webhook

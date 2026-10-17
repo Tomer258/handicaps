@@ -1,3 +1,4 @@
+using Hangar.Core.Media;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Hangar.Api.Endpoints;
@@ -23,6 +24,7 @@ builder.Services.Configure<HangarOptions>(config.GetSection("Hangar"));
 builder.Services.Configure<WorkspaceBootstrapOptions>(config.GetSection("Hangar:Bootstrap"));
 builder.Services.PostConfigure<WorkspaceBootstrapOptions>(o => o.PublicBaseUrl = config["Hangar:PublicBaseUrl"] ?? o.PublicBaseUrl);
 builder.Services.Configure<HangarIdentityOptions>(config.GetSection("Hangar:Identity"));
+builder.Services.Configure<LiveKitOptions>(config.GetSection("Hangar:LiveKit"));
 
 var hangar = config.GetSection("Hangar").Get<HangarOptions>() ?? new HangarOptions();
 var dataDir = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, hangar.DataDirectory));
@@ -41,6 +43,10 @@ builder.Services.AddScoped<ISessionRevocationListener, RealtimeRevocationListene
 builder.Services.AddHostedService<OutboxDispatcher>();
 builder.Services.AddHostedService<PresenceSweeper>();
 builder.Services.AddHostedService<MaintenanceService>();
+// Media: LiveKit RoomService adapter (private network), voice roster push, reconciliation.
+builder.Services.AddHttpClient<ILiveKitRooms, LiveKitRoomClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddScoped<IVoiceEventSink, SignalRVoiceSink>();
+builder.Services.AddHostedService<VoiceReconciler>();
 builder.Services.AddSignalR(o =>
 {
     o.AddFilter<SessionHubFilter>();
@@ -152,6 +158,8 @@ var api = app.MapGroup("/api/v1").AddEndpointFilter<CsrfFilter>();
 api.MapAuth();
 api.MapWorkspaces();
 api.MapMessages();
+api.MapVoice();
+app.MapLiveKitInternal();
 app.MapHub<HangarHub>(HangarHub.Path);
 
 await InitializeAsync(app);
