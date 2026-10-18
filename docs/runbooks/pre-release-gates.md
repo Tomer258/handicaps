@@ -27,6 +27,10 @@ The unmodified `compose.prod.yml` runs inside a Docker-in-Docker "VPS" at `*.han
 - Watchdog drill: closed 64 s after `dc stop api` (flag owned by uid 10003, `/rtc` returned 503), and reopened 34 s
   after `dc start api`.
 
+- Forced TURN/TLS (`POC_NODE_IP=container`, `POC_FORCE_RELAY=1 node scripts/poc-smoke.mjs`): browsers may only use
+  relays, and LiveKit advertises an address they cannot reach. Every selected path was `relay/tls`, through Caddy's
+  layer4 `turn.` route to LiveKit TURN. Voice, soundboard and screen share all worked. 3/3 runs passed.
+
 This does not replace the host checks below, which need public networking.
 
 ## Manual, on the production host (not done yet, required)

@@ -14,10 +14,11 @@
 # Options: --root DIR (default /srv/hangar)   --app-host/--rtc-host/--turn-host H (default app./rtc./turn.<domain>)
 #          --config-only (directories + config, no sysctl/firewall/compose)   --force-config
 #          --local (no VPS: LiveKit advertises 127.0.0.1 instead of its STUN-detected public IP; used by poc-local.sh)
+#          --node-ip IP (with --local: advertise this address instead of 127.0.0.1)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ROOT=/srv/hangar DOMAIN="" EMAIL="" APP_HOST="" RTC_HOST="" TURN_HOST="" UFW=0 CONFIG_ONLY=0 FORCE=0 LOCAL=0
+ROOT=/srv/hangar DOMAIN="" EMAIL="" APP_HOST="" RTC_HOST="" TURN_HOST="" UFW=0 CONFIG_ONLY=0 FORCE=0 LOCAL=0 NODE_IP=127.0.0.1
 while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN="$2"; shift 2 ;;
@@ -30,6 +31,7 @@ while [ $# -gt 0 ]; do
     --config-only) CONFIG_ONLY=1; shift ;;
     --force-config) FORCE=1; shift ;;
     --local) LOCAL=1; shift ;;
+    --node-ip) NODE_IP="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -79,7 +81,7 @@ else
   sed -E -e "s|^hangar:.*|hangar: $LK|" -e "s|^watchdog:.*|watchdog: $WD|" < "$EX/livekit-keys.yaml" > "$OUT/livekit-keys.yaml"
   hosts < "$REPO/infra/livekit.prod.yaml" > "$OUT/livekit.yaml"
   if [ "$LOCAL" -eq 1 ]; then
-    sed -i -E 's|^(  )use_external_ip: true|\1use_external_ip: false\n\1node_ip: 127.0.0.1|' "$OUT/livekit.yaml"
+    sed -i -E 's|^(  )use_external_ip: true|\1use_external_ip: false\n\1node_ip: '"$NODE_IP"'|' "$OUT/livekit.yaml"
   fi
   if [ -f "$CFG/backup.env" ]; then cp -p "$CFG/backup.env" "$OUT/backup.env"; else cp "$EX/backup.env" "$OUT/backup.env"; fi
   printf %s "$PG" > "$OUT/postgres_password"

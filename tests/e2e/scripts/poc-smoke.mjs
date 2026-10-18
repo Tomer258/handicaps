@@ -5,24 +5,80 @@
 // sounds) and a screen share.
 // Usage: node scripts/poc-smoke.mjs <owner-invite-url> [base-url]   (base defaults to the invite's origin)
 // Local POC certificates come from Caddy's internal CA, so TLS errors are ignored here.
+// POC_FORCE_RELAY=1: browsers may only use TURN relays (iceTransportPolicy 'relay'), and the run asserts that media
+// flowed over TURN/TLS — the pre-release "UDP and 7881 blocked" gate (Caddy layer4 turn.* → LiveKit TURN).
 import { chromium } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 const [, , inviteUrl, baseArg] = process.argv;
 if (!inviteUrl) throw new Error('usage: node scripts/poc-smoke.mjs <owner-invite-url> [base-url]');
 const BASE = baseArg ?? new URL(inviteUrl).origin;
 const PASSWORD = 'poc smoke passphrase 2026';
 const stamp = Date.now().toString(36).slice(-5);
+const RELAY = process.env.POC_FORCE_RELAY === '1';
+/** Forces relay-only ICE and keeps every RTCPeerConnection reachable for stats. */
+const relayOnly = () => {
+  const Native = window.RTCPeerConnection;
+  window.__pcs = [];
+  class Relay extends Native {
+    constructor(cfg = {}, ...rest) {
+      super({ ...cfg, iceTransportPolicy: 'relay' }, ...rest);
+      window.__pcs.push(this);
+    }
+    setConfiguration(cfg = {}) { return super.setConfiguration({ ...cfg, iceTransportPolicy: 'relay' }); }
+  }
+  window.RTCPeerConnection = Relay;
+};
+/** Local candidate types/protocols of the selected candidate pairs across all peer connections. */
+const selectedPaths = (page) => page.evaluate(async () => {
+  const out = [];
+  for (const pc of window.__pcs ?? []) {
+    if (pc.connectionState === 'closed') continue;
+    const stats = await pc.getStats();
+    const byId = new Map([...stats.values()].map((s) => [s.id, s]));
+    for (const s of stats.values()) {
+      if (s.type !== 'transport' || !s.selectedCandidatePairId) continue;
+      const local = byId.get(byId.get(s.selectedCandidatePairId)?.localCandidateId);
+      if (local) out.push(`${local.candidateType}/${local.relayProtocol ?? local.protocol}`);
+    }
+  }
+  return out;
+});
 
 function check(cond, msg) {
   if (!cond) throw new Error('FAILED: ' + msg);
   console.log('✓', msg);
 }
+// Fake microphone input that sounds like speech (syllable bursts, moving pitch, harmonics). Chrome's built-in fake
+// beep is a stationary tone that noise suppression removes after a few seconds, which makes "is speaking" flaky.
+const voiceFile = resolve(import.meta.dirname, '../../../.tmp/poc-voice.wav');
+{
+  const rate = 48000, n = rate * 6, buf = Buffer.alloc(44 + n * 2);
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVE', 8); buf.write('fmt ', 12);
+  buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);
+  let phase = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / rate, syl = (t * 4) % 1; // four syllables per second
+    const env = syl < 0.7 ? Math.sin((Math.PI * syl) / 0.7) : 0;
+    const f0 = 140 + 60 * Math.sin(2 * Math.PI * 0.7 * t) + 30 * Math.sin(2 * Math.PI * 3.1 * t);
+    phase += (2 * Math.PI * f0) / rate;
+    let v = 0;
+    for (let h = 1; h <= 8; h++) v += Math.sin(h * phase) / h;
+    buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, v * env * 0.45)) * 32767), 44 + i * 2);
+  }
+  mkdirSync(join(voiceFile, '..'), { recursive: true });
+  writeFileSync(voiceFile, buf);
+}
 const browser = await chromium.launch({
-  args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--auto-select-desktop-capture-source=Entire screen',
+  args: [...(RELAY ? ['--ignore-certificate-errors'] : []), '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${voiceFile}`,
+    '--auto-select-desktop-capture-source=Entire screen',
     '--autoplay-policy=no-user-gesture-required'],
 });
 async function newPage(name) {
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true, permissions: ['microphone'], viewport: { width: 1440, height: 900 } });
+  if (RELAY) await ctx.addInitScript(relayOnly);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log(`[${name}] page error:`, e.message));
   return page;
@@ -90,8 +146,26 @@ await friend.goto(`${BASE}/s/${serverId}/v/${voice.id}`);
 await friend.getByRole('button', { name: 'Join voice' }).click();
 await friend.getByRole('toolbar', { name: 'Voice controls' }).waitFor({ timeout: 20000 });
 check(true, 'both joined voice through the admission gate');
-await owner.locator('.pcard.talk', { hasText: 'Friend' }).waitFor({ timeout: 20000 });
+await owner.locator('.pcard.talk', { hasText: 'Friend' }).waitFor({ timeout: 20000 }).catch(async (e) => {
+  for (const [name, p] of [['owner', owner], ['friend', friend]]) {
+    const states = await p.evaluate(() => (window.__pcs ?? []).map((pc) => `${pc.connectionState}/${pc.iceConnectionState}`));
+    console.log(`[${name}] peer connections: ${states.join(', ') || 'n/a'}; selected: ${(await selectedPaths(p)).join(', ') || 'none'}`);
+    const rtp = await p.evaluate(async () => {
+      const out = [];
+      for (const pc of window.__pcs ?? []) for (const r of (await pc.getStats()).values())
+        if ((r.type === 'inbound-rtp' || r.type === 'outbound-rtp') && r.kind === 'audio')
+          out.push(`${r.type} ${r.bytesReceived ?? r.bytesSent}B level=${r.audioLevel ?? '-'}`);
+      return out;
+    });
+    console.log(`[${name}] audio rtp: ${rtp.join(' | ') || 'none'}`);
+  }
+  throw e;
+});
 check(true, 'owner hears friend (speaking indicator from real audio through the SFU)');
+if (RELAY) {
+  const paths = [...await selectedPaths(owner), ...await selectedPaths(friend)];
+  check(paths.length > 0 && paths.every((p) => p === 'relay/tls'), `media flows only over TURN/TLS on 443 (${paths.join(', ')})`);
+}
 
 // 5. Soundboard: upload (validator trims/normalizes), play, friend receives the publisher's track.
 const rate = 44100, n = rate * 2, wav = Buffer.alloc(44 + n * 2);

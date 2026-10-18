@@ -52,9 +52,26 @@ def limits() -> None:
     resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
 
 
+FFMPEG_THREADS = os.environ.get("FFMPEG_THREADS", "2")
+
+
+def capped(args: list[str]) -> list[str]:
+    """ffmpeg sizes decoder/encoder/filter thread pools by the host's core count. Under the container pids limit and
+    RLIMIT_AS that fails on many-core hosts ("Resource temporarily unavailable" → decode_failed), so cap them."""
+    if args[0] != "ffmpeg":
+        return args
+    out = ["ffmpeg", "-filter_threads", FFMPEG_THREADS, "-filter_complex_threads", "1"]
+    last = len(args) - 1
+    for i, a in enumerate(args[1:], start=1):
+        if a == "-i" or i == last:  # input decoder threads / output encoder threads
+            out += ["-threads", FFMPEG_THREADS]
+        out.append(a)
+    return out
+
+
 def run(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
     # Argument lists only — no shell, no interpolation of names.
-    return subprocess.run(args, capture_output=True, text=True, timeout=timeout, preexec_fn=limits, check=False)
+    return subprocess.run(capped(args), capture_output=True, text=True, timeout=timeout, preexec_fn=limits, check=False)
 
 
 def probe(path: str, max_source_seconds: float) -> None:

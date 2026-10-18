@@ -29,5 +29,7 @@
 - Production migrations: one-off `--migrate` job (API exits after migrate+bootstrap), never on startup.
 - Angular prod build: optimization.styles.inlineCritical=false so CSP script-src 'self' works (no inline onload).
 - Backups: pg_dump -Fc + file store + DP keys + manifest → age-encrypted single archive, rclone off-host daily/weekly; restore expires all sessions and voice leases.
+- asset-validator caps ffmpeg threads (FFMPEG_THREADS, default 2; -threads per input/output, -filter_threads): with pids_limit 64 + RLIMIT_AS 1 GiB, ffmpeg's per-core thread pools failed on a 16-core host ("Resource temporarily unavailable" → decode_failed). Keep the caps if limits change.
+- POC smoke fakes the microphone with a speech-like WAV (--use-file-for-fake-audio-capture): Chrome's default fake beep is a stationary tone that noise suppression removes after a few seconds, making "speaking" checks flaky.
 - Authorization watchdog: API ReconcileHealth (complete pass = ListRooms + every room's participants; unhealthy if the last pass was incomplete or no success for 3×ReconcileInterval) → GET /internal/watchdog/reconcile (200/503, loopback only). Admission refuses when stale (no success for 45 s). Host-local workers/auth-watchdog (stdlib Python, uid 10003, dedicated LiveKit key 'watchdog'): 60 s unhealthy/unreachable → flag file /srv/hangar/watchdog/closed (Caddy `file` matcher → 503 on /rtc before forward_auth) + DeleteRoom for all rooms each check; reopens after 30 s healthy. Flag persists across restarts.
 

@@ -11,6 +11,8 @@
 #
 # POC_DATA=<volume> selects a separate data set (default hangar-poc-srv), e.g. POC_DATA=hangar-poc-test for
 # automated runs that must not touch your accounts. Built images are shared.
+# POC_NODE_IP=container makes LiveKit advertise the inner host's own address, which browsers cannot reach directly:
+# media must then use TURN/TLS on 443 (rehearses the VPS topology for the forced-relay gate). Applies on a new data set.
 #
 # Open https://app.hangar.localhost (Chrome/Edge resolve *.localhost to 127.0.0.1). Caddy issues certificates from
 # its own local CA: accept the browser warning for app. AND rtc. (visit https://rtc.hangar.localhost once), or trust
@@ -46,7 +48,10 @@ up() {
   # (Docker then creates them as directories). Remove them and start from an empty /srv/hangar.
   inside '[ -f /srv/hangar/config/postgres_password ] || [ -n "$(ls -A /srv/hangar/postgres 2>/dev/null)" ] \
     || { docker ps -aq | xargs -r docker rm -f >/dev/null; rm -rf /srv/hangar/*; }'
-  docker exec "$NAME" bash /opt/hangar/infra/scripts/poc-bootstrap.sh --domain "$DOMAIN" --email ops@example.com --local
+  local node_ip=127.0.0.1
+  [ "${POC_NODE_IP:-}" = container ] && node_ip="$(docker exec "$NAME" hostname -i | awk '{print $1}')"
+  [ -n "${POC_NODE_IP:-}" ] && [ "$POC_NODE_IP" != container ] && node_ip="$POC_NODE_IP"
+  docker exec "$NAME" bash /opt/hangar/infra/scripts/poc-bootstrap.sh --domain "$DOMAIN" --email ops@example.com --local --node-ip "$node_ip"
   echo
   echo "Open https://app.$DOMAIN (accept the certificate warning for app. and rtc.)"
   echo "Owner invite (first run): ./infra/scripts/poc-local.sh invite"
