@@ -14,6 +14,8 @@ public sealed class ConnectionInfo(string connectionId, Guid userId, Guid sessio
     public bool Idle { get; set; }
     /// <summary>Set once revoked: delivery is suppressed even before the socket actually closes.</summary>
     public bool Revoked { get; set; }
+    /// <summary>Invocation budget (null = unlimited).</summary>
+    public Hangar.Api.Infrastructure.TokenBucket? Budget { get; init; }
 }
 
 /// <summary>

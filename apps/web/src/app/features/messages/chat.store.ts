@@ -482,6 +482,14 @@ export class ChatStore {
         return false;
       }
       this.replacePending(m.channelId, m.clientMessageId, { ...m, pending: 'failed' });
+      if (err.status === 429) {
+        // Throttled: say so once and resend by itself when the server allows it (same clientMessageId → no duplicate).
+        this.toast.show(err.message, 'warn');
+        setTimeout(() => {
+          const still = this._chats()[m.channelId]?.messages.some((x) => x.pending === 'failed' && x.clientMessageId === m.clientMessageId);
+          if (still) void this.retry(m);
+        }, err.retryAfterMs ?? 2000);
+      }
       return true;
     }
   }

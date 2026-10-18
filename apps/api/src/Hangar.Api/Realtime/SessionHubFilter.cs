@@ -22,6 +22,8 @@ public sealed class SessionHubFilter(ConnectionRegistry registry) : IHubFilter
             ctx.Context.Abort();
             throw new HubException("Session expired.");
         }
+        // Over budget: drop the call (typing/heartbeats are best effort; the client sees a HubException).
+        if (info.Budget is { } budget && !budget.TryTake()) throw new HubException("rate_limited");
         return await next(ctx);
     }
 }

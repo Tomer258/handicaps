@@ -122,13 +122,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
-builder.Services.AddRateLimiter(o =>
-{
-    o.RejectionStatusCode = 429;
-    o.AddPolicy("auth", http => RateLimitPartition.GetFixedWindowLimiter(
-        http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("Hangar:AuthRequestsPerMinute", 20), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-});
+builder.Services.AddHangarRateLimits(config);
 
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {

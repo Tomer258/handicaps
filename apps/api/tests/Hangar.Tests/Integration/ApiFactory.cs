@@ -14,7 +14,7 @@ using Testcontainers.PostgreSql;
 namespace Hangar.Tests.Integration;
 
 /// <summary>Real ASP.NET host against a real PostgreSQL 18 container (no in-memory database fakes).</summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _pg = new PostgreSqlBuilder("postgres:18-alpine").Build();
     private readonly string _dataDir = Path.Combine(AppContext.BaseDirectory, "test-data", Guid.NewGuid().ToString("N"));
@@ -36,6 +36,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Hangar:MigrateOnStartup", "true");
         builder.UseSetting("Hangar:AllowedOrigins:0", "http://localhost");
         builder.UseSetting("Hangar:AuthRequestsPerMinute", "10000");
+        // Abuse limits get their own host (RateLimitTests); everything else runs unthrottled.
+        builder.UseSetting("Hangar:RateLimits:Enabled", "false");
         builder.UseSetting("Hangar:LiveKit:MaxHumans", MaxHumans.ToString());
         builder.UseSetting("Hangar:LiveKit:MaxScreens", MaxScreens.ToString());
         // Tests drive reconciliation explicitly; the background loop must not race them.
@@ -49,6 +51,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             // Tests collect validation results and reconcile playback explicitly.
             foreach (var d in s.Where(d => d.ImplementationType == typeof(SoundboardLoop)).ToList()) s.Remove(d);
         });
+        Configure(builder);
+    }
+
+    /// <summary>Extra settings for specialised hosts (applied last, so they win).</summary>
+    protected virtual void Configure(IWebHostBuilder builder)
+    {
     }
 
     public const int MaxHumans = 6;

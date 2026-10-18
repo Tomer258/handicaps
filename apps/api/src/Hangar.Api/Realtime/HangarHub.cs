@@ -22,14 +22,18 @@ public sealed class HangarHub(
     PresenceBroadcaster presence,
     PermissionService permissions,
     VoiceService voice,
-    HangarDbContext db) : Hub
+    HangarDbContext db,
+    RateLimitOptions limits) : Hub
 {
     public const string Path = "/hubs/realtime";
 
     public override async Task OnConnectedAsync()
     {
         var user = Context.User!;
-        var info = new ConnectionInfo(Context.ConnectionId, user.UserId(), user.SessionId(), Context.Abort);
+        var info = new ConnectionInfo(Context.ConnectionId, user.UserId(), user.SessionId(), Context.Abort)
+        {
+            Budget = limits.Enabled ? new TokenBucket(limits.Hub) : null,
+        };
         if (!registry.HasPreferred(info.UserId))
         {
             var pref = await db.UserSettings.AsNoTracking().Where(s => s.UserId == info.UserId)
