@@ -4,7 +4,7 @@ name: hangar-dev
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     environment:
       POSTGRES_DB: hangar
       POSTGRES_USER: hangar
@@ -20,7 +20,7 @@ services:
       retries: 20
 
   livekit:
-    image: livekit/livekit-server:v1.9.1
+    image: livekit/livekit-server:v1.9.1@sha256:c039a1bfa154c8479ac369c380665638e92a7e9531e69664549c0c0d3eb65e63
     command: ["--config", "/etc/livekit.yaml", "--node-ip", "127.0.0.1"]
     volumes:
       - ./livekit.dev.yaml:/etc/livekit.yaml:ro

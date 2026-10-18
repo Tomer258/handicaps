@@ -39,7 +39,7 @@ up() {
     docker run -d --privileged --name "$NAME" \
       -p 80:80 -p 443:443 -p 7881:7881 -p 7882:7882/udp \
       -v "$REPO:/opt/hangar:ro" -v hangar-poc-docker:/var/lib/docker -v "$DATA:/srv/hangar" \
-      docker:28.5.1-dind >/dev/null
+      docker:28.5.1-dind@sha256:ea9d20492ca1caaaba78e68453433895d256173c79281756e88b745647fcbcfd >/dev/null
   fi
   echo "waiting for the inner Docker daemon"
   for _ in $(seq 1 60); do inside 'docker info >/dev/null 2>&1' && break; sleep 2; done

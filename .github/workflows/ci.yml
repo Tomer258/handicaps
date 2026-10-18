@@ -24,6 +24,8 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet test apps/api/Hangar.sln --configuration Release
+      - name: Licenses of shipped NuGet + npm packages (runbooks/dependencies.md)
+        run: python3 -I infra/scripts/license-report.py --self-test && python3 -I infra/scripts/license-report.py
 
   web:
     name: Angular production build
@@ -81,3 +83,5 @@ jobs:
           printf x > "$root/config/postgres_password"
           HANGAR_ROOT="$root" docker compose -f infra/compose.prod.yml --env-file infra/config.example/hangar.env \
             --profile release --profile ops config --quiet
+      - name: Licenses of the Python packages in the sound publisher image
+        run: docker run --rm -v "$PWD/infra/scripts:/s:ro" hangar-sound-publisher:ci python -I /s/license-report.py --python
