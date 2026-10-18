@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { SessionService } from '../../core/auth/session.service';
@@ -16,12 +16,29 @@ import { Icon } from '../../shared/ui/icon';
   template: `
     <main class="auth-wrap">
       @if (preview(); as p) {
-        @if (p.valid) {
+        @if (signedIn()) {
+          <div class="auth-card fade" data-testid="invite-signed-in">
+            <span class="eyebrow mono" style="font-size: 11.5px; letter-spacing: .12em; color: var(--tx3); text-transform: uppercase">Invitation</span>
+            <h1>You're already in{{ p.serverName ? ' ' + p.serverName : '' }}</h1>
+            <p>You're signed in as <b>{{ session.user()?.displayName }}</b>.
+              @if (p.valid) { This link is for a friend who doesn't have an account yet — send it to them. }</p>
+            <a class="btn pri" routerLink="/" style="height: 40px">Open Hangar</a>
+            @if (p.valid) {
+              <button class="btn ghost" type="button" (click)="signOut()">Sign out and create another account</button>
+            }
+          </div>
+        } @else if (p.valid) {
           <form class="auth-card fade" [formGroup]="form" (ngSubmit)="submit()" novalidate>
             <span class="eyebrow mono" style="font-size: 11.5px; letter-spacing: .12em; color: var(--tx3); text-transform: uppercase">
               {{ p.ownerBootstrap ? 'Owner setup' : "You're invited" }}
             </span>
             <h1>Join {{ p.serverName }}</h1>
+            @if (!p.ownerBootstrap && (p.invitedBy || p.memberCount)) {
+              <p style="margin-bottom: 0; color: var(--tx2)" data-testid="invite-from">
+                @if (p.invitedBy) { <b style="color: var(--tx)">{{ p.invitedBy }}</b> invited you. }
+                @if (p.memberCount) { {{ p.memberCount === 1 ? '1 member' : p.memberCount + ' members' }} already here. }
+              </p>
+            }
             <p>{{ p.ownerBootstrap ? 'This one-time link creates the owner account.' : 'Pick a login and a display name your friends will see.' }}</p>
 
             <div class="field">
@@ -48,11 +65,14 @@ import { Icon } from '../../shared/ui/icon';
             <button class="btn pri" type="submit" [disabled]="busy() || form.invalid" style="height: 40px">
               {{ busy() ? 'Creating account…' : 'Create account' }}
             </button>
+            @if (!p.ownerBootstrap) {
+              <p style="margin: 0; font-size: 13px; text-align: center">Already have an account? <a routerLink="/login">Sign in</a></p>
+            }
           </form>
         } @else {
           <div class="auth-card fade">
-            <h1>Link expired</h1>
-            <p>This invitation is invalid, expired or already used. Ask for a new one.</p>
+            <h1>This invite doesn't work anymore</h1>
+            <p>It may have expired, been used up or been turned off. Ask the friend who sent it for a new link.</p>
             <a class="btn sec" routerLink="/login">Go to sign in</a>
           </div>
         }
@@ -66,10 +86,11 @@ export class InvitePage implements OnInit {
   /** Route param bound via withComponentInputBinding. */
   readonly secret = input.required<string>();
 
-  private readonly session = inject(SessionService);
+  readonly session = inject(SessionService);
   private readonly router = inject(Router);
 
   readonly preview = signal<InvitePreview | null>(null);
+  readonly signedIn = computed(() => this.session.status() === 'authenticated');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   readonly form = inject(NonNullableFormBuilder).group({
@@ -80,11 +101,17 @@ export class InvitePage implements OnInit {
   });
 
   async ngOnInit(): Promise<void> {
+    // Already signed in (e.g. a member opening a link they made): say so instead of offering a second account.
+    if (this.session.status() === 'unknown') await this.session.restore().catch(() => undefined);
     try {
       this.preview.set(await this.session.previewInvite(this.secret()));
     } catch {
       this.preview.set({ valid: false, serverName: null, ownerBootstrap: false });
     }
+  }
+
+  async signOut(): Promise<void> {
+    await this.session.logout(`/invite/${encodeURIComponent(this.secret())}`);
   }
 
   async submit(): Promise<void> {

@@ -76,7 +76,10 @@ public sealed partial class AuthService(
         user.PasswordHash = hasher.HashPassword(user, password);
         db.Users.Add(user);
         db.UserSettings.Add(new UserSettings { UserId = user.Id });
-        db.ServerMembers.Add(new ServerMember { ServerId = invite.ServerId, UserId = user.Id, JoinedAt = now, MemberVersion = 1 });
+        db.ServerMembers.Add(new ServerMember
+        {
+            ServerId = invite.ServerId, UserId = user.Id, JoinedAt = now, MemberVersion = 1, InvitationId = invite.Id, InvitedBy = invite.CreatedBy,
+        });
 
         if (invite.Purpose == InvitationPurpose.OwnerBootstrap)
         {

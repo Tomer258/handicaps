@@ -10,6 +10,7 @@ import { VoiceRoster } from './voice-roster';
 import { VoicePanel } from './voice-panel';
 import { CreateChannelDialog } from './create-channel.dialog';
 import { Dialog } from '@angular/cdk/dialog';
+import { openInviteDialog } from '../invites/invite.dialog';
 
 /** ChannelSidebar (hx-channel-sidebar): header, text/voice groups, persistent voice panel, user panel. */
 @Component({
@@ -26,6 +27,9 @@ import { Dialog } from '@angular/cdk/dialog';
     <div style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line)">
       <span class="disp" style="flex: 1; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ store.server()?.name }}</span>
       <span class="mono" style="font-size: 11px; color: var(--tx3)">{{ store.members().length }} members</span>
+      @if (store.canManageInvites()) {
+        <button class="ibtn" aria-label="Invite friends" title="Invite friends" (click)="invite()" style="width: 28px; height: 28px; flex: none; margin-right: -6px"><hx-icon name="user-plus" size="sm" /></button>
+      }
     </div>
 
     <div class="scroll" style="flex: 1; padding: 4px 8px 12px">
@@ -86,6 +90,10 @@ export class ChannelSidebar {
 
   readonly textOpen = signal(true);
   readonly voiceOpen = signal(true);
+
+  invite(): void {
+    openInviteDialog(this.dialog);
+  }
 
   create(type: Channel['type']): void {
     const ref = this.dialog.open<Channel>(CreateChannelDialog, { data: { type }, ariaLabel: 'Create channel' });

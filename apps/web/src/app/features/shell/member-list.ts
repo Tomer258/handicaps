@@ -6,9 +6,12 @@ import { PresenceStore } from '../presence/presence.store';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { Avatar } from '../../shared/ui/avatar';
+import { Icon } from '../../shared/ui/icon';
 import { Member, Perm } from '../../core/api/models';
 import { ago } from '../../shared/ui/time-ago';
 import { ProfileService } from '../profile/profile.service';
+import { Dialog } from '@angular/cdk/dialog';
+import { openInviteDialog } from '../invites/invite.dialog';
 
 interface Group {
   label: string;
@@ -19,7 +22,7 @@ interface Group {
 /** MemberList (hx-member-list): 248px aside grouped by hoisted role (highest first), then Online / Offline. */
 @Component({
   selector: 'hx-member-list',
-  imports: [Avatar],
+  imports: [Avatar, Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     role: 'complementary',
@@ -45,6 +48,9 @@ interface Group {
           </span>
           @if (q.channel && !q.waiting) {
             <button class="btn sec" style="margin-top: 4px" (click)="wait(q.channel.id)">Wait in {{ q.channel.name }}</button>
+          }
+          @if (store.canManageInvites()) {
+            <button class="btn ghost" (click)="invite()"><hx-icon name="user-plus" size="sm" />Invite friends</button>
           }
         </div>
       }
@@ -72,7 +78,8 @@ interface Group {
   `,
 })
 export class MemberList {
-  private readonly store = inject(WorkspaceStore);
+  readonly store = inject(WorkspaceStore);
+  private readonly dialog = inject(Dialog);
   private readonly presence = inject(PresenceStore);
   private readonly voice = inject(VoicePresenceStore);
   readonly media = inject(MediaSessionService);
@@ -97,6 +104,10 @@ export class MemberList {
       waiting: this.media.connected() && !!channel && this.media.channelId() === channel.id,
     };
   });
+
+  invite(): void {
+    openInviteDialog(this.dialog);
+  }
 
   wait(channelId: string): void {
     const serverId = this.store.serverId();

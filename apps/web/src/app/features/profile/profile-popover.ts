@@ -49,6 +49,9 @@ const MY_STATUS: { id: PreferredStatus; label: string; color: string }[] = [
           </div>
           <div class="disp" style="font-size: 20px; font-weight: 700; margin-top: 8px" dir="auto">{{ v.name }}</div>
           <div class="mono" style="font-size: 12px; color: var(--tx3)">&#64;{{ v.login }} · {{ v.statusLabel }}</div>
+          @if (v.joined) {
+            <div style="margin-top: 10px; font-size: 12.5px; color: var(--tx3)" data-testid="profile-joined">{{ v.joined }}</div>
+          }
           @if (v.lastHere) {
             <div style="margin-top: 10px; font-size: 13px; color: var(--tx2)">Last here {{ v.lastHere }}</div>
           }
@@ -124,6 +127,8 @@ export class ProfilePopover {
     if (this.voice.byUser().get(m.userId)?.screen) badges.push('LIVE');
     const offlineAt = this.presence.wentOffline()[m.userId] ?? (m.lastOnlineAt ? Date.parse(m.lastOnlineAt) : 0);
     const color = avatarColor(m.avatarHue);
+    const inviter = m.invitedBy ? this.store.memberById().get(m.invitedBy)?.displayName : null;
+    const joinedOn = m.joinedAt ? new Date(m.joinedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '';
     return {
       userId: m.userId,
       name: m.displayName,
@@ -134,6 +139,7 @@ export class ProfilePopover {
       status,
       statusLabel: isMe ? MY_STATUS.find((s) => s.id === this.settings.preferredStatus())?.label ?? 'Online' : STATUS_LABEL[status],
       badges,
+      joined: joinedOn ? `Joined ${joinedOn}${inviter ? ' · invited by ' + inviter : ''}` : '',
       lastHere: !isMe && status === 'offline' && offlineAt ? ago(Date.now() - offlineAt) : null,
       isMe,
       inMyVoice: !isMe && this.media.connected() && this.media.peers().some((p) => p.userId === m.userId),

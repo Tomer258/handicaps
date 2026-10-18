@@ -22,6 +22,9 @@ public sealed class ServerMember
     public long MemberVersion { get; set; }
     /// <summary>Server mute by a moderator; sticks across voice sessions until lifted.</summary>
     public bool VoiceMuted { get; set; }
+    /// <summary>The invitation this member registered with, and who created it (kept after the invitation is purged).</summary>
+    public Guid? InvitationId { get; set; }
+    public Guid? InvitedBy { get; set; }
 }
 
 public sealed class Role

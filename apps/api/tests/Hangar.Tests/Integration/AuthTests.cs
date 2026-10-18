@@ -180,4 +180,38 @@ public class AuthTests(ApiFactory factory)
         var r = await m.Http.PostAsJsonAsync($"/api/v1/servers/{serverId}/invitations", new { maxUses = 1 });
         Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
     }
+
+    [Fact]
+    public async Task Invite_preview_names_the_inviter_and_the_list_shows_who_joined()
+    {
+        var (owner, serverId) = await EnsureOwnerAsync();
+        var created = await owner.Http.PostAsJsonAsync($"/api/v1/servers/{serverId}/invitations", new { maxUses = 1, note = "For Gal" });
+        var c = await Json(created);
+        var secret = c.GetProperty("secret").GetString()!;
+        var id = c.GetProperty("invitation").GetProperty("id").GetString();
+
+        var anon = factory.NewClient();
+        await anon.CsrfAsync();
+        var preview = await Json(await anon.Http.PostAsJsonAsync("/api/v1/auth/invitations/preview", new { secret }));
+        Assert.True(preview.GetProperty("valid").GetBoolean());
+        Assert.False(string.IsNullOrEmpty(preview.GetProperty("invitedBy").GetString()));
+        Assert.True(preview.GetProperty("memberCount").GetInt32() >= 1);
+        var bogus = await Json(await anon.Http.PostAsJsonAsync("/api/v1/auth/invitations/preview", new { secret = "nope" }));
+        Assert.False(bogus.GetProperty("valid").GetBoolean());
+        Assert.False(bogus.TryGetProperty("invitedBy", out var by) && by.ValueKind == JsonValueKind.String);
+
+        var login = "gal" + Random.Shared.Next(1000, 9999);
+        (await anon.RegisterAsync(secret, login, displayName: "Gal")).EnsureSuccessStatusCode();
+
+        var list = await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/invitations"));
+        var row = list.EnumerateArray().Single(i => i.GetProperty("id").GetString() == id);
+        Assert.Equal("usedUp", row.GetProperty("state").GetString());
+        Assert.False(string.IsNullOrEmpty(row.GetProperty("createdByName").GetString()));
+        Assert.Equal("Gal", row.GetProperty("joined")[0].GetProperty("displayName").GetString());
+
+        var me = await Json(await owner.Http.GetAsync("/api/v1/auth/me"));
+        var members = await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/members"));
+        var gal = members.EnumerateArray().Single(m => m.GetProperty("login").GetString() == login);
+        Assert.Equal(me.GetProperty("user").GetProperty("id").GetString(), gal.GetProperty("invitedBy").GetString());
+    }
 }

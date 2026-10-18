@@ -82,13 +82,14 @@ export class SessionService {
     this._user.set(p);
   }
 
-  async logout(): Promise<void> {
+  /** next: where to land afterwards (the invite page keeps its link open). */
+  async logout(next = '/login'): Promise<void> {
     await this.runTeardown();
     try {
       await this.api.post('/auth/logout');
     } finally {
       this.clear();
-      await this.router.navigateByUrl('/login');
+      await this.router.navigateByUrl(next);
     }
   }
 

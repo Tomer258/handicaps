@@ -1,12 +1,13 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
 import { ApiError } from '../../core/api/api-error';
 import { CreatedInvitation, Invitation } from '../../core/api/models';
 import { ToastService } from '../../core/ui/toast.service';
 import { Icon } from '../../shared/ui/icon';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { INVITE_LIFETIMES, INVITE_USES } from '../invites/invite-options';
 
-/** Server administration: invitations (the secret is shown once). */
+/** Server administration: invitations (the secret is shown once), who made them and who joined with them. */
 @Component({
   selector: 'hx-invites-section',
   imports: [Icon],
@@ -17,12 +18,12 @@ import { WorkspaceStore } from '../workspaces/workspace.store';
     <div class="lbl" style="margin: 0 0 8px">Create an invite</div>
     <div class="card" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end">
       <div class="field"><label for="inv-life">Expires after</label>
-        <select id="inv-life" class="inp" [value]="lifetime()" (change)="lifetime.set(+$any($event.target).value)">
-          <option value="1">1 hour</option><option value="24">1 day</option><option value="168">7 days</option><option value="720">30 days</option>
+        <select id="inv-life" class="inp" (change)="lifetime.set(+$any($event.target).value)">
+          @for (o of lifetimes; track o.hours) { <option [value]="o.hours" [selected]="o.hours === lifetime()">{{ o.label }}</option> }
         </select></div>
       <div class="field"><label for="inv-uses">Max uses</label>
-        <select id="inv-uses" class="inp" [value]="maxUses()" (change)="maxUses.set(+$any($event.target).value)">
-          <option value="1">1 person</option><option value="5">5 people</option><option value="10">10 people</option><option value="25">25 people</option>
+        <select id="inv-uses" class="inp" (change)="maxUses.set(+$any($event.target).value)">
+          @for (u of uses; track u) { <option [value]="u" [selected]="u === maxUses()">{{ u === 1 ? '1 person' : u + ' people' }}</option> }
         </select></div>
       <div class="field"><label for="inv-note">Note (optional)</label>
         <input id="inv-note" class="inp" maxlength="100" placeholder="For Gal" [value]="note()" (input)="note.set($any($event.target).value)" /></div>
@@ -36,14 +37,27 @@ import { WorkspaceStore } from '../workspaces/workspace.store';
       </div>
     }
     <div class="lbl" style="margin: 22px 0 4px">Active invites</div>
-    @for (i of invites(); track i.id) {
-      <div class="srow">
-        <div><div class="t">{{ i.note || 'Invite' }}</div>
-          <div class="d">{{ i.usedCount }}/{{ i.maxUses }} used · expires {{ date(i.expiresAt) }}</div></div>
+    @for (i of active(); track i.id) {
+      <div class="srow" data-testid="invite-row">
+        <div style="min-width: 0"><div class="t">{{ i.note || 'Invite' }}</div>
+          <div class="d">{{ i.usedCount }}/{{ i.maxUses }} used · expires {{ date(i.expiresAt) }}{{ i.createdByName ? ' · by ' + i.createdByName : '' }}</div>
+          @if (i.joined.length) { <div class="d" style="color: var(--tx2)">Joined: {{ names(i) }}</div> }
+        </div>
         <button class="btn ghost" style="color: var(--danger)" (click)="revokeInvite(i)" [attr.aria-label]="'Revoke invite ' + (i.note || '')">Revoke</button>
       </div>
     } @empty {
       <div style="font-size: 12.5px; color: var(--tx3); padding: 8px 0">No active invites.</div>
+    }
+    @if (ended().length) {
+      <div class="lbl" style="margin: 22px 0 4px">Recently ended</div>
+      @for (i of ended(); track i.id) {
+        <div class="srow" data-testid="ended-invite-row">
+          <div style="min-width: 0"><div class="t" style="color: var(--tx2)">{{ i.note || 'Invite' }}</div>
+            <div class="d">{{ stateLabel[i.state] }} · {{ i.usedCount }}/{{ i.maxUses }} used{{ i.createdByName ? ' · by ' + i.createdByName : '' }}</div>
+            @if (i.joined.length) { <div class="d" style="color: var(--tx2)">Joined: {{ names(i) }}</div> }
+          </div>
+        </div>
+      }
     }
   `,
 })
@@ -58,6 +72,15 @@ export class InvitesSection {
   readonly busy = signal(false);
   readonly created = signal<CreatedInvitation | null>(null);
   readonly invites = signal<Invitation[]>([]);
+  readonly active = computed(() => this.invites().filter((i) => i.state === 'active'));
+  readonly ended = computed(() => this.invites().filter((i) => i.state !== 'active'));
+  readonly lifetimes = INVITE_LIFETIMES;
+  readonly uses = INVITE_USES;
+  readonly stateLabel = { active: 'Active', usedUp: 'Used up', expired: 'Expired', revoked: 'Revoked' } as const;
+
+  names(i: Invitation): string {
+    return i.joined.map((j) => j.displayName).join(', ');
+  }
 
   constructor() {
     void this.loadInvites();
@@ -97,7 +120,7 @@ export class InvitesSection {
   async revokeInvite(i: Invitation): Promise<void> {
     try {
       await this.api.delete(`/servers/${this.store.serverId()}/invitations/${i.id}`);
-      this.invites.update((l) => l.filter((x) => x.id !== i.id));
+      this.invites.update((l) => l.map((x) => (x.id === i.id ? { ...x, state: 'revoked' as const } : x)));
     } catch (e) {
       this.toast.show(ApiError.from(e).message, 'danger');
     }

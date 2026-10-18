@@ -8,7 +8,8 @@ using Hangar.Core.Workspaces;
 namespace Hangar.Api.Endpoints;
 
 public sealed record CreateInvitationRequest(int? LifetimeHours, int? MaxUses, string? Note);
-public sealed record InvitationDto(Guid Id, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, int MaxUses, int UsedCount, string? Note);
+public sealed record InvitationDto(Guid Id, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, int MaxUses, int UsedCount, string? Note,
+    string State = "active", string? CreatedByName = null, List<InvitedMember>? Joined = null);
 public sealed record CreatedInvitationDto(InvitationDto Invitation, string Secret, string Url);
 public sealed record CreateChannelRequest(string Type, string Name, string? Topic);
 public sealed record UpdateChannelRequest(string? Name, string? Topic, int? Position);
@@ -83,7 +84,10 @@ public static class WorkspaceEndpoints
         });
 
         servers.MapGet("/{serverId:guid}/invitations", async (Guid serverId, HttpContext http, InvitationService invites, CancellationToken ct) =>
-            Results.Ok((await invites.ListAsync(http.User.UserId(), serverId, ct)).Select(ToDto)));
+            Results.Ok((await invites.ListAsync(http.User.UserId(), serverId, ct)).Select(v => ToDto(v.Invitation) with
+            {
+                State = StateName(v.State), CreatedByName = v.CreatedByName, Joined = v.Joined,
+            })));
 
         servers.MapDelete("/{serverId:guid}/invitations/{id:guid}", async (Guid serverId, Guid id, HttpContext http, InvitationService invites, CancellationToken ct) =>
         {
@@ -126,5 +130,13 @@ public static class WorkspaceEndpoints
             Results.Ok(await users.UpdateProfileAsync(http.User.UserId(), req.DisplayName, req.AvatarHue, ct)));
     }
 
-    private static InvitationDto ToDto(Invitation i) => new(i.Id, i.CreatedAt, i.ExpiresAt, i.MaxUses, i.UsedCount, i.Note);
+    private static InvitationDto ToDto(Invitation i) => new(i.Id, i.CreatedAt, i.ExpiresAt, i.MaxUses, i.UsedCount, i.Note, Joined: []);
+
+    private static string StateName(InvitationState s) => s switch
+    {
+        InvitationState.UsedUp => "usedUp",
+        InvitationState.Expired => "expired",
+        InvitationState.Revoked => "revoked",
+        _ => "active",
+    };
 }

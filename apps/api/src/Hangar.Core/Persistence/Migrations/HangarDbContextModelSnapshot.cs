@@ -1457,6 +1457,14 @@ namespace Hangar.Core.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
+                    b.Property<Guid?>("InvitationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invitation_id");
+
+                    b.Property<Guid?>("InvitedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invited_by");
+
                     b.Property<DateTimeOffset>("JoinedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("joined_at");

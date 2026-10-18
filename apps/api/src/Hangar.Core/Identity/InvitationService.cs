@@ -9,7 +9,15 @@ namespace Hangar.Core.Identity;
 
 public sealed record CreatedInvitation(Invitation Invitation, string Secret);
 
-public sealed record InvitationPreview(bool Valid, string? ServerName, bool OwnerBootstrap);
+/// <summary>Landing-page view. InvitedBy/MemberCount are shown only to holders of a valid secret.</summary>
+public sealed record InvitationPreview(bool Valid, string? ServerName, bool OwnerBootstrap, string? InvitedBy = null, int MemberCount = 0);
+
+public enum InvitationState { Active, UsedUp, Expired, Revoked }
+
+public sealed record InvitedMember(Guid UserId, string DisplayName, DateTimeOffset JoinedAt);
+
+/// <summary>Admin list row: who created it and who joined with it.</summary>
+public sealed record InvitationView(Invitation Invitation, InvitationState State, string? CreatedByName, List<InvitedMember> Joined);
 
 public sealed class InvitationService(
     HangarDbContext db,
@@ -33,13 +41,33 @@ public sealed class InvitationService(
         return new CreatedInvitation(invite, secret);
     }
 
-    public async Task<List<Invitation>> ListAsync(Guid actor, Guid serverId, CancellationToken ct)
+    /// <summary>Active invitations first, then spent ones until retention purges them (a week after they end).</summary>
+    public async Task<List<InvitationView>> ListAsync(Guid actor, Guid serverId, CancellationToken ct)
     {
         await permissions.RequireServerAsync(actor, serverId, Permission.ManageInvites, ct);
         var now = clock.GetUtcNow();
-        return await db.Invitations.AsNoTracking()
-            .Where(i => i.ServerId == serverId && i.Purpose == InvitationPurpose.Member && i.RevokedAt == null && i.ExpiresAt > now && i.UsedCount < i.MaxUses)
+        var rows = await db.Invitations.AsNoTracking()
+            .Where(i => i.ServerId == serverId && i.Purpose == InvitationPurpose.Member)
             .OrderByDescending(i => i.CreatedAt).Take(100).ToListAsync(ct);
+        var ids = rows.Select(i => i.Id).ToList();
+        var creators = rows.Where(i => i.CreatedBy != null).Select(i => i.CreatedBy!.Value).Distinct().ToList();
+        var names = await db.Users.AsNoTracking().Where(u => creators.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);
+        var joined = (await db.ServerMembers.AsNoTracking()
+                .Where(m => m.ServerId == serverId && m.InvitationId != null && ids.Contains(m.InvitationId.Value))
+                .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new { m.InvitationId, u.Id, u.DisplayName, m.JoinedAt })
+                .ToListAsync(ct))
+            .ToLookup(j => j.InvitationId!.Value, j => new InvitedMember(j.Id, j.DisplayName, j.JoinedAt));
+
+        return rows
+            .Select(i => new InvitationView(i,
+                i.RevokedAt != null ? InvitationState.Revoked
+                : i.UsedCount >= i.MaxUses ? InvitationState.UsedUp
+                : i.ExpiresAt <= now ? InvitationState.Expired
+                : InvitationState.Active,
+                i.CreatedBy is { } c ? names.GetValueOrDefault(c) : null,
+                joined[i.Id].OrderBy(j => j.JoinedAt).ToList()))
+            .OrderBy(v => v.State == InvitationState.Active ? 0 : 1).ThenByDescending(v => v.Invitation.CreatedAt)
+            .ToList();
     }
 
     public async Task RevokeAsync(Guid actor, Guid serverId, Guid invitationId, CancellationToken ct)
@@ -55,17 +83,19 @@ public sealed class InvitationService(
         }
     }
 
-    /// <summary>Landing-page lookup. Reveals only the server name, and only for a valid secret.</summary>
+    /// <summary>Landing-page lookup. Only for a valid secret: the server name, who invited, and how many members.</summary>
     public async Task<InvitationPreview> PreviewAsync(string secret, CancellationToken ct)
     {
         var hash = Secrets.Sha256Hex(secret ?? "");
         var now = clock.GetUtcNow();
         var row = await db.Invitations.AsNoTracking()
             .Where(i => i.TokenHash == hash && i.RevokedAt == null && i.ExpiresAt > now && i.UsedCount < i.MaxUses)
-            .Join(db.Servers, i => i.ServerId, s => s.Id, (i, s) => new { s.Name, i.Purpose })
+            .Join(db.Servers, i => i.ServerId, s => s.Id, (i, s) => new { s.Name, i.Purpose, i.ServerId, i.CreatedBy })
             .FirstOrDefaultAsync(ct);
-        return row is null ? new InvitationPreview(false, null, false)
-            : new InvitationPreview(true, row.Name, row.Purpose == InvitationPurpose.OwnerBootstrap);
+        if (row is null) return new InvitationPreview(false, null, false);
+        var inviter = row.CreatedBy is { } by ? await db.Users.AsNoTracking().Where(u => u.Id == by).Select(u => u.DisplayName).FirstOrDefaultAsync(ct) : null;
+        var members = await db.ServerMembers.CountAsync(m => m.ServerId == row.ServerId && m.RemovedAt == null, ct);
+        return new InvitationPreview(true, row.Name, row.Purpose == InvitationPurpose.OwnerBootstrap, inviter, members);
     }
 
     internal (Invitation, string) New(Guid serverId, Guid? actor, InvitationPurpose purpose, TimeSpan life, int uses, string? note)

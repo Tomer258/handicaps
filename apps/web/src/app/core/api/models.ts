@@ -65,12 +65,17 @@ export interface Member {
   joinedAt: string;
   /** When their last connection went away; null if never recorded. */
   lastOnlineAt: string | null;
+  /** Who created the invitation they registered with. */
+  invitedBy?: string | null;
 }
 
 export interface InvitePreview {
   valid: boolean;
   serverName: string | null;
   ownerBootstrap: boolean;
+  /** Who created the link (valid links only). */
+  invitedBy?: string | null;
+  memberCount?: number;
 }
 
 export interface Invitation {
@@ -80,6 +85,9 @@ export interface Invitation {
   maxUses: number;
   usedCount: number;
   note: string | null;
+  state: 'active' | 'usedUp' | 'expired' | 'revoked';
+  createdByName?: string | null;
+  joined: { userId: string; displayName: string; joinedAt: string }[];
 }
 
 export interface CreatedInvitation {
