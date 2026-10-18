@@ -14,6 +14,18 @@ the date and version.
   leaving. The voice smoke also passes through the gate.
   **Passed 2026-10-18** (Caddy 2.11.4 + caddy-l4 v0.1.2, LiveKit v1.9.1, livekit-client 2.23).
 
+## Local rehearsal of the production stack (`infra/scripts/poc-local.sh`)
+
+The unmodified `compose.prod.yml` runs inside a Docker-in-Docker "VPS" at `*.hangar.localhost`.
+**Passed 2026-10-18:**
+- `poc-verify.sh --insecure`: 10/10 checks.
+- `poc-smoke.mjs`: invite registration, realtime chat, an image through the validator, voice with real audio
+  through the gate, soundboard upload and play through the publisher, and a screen share.
+- Watchdog drill: closed 64 s after `dc stop api` (flag owned by uid 10003, `/rtc` returned 503), and reopened 34 s
+  after `dc start api`.
+
+This does not replace the host checks below, which need public networking.
+
 ## Manual, on the production host (not done yet, required)
 
 - [ ] Session revocation: obtain an initial and a server-refreshed LiveKit token, revoke the session, then replay

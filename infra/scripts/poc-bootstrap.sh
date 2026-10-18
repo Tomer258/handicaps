@@ -52,37 +52,48 @@ chown 10003:10003 "$ROOT/watchdog"
 chmod 700 "$CFG" "$ROOT/data/keys"
 chmod 755 "$ROOT/watchdog"
 
-if [ -f "$CFG/hangar.env" ] && [ "$FORCE" -eq 0 ]; then
+FILES=(hangar.env api.env publisher.env watchdog.env livekit-keys.yaml livekit.yaml backup.env postgres_password)
+present=0
+for f in "${FILES[@]}"; do [ -f "$CFG/$f" ] && present=$((present + 1)); done
+if [ "$present" -eq "${#FILES[@]}" ] && [ "$FORCE" -eq 0 ]; then
   step "Config exists in $CFG: keeping it (--force-config regenerates every secret)"
+elif [ "$present" -gt 0 ] && [ "$FORCE" -eq 0 ]; then
+  echo "incomplete config in $CFG ($present of ${#FILES[@]} files). If no data was created with it yet, rerun with" >&2
+  echo "--force-config; otherwise restore the missing files (new secrets would not match the existing database)." >&2
+  exit 1
 else
   step "Generating config in $CFG"
+  OUT="$(mktemp -d "$ROOT/.config.XXXXXX")"
   PG="$(secret)" LK="$(secret)" WD="$(secret)" WORKER="$(secret)"
   VERSION="poc-$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M)"
   hosts() { sed -e "s/app\.example\.com/$APP_HOST/g" -e "s/rtc\.example\.com/$RTC_HOST/g" -e "s/turn\.example\.com/$TURN_HOST/g"; }
   setkv() { sed -E "s|^($1)=.*|\\1=$2|"; }
   EX="$REPO/infra/config.example"
 
-  hosts < "$EX/hangar.env" | setkv HANGAR_VERSION "$VERSION" | setkv HANGAR_ROOT "$ROOT" | setkv ACME_EMAIL "$EMAIL" > "$CFG/hangar.env"
+  hosts < "$EX/hangar.env" | setkv HANGAR_VERSION "$VERSION" | setkv HANGAR_ROOT "$ROOT" | setkv ACME_EMAIL "$EMAIL" > "$OUT/hangar.env"
   hosts < "$EX/api.env" \
     | sed -E "s|Password=[^;]*;|Password=$PG;|" \
-    | setkv Hangar__LiveKit__ApiSecret "$LK" | setkv Hangar__Soundboard__WorkerKey "$WORKER" > "$CFG/api.env"
-  setkv WORKER_KEY "$WORKER" < "$EX/publisher.env" > "$CFG/publisher.env"
-  setkv LIVEKIT_API_SECRET "$WD" < "$EX/watchdog.env" > "$CFG/watchdog.env"
-  sed -E -e "s|^hangar:.*|hangar: $LK|" -e "s|^watchdog:.*|watchdog: $WD|" < "$EX/livekit-keys.yaml" > "$CFG/livekit-keys.yaml"
-  hosts < "$REPO/infra/livekit.prod.yaml" > "$CFG/livekit.yaml"
+    | setkv Hangar__LiveKit__ApiSecret "$LK" | setkv Hangar__Soundboard__WorkerKey "$WORKER" > "$OUT/api.env"
+  setkv WORKER_KEY "$WORKER" < "$EX/publisher.env" > "$OUT/publisher.env"
+  setkv LIVEKIT_API_SECRET "$WD" < "$EX/watchdog.env" > "$OUT/watchdog.env"
+  sed -E -e "s|^hangar:.*|hangar: $LK|" -e "s|^watchdog:.*|watchdog: $WD|" < "$EX/livekit-keys.yaml" > "$OUT/livekit-keys.yaml"
+  hosts < "$REPO/infra/livekit.prod.yaml" > "$OUT/livekit.yaml"
   if [ "$LOCAL" -eq 1 ]; then
-    sed -i -E 's|^(  )use_external_ip: true|\1use_external_ip: false\n\1node_ip: 127.0.0.1|' "$CFG/livekit.yaml"
+    sed -i -E 's|^(  )use_external_ip: true|\1use_external_ip: false\n\1node_ip: 127.0.0.1|' "$OUT/livekit.yaml"
   fi
-  [ -f "$CFG/backup.env" ] || cp "$EX/backup.env" "$CFG/backup.env"
-  printf %s "$PG" > "$CFG/postgres_password"
+  if [ -f "$CFG/backup.env" ]; then cp -p "$CFG/backup.env" "$OUT/backup.env"; else cp "$EX/backup.env" "$OUT/backup.env"; fi
+  printf %s "$PG" > "$OUT/postgres_password"
   unset PG LK WD WORKER
 
-  chown root:root "$CFG"/*
-  chmod 600 "$CFG"/{api.env,publisher.env,watchdog.env,backup.env,livekit-keys.yaml,postgres_password}
-  chmod 644 "$CFG"/{hangar.env,livekit.yaml}
-  if grep -l CHANGE_ME "$CFG"/{hangar.env,api.env,publisher.env,watchdog.env,livekit-keys.yaml,livekit.yaml} 2>/dev/null; then
-    echo "a CHANGE_ME placeholder survived in the files above: fix the template substitution" >&2; exit 1
+  chown root:root "$OUT"/*
+  chmod 600 "$OUT"/{api.env,publisher.env,watchdog.env,backup.env,livekit-keys.yaml,postgres_password}
+  chmod 644 "$OUT"/{hangar.env,livekit.yaml}
+  if grep -l CHANGE_ME "$OUT"/{hangar.env,api.env,publisher.env,watchdog.env,livekit-keys.yaml,livekit.yaml} 2>/dev/null; then
+    echo "a CHANGE_ME placeholder survived in the files above: fix the template substitution" >&2; rm -rf "$OUT"; exit 1
   fi
+  # Only a complete config is moved into place (a failed run leaves nothing half-written behind).
+  for f in "${FILES[@]}"; do rm -rf "${CFG:?}/$f"; mv "$OUT/$f" "$CFG/$f"; done
+  rmdir "$OUT"
 fi
 
 [ "$CONFIG_ONLY" -eq 1 ] && { step "Config only: done"; exit 0; }

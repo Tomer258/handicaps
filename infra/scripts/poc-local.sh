@@ -9,6 +9,9 @@
 #   ./infra/scripts/poc-local.sh reset   # delete the POC container and all its volumes (next `up` rebuilds)
 #   ./infra/scripts/poc-local.sh dc ...  # docker compose inside the POC, e.g. `dc logs -f api`
 #
+# POC_DATA=<volume> selects a separate data set (default hangar-poc-srv), e.g. POC_DATA=hangar-poc-test for
+# automated runs that must not touch your accounts. Built images are shared.
+#
 # Open https://app.hangar.localhost (Chrome/Edge resolve *.localhost to 127.0.0.1). Caddy issues certificates from
 # its own local CA: accept the browser warning for app. AND rtc. (visit https://rtc.hangar.localhost once), or trust
 # the root printed by `poc-local.sh ca`. Uses host ports 80, 443, 7881/tcp, 7882/udp: the dev LiveKit is stopped.
@@ -18,22 +21,31 @@ export MSYS_NO_PATHCONV=1 # Git Bash on Windows: keep container paths as written
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 NAME=hangar-poc
 DOMAIN=hangar.localhost
+DATA="${POC_DATA:-hangar-poc-srv}"
 DC="docker compose -f /opt/hangar/infra/compose.prod.yml --env-file /srv/hangar/config/hangar.env"
 inside() { docker exec "$NAME" sh -c "$*"; }
 
 up() {
+  # Switching data sets: recreate the outer container with the other /srv/hangar volume.
+  if docker ps -a --format '{{.Names}}' | grep -qx "$NAME"      && [ "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/srv/hangar"}}{{.Name}}{{end}}{{end}}' "$NAME")" != "$DATA" ]; then
+    docker rm -f "$NAME" >/dev/null
+  fi
   if ! docker ps --format '{{.Names}}' | grep -qx "$NAME"; then
     # Ports 7881/7882 are advertised to browsers as 127.0.0.1: the dev LiveKit must not hold them.
     docker ps --format '{{.Names}}' | grep -E 'hangar-dev-(livekit|sound-publisher)' | xargs -r docker stop >/dev/null
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     docker run -d --privileged --name "$NAME" \
       -p 80:80 -p 443:443 -p 7881:7881 -p 7882:7882/udp \
-      -v "$REPO:/opt/hangar:ro" -v hangar-poc-docker:/var/lib/docker -v hangar-poc-srv:/srv/hangar \
+      -v "$REPO:/opt/hangar:ro" -v hangar-poc-docker:/var/lib/docker -v "$DATA:/srv/hangar" \
       docker:28.5.1-dind >/dev/null
   fi
   echo "waiting for the inner Docker daemon"
   for _ in $(seq 1 60); do inside 'docker info >/dev/null 2>&1' && break; sleep 2; done
   inside 'apk add -q bash openssl git >/dev/null && git config --global --add safe.directory /opt/hangar'
+  # New data set: containers restarted from another set's run would bind-mount config files that do not exist yet
+  # (Docker then creates them as directories). Remove them and start from an empty /srv/hangar.
+  inside '[ -f /srv/hangar/config/postgres_password ] || [ -n "$(ls -A /srv/hangar/postgres 2>/dev/null)" ] \
+    || { docker ps -aq | xargs -r docker rm -f >/dev/null; rm -rf /srv/hangar/*; }'
   docker exec "$NAME" bash /opt/hangar/infra/scripts/poc-bootstrap.sh --domain "$DOMAIN" --email ops@example.com --local
   echo
   echo "Open https://app.$DOMAIN (accept the certificate warning for app. and rtc.)"
@@ -47,7 +59,7 @@ case "${1:-up}" in
     docker exec "$NAME" sh -c "$DC --profile release --profile ops down -v --remove-orphans; rm -rf /srv/hangar/*"
     up ;;
   invite) docker exec "$NAME" sh -c "$DC logs api migrate" 2>/dev/null | grep -o "https://app.$DOMAIN/invite/[A-Za-z0-9_-]*" | tail -1 ;;
-  reset) docker rm -f "$NAME" >/dev/null 2>&1 || true; docker volume rm hangar-poc-docker hangar-poc-srv >/dev/null 2>&1 || true; echo "POC data deleted" ;;
+  reset) docker rm -f "$NAME" >/dev/null 2>&1 || true; docker volume rm hangar-poc-docker "$DATA" >/dev/null 2>&1 || true; echo "POC data deleted" ;;
   dc) shift; docker exec "$NAME" sh -c "$DC $*" ;;
   ca) inside 'cat /srv/hangar/caddy/data/caddy/pki/authorities/local/root.crt' ;;
   *) echo "usage: $0 up|down|invite|fresh|reset|dc <args>|ca" >&2; exit 2 ;;
