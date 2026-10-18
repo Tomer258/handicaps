@@ -38,6 +38,13 @@ public sealed class AppProblemHandler(IProblemDetailsService problems, ILogger<A
             pd.Extensions["code"] = "service.unavailable";
             ctx.Response.Headers.RetryAfter = "5";
         }
+        else if (ex is FileNotFoundException or DirectoryNotFoundException && HttpMethods.IsGet(ctx.Request.Method))
+        {
+            // The row exists but its bytes don't (partial restore, files volume not mounted): a broken image, not a 500.
+            log.LogWarning("Stored file missing for {Path}: {File}", ctx.Request.Path, (ex as FileNotFoundException)?.FileName ?? ex.Message);
+            pd = new ProblemDetails { Status = 404, Title = "This file is no longer available." };
+            pd.Extensions["code"] = "file.missing";
+        }
         else if (ex is OperationCanceledException && ctx.RequestAborted.IsCancellationRequested)
         {
             return true;

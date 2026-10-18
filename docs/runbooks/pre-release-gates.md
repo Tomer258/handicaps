@@ -49,6 +49,9 @@ The unmodified `compose.prod.yml` runs inside a Docker-in-Docker "VPS" at `*.han
   local certificates; stopping the API raised `api` after 3 min and `reconcile` after 5 min, and both RESOLVED within
   a minute of `dc start api`.
 
+- Rollback compatibility (2026-10-18): the previous release's API (`21fcf28`) ran against the latest schema. Four
+  smokes passed and the server logged no errors. The migration lint runs in CI (rollback.md).
+
 This does not replace the host checks below, which need public networking.
 
 ## Manual, on the production host (not done yet, required)

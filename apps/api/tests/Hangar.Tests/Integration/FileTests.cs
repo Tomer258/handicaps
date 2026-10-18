@@ -81,6 +81,23 @@ public class FileTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Missing_stored_bytes_answer_404_not_500()
+    {
+        var (owner, serverId) = await OwnerAsync(factory);
+        var id = (await Json(await UploadAsync(owner, $"/api/v1/servers/{serverId}/attachments", Png, "gone.png"))).GetProperty("id").GetGuid();
+        await FakeValidator.RunAsync(factory, width: 64, height: 64);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var key = (await scope.ServiceProvider.GetRequiredService<HangarDbContext>().FileAssets.SingleAsync(f => f.Id == id)).StorageKey;
+            File.Delete(Path.Combine(StorageRoot, StorageArea.Images, key)); // e.g. a DB restored without its files volume
+        }
+
+        var res = await owner.Http.GetAsync($"/api/v1/attachments/{id}");
+        Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
+        Assert.Equal("file.missing", (await Json(res)).GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task Only_images_and_real_plain_text_are_accepted_and_text_always_downloads()
     {
         var (owner, serverId) = await OwnerAsync(factory);
