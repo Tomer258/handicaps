@@ -69,6 +69,14 @@ try {
   await friend.evaluate(() => document.querySelector('.tile.prim video').dispatchEvent(new Event('playing')));
   await buffering.waitFor({ state: 'detached', timeout: 5000 });
   check(true, 'the overlay clears when playback resumes');
+  const pip = friend.getByRole('button', { name: 'Pop out' });
+  if (await pip.count()) {
+    await pip.click();
+    await friend.waitForFunction(() => document.pictureInPictureElement?.tagName === 'VIDEO', null, { timeout: 5000 });
+    check(true, 'Pop out puts the stream in picture-in-picture');
+    await pip.click();
+    await friend.waitForFunction(() => !document.pictureInPictureElement, null, { timeout: 5000 });
+  } else console.log('- picture-in-picture not available in this browser; pop-out not checked');
   await dock.getByRole('button', { name: 'Stop sharing your screen' }).click();
   console.log('going-live smoke passed');
 } finally {

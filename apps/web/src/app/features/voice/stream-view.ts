@@ -43,6 +43,9 @@ import { StreamTile } from './stream-tile';
                 <button [attr.aria-pressed]="fit() === 'contain'" (click)="fit.set('contain')" style="color: #fff">Fit</button>
                 <button [attr.aria-pressed]="fit() === 'cover'" (click)="fit.set('cover')" style="color: #fff">Fill</button>
               </div>
+              @if (canPip) {
+                <button class="ctl" aria-label="Pop out" title="Pop out (picture-in-picture)" (click)="popOut()"><hx-icon name="pip" /></button>
+              }
               <button class="ctl" aria-label="Full screen" title="Full screen" (click)="fullscreen()"><hx-icon name="fullscreen" /></button>
             </div>
           </div>
@@ -135,6 +138,16 @@ export class StreamView implements OnDestroy {
       this.restore.set(s.userId, v);
       this.media.setStreamVolume(s.userId, 0);
     }
+  }
+
+  readonly canPip = typeof document !== 'undefined' && !!document.pictureInPictureEnabled;
+
+  /** Keeps the primary stream on top while the user works in another window or tab. */
+  popOut(): void {
+    const video = this.stage()?.nativeElement.querySelector('video');
+    if (!video) return;
+    if (document.pictureInPictureElement === video) void document.exitPictureInPicture().catch(() => undefined);
+    else void video.requestPictureInPicture().catch(() => undefined);
   }
 
   fullscreen(): void {
