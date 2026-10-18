@@ -1,5 +1,6 @@
-// Dev smoke: Windows refuses system-audio capture (Chrome throws NotReadableError when audio is requested). The Go
-// Live dialog stays open, explains it, and one click shares without sound.
+// Dev smoke: the PC refuses "clean" system-audio capture (Chrome throws NotReadableError when audio processing is
+// turned off). The Go Live dialog stays open and retries in compatibility mode (browser-default audio); when that
+// fails too, it shows the browser's error and shares without sound.
 // Usage: node scripts/smoke-share-audio.mjs <out-dir>   (needs compose livekit + API + ng serve; user tomer)
 import { chromium } from '@playwright/test';
 
@@ -15,10 +16,15 @@ function check(cond, msg) {
 
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, permissions: ['microphone'] });
+  // window.__failCompat: also fail browser-default audio (audio: true).
   await ctx.addInitScript(() => {
     const orig = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getDisplayMedia = (c) =>
-      c && c.audio ? Promise.reject(new DOMException('Could not start audio source', 'NotReadableError')) : orig(c);
+    navigator.mediaDevices.getDisplayMedia = (c) => {
+      const clean = c && typeof c.audio === 'object';
+      const compat = c && c.audio === true;
+      if (clean || (compat && window.__failCompat)) return Promise.reject(new DOMException('Could not start audio source', 'NotReadableError'));
+      return orig(c);
+    };
   });
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login`);
@@ -34,16 +40,35 @@ try {
   const dock = page.getByRole('toolbar', { name: 'Voice controls' });
   await dock.waitFor({ timeout: 20000 });
 
-  await dock.getByRole('button', { name: 'Share your screen' }).click();
   const dialog = page.getByRole('dialog', { name: /Go live in/ });
+  const stop = dock.getByRole('button', { name: 'Stop sharing your screen' });
+
+  // 1. Clean capture fails → compatibility mode goes live with one click.
+  await dock.getByRole('button', { name: 'Share your screen' }).click();
   await dialog.getByRole('button', { name: 'Choose what to share' }).click();
-  await dialog.getByRole('alert').getByText("Windows wouldn't let the browser capture this PC's sound").waitFor({ timeout: 10000 });
-  check(await dialog.getByRole('button', { name: 'Include system audio' }).getAttribute('aria-pressed') === 'false', 'sound failure keeps the dialog open with audio switched off');
+  await dialog.getByRole('alert').getByText("couldn't start this PC's sound in high-quality mode").waitFor({ timeout: 10000 });
+  await page.waitForTimeout(400);
   await page.screenshot({ path: `${outDir}/share-audio-failed.png` });
+  await dialog.getByRole('button', { name: 'Try again with sound' }).click();
+  await stop.waitFor({ timeout: 20000 });
+  check(true, 'after a clean-capture failure, "Try again with sound" goes live in compatibility mode');
+  await stop.click();
+  await dock.getByRole('button', { name: 'Share your screen' }).waitFor();
+
+  // 2. Both modes fail → the browser's words, and video-only still works.
+  // Compatibility mode worked above, so it is remembered: the next share asks for browser-default audio first.
+  check(await page.evaluate(() => JSON.parse(localStorage.getItem('hangar.mediaPrefs')).screenAudioCompat === true), 'the working compatibility mode is remembered');
+  await page.evaluate(() => { window.__failCompat = true; });
+  await dock.getByRole('button', { name: 'Share your screen' }).click();
+  await dialog.getByRole('button', { name: 'Choose what to share' }).click();
+  await dialog.getByRole('alert').getByText('NotReadableError: Could not start audio source').waitFor({ timeout: 10000 });
+  check(true, 'when compatibility mode fails too, the dialog quotes the browser and suggests a tab');
+  await page.screenshot({ path: `${outDir}/share-audio-failed-compat.png` });
   await dialog.getByRole('button', { name: 'Share without sound' }).click();
-  await dock.getByRole('button', { name: 'Stop sharing your screen' }).waitFor({ timeout: 20000 });
+  await stop.waitFor({ timeout: 20000 });
   check(true, '"Share without sound" goes live with video only');
-  await dock.getByRole('button', { name: 'Stop sharing your screen' }).click();
+  await stop.click();
+  await page.evaluate(() => localStorage.removeItem('hangar.mediaPrefs'));
   console.log('share-audio smoke passed');
 } finally {
   await browser.close();

@@ -46,16 +46,30 @@ import { Icon } from '../../shared/ui/icon';
             <hx-icon name="lock" size="sm" style="color: var(--accent-tx); margin-top: 1px" />
             <span>Next, <b>your browser</b> asks what to share — a screen, a window or a tab. Hangar can't see or pick anything until you choose there.</span>
           </div>
-          @if (audioFailed()) {
+          @if (audioFailed() === 'clean') {
             <div class="note w" role="alert" style="margin-top: 12px">
               <hx-icon name="alert-triangle" size="sm" style="margin-top: 1px" />
-              <span>Windows wouldn't let the browser capture this PC's sound, so nothing was shared. You can share without sound now.
-                To fix sound: check the default playback device (Bluetooth headsets in call mode and apps using the device exclusively block it).</span>
+              <span>The browser couldn't start this PC's sound in high-quality mode, so nothing was shared.
+                <b>Try again with sound</b> retries in compatibility mode (the browser's default audio settings), which often works when this happens — pick the screen once more.</span>
+            </div>
+          } @else if (audioFailed() === 'compat') {
+            <div class="note w" role="alert" style="margin-top: 12px">
+              <hx-icon name="alert-triangle" size="sm" style="margin-top: 1px" />
+              <span>This browser can't capture the sound of this screen on this PC (it said: <span class="mono">{{ media.lastCaptureError() }}</span>).
+                Share without sound, or share a <b>browser tab</b> instead — tab sound comes straight from the browser and always works.</span>
             </div>
           }
           <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px">
             <button class="btn ghost" (click)="closed.emit()">Cancel</button>
-            <button class="btn pri" (click)="start()" [disabled]="busy()">{{ audioFailed() && !audio() ? 'Share without sound' : 'Choose what to share' }}</button>
+            @if (audioFailed() === 'clean') {
+              <button class="btn sec" (click)="start(false)" [disabled]="busy()">Share without sound</button>
+              <button class="btn pri" (click)="start(true, true)" [disabled]="busy()">Try again with sound</button>
+            } @else if (audioFailed() === 'compat') {
+              <button class="btn sec" (click)="start(true, true)" [disabled]="busy()">Share a tab with sound</button>
+              <button class="btn pri" (click)="start(false)" [disabled]="busy()">Share without sound</button>
+            } @else {
+              <button class="btn pri" (click)="start()" [disabled]="busy()">Choose what to share</button>
+            }
           </div>
         </div>
       } @else {
@@ -83,12 +97,13 @@ export class ShareDialog {
   readonly viewers = input(0);
   readonly closed = output<void>();
 
-  private readonly media = inject(MediaSessionService);
+  readonly media = inject(MediaSessionService);
   readonly quality = signal<ScreenQuality>(inject(MediaPrefsService).prefs().streamQuality);
   readonly audio = signal(true);
   readonly denied = signal(false);
   readonly busy = signal(false);
-  readonly audioFailed = signal(false);
+  /** Which sound capture mode failed: offer the next step instead of failing the share. */
+  readonly audioFailed = signal<'clean' | 'compat' | null>(null);
 
   private done = false;
 
@@ -100,16 +115,15 @@ export class ShareDialog {
   }
 
   /** Runs inside the click: startScreenShare calls getDisplayMedia before any await. */
-  async start(): Promise<void> {
+  async start(withAudio = this.audio(), compat?: boolean): Promise<void> {
     this.busy.set(true);
-    const result = await this.media.startScreenShare(this.quality(), this.audio());
+    const result = await this.media.startScreenShare(this.quality(), withAudio, compat);
     this.busy.set(false);
+    // Stay open after a sound failure: the next step is one click (a fresh user gesture, which the picker needs).
     if (result === 'denied') this.denied.set(true);
-    else if (result === 'audio-failed') {
-      // Stay open: one click (a fresh user gesture, which the picker needs) shares video only.
-      this.audioFailed.set(true);
-      this.audio.set(false);
-    } else this.close();
+    else if (result === 'audio-failed') this.audioFailed.set('clean');
+    else if (result === 'audio-failed-compat') this.audioFailed.set('compat');
+    else this.close();
   }
 
   private close(): void {

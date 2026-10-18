@@ -10,6 +10,8 @@ export interface MediaPrefs {
   echoCancellation: boolean;
   autoGainControl: boolean;
   streamQuality: ScreenQuality;
+  /** Screen-share sound with the browser's default audio settings: set once clean capture failed and this worked. */
+  screenAudioCompat: boolean;
 }
 
 const KEY = 'hangar.mediaPrefs';
@@ -21,6 +23,7 @@ const DEFAULTS: MediaPrefs = {
   echoCancellation: true,
   autoGainControl: true,
   streamQuality: '1080p60',
+  screenAudioCompat: false,
 };
 
 /** Local device and processing choices. Applied by MediaSessionService on the next capture (and live where possible). */
@@ -51,6 +54,7 @@ function load(): MediaPrefs {
       echoCancellation: raw.echoCancellation !== false,
       autoGainControl: raw.autoGainControl !== false,
       streamQuality: raw.streamQuality === '720p30' ? '720p30' : '1080p60',
+      screenAudioCompat: raw.screenAudioCompat === true,
     };
   } catch {
     return DEFAULTS;

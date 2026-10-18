@@ -50,7 +50,7 @@ export interface RoomPeer {
 
 export type ScreenQuality = '1080p60' | '720p30';
 /** 'audio-failed': Windows refused system-audio loopback (NotReadableError); sharing without sound usually works. */
-export type ShareResult = 'ok' | 'denied' | 'failed' | 'audio-failed';
+export type ShareResult = 'ok' | 'denied' | 'failed' | 'audio-failed' | 'audio-failed-compat';
 
 /** A camera or screen stream in the room. Remote video is subscribed only while a tile watches it. */
 export interface StreamInfo {
@@ -336,7 +336,15 @@ export class MediaSessionService {
    * Must be called directly from a click handler: the browser picker needs transient activation, so capture happens
    * first; nothing is published until the server reserves capacity and grants the source. Denial stops every track.
    */
-  async startScreenShare(quality: ScreenQuality, withAudio: boolean): Promise<ShareResult> {
+  /** The browser's own words for the last failed screen capture (shown in the Go Live dialog). */
+  readonly lastCaptureError = signal('');
+
+  /**
+   * compat: ask for sound with the browser's default audio settings. Clean capture (processing off) makes Chrome open
+   * the Windows output device in its native format, which fails on some PCs with NotReadableError; the default path
+   * captures at 48 kHz through Chrome's audio pipeline instead.
+   */
+  async startScreenShare(quality: ScreenQuality, withAudio: boolean, compat = this.mediaPrefs.prefs().screenAudioCompat): Promise<ShareResult> {
     const room = this.room;
     const lease = this.leaseId;
     if (!room || !lease || this._sharing() !== 'off') return 'failed';
@@ -344,7 +352,7 @@ export class MediaSessionService {
     let tracks: LocalTrack[];
     try {
       tracks = await createLocalScreenTracks({
-        audio: withAudio ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
+        audio: withAudio ? (compat ? true : { echoCancellation: false, noiseSuppression: false, autoGainControl: false }) : false,
         systemAudio: withAudio ? 'include' : 'exclude',
         resolution: { width: enc.width, height: enc.height, frameRate: enc.fps },
         contentHint: 'motion',
@@ -355,8 +363,10 @@ export class MediaSessionService {
       const name = (e as Error)?.name ?? 'Error';
       if (name === 'NotAllowedError' || name === 'AbortError') return 'denied';
       if (name === 'NotReadableError' && withAudio) {
-        console.warn('screen capture with system audio failed', e);
-        return 'audio-failed';
+        console.warn(`screen capture with system audio failed (${compat ? 'compatibility' : 'clean'} mode)`, e);
+        this.lastCaptureError.set(`${name}${(e as Error)?.message ? ': ' + (e as Error).message : ''}`);
+        if (compat && this.mediaPrefs.prefs().screenAudioCompat) this.mediaPrefs.update({ screenAudioCompat: false });
+        return compat ? 'audio-failed-compat' : 'audio-failed';
       }
       // Anything else used to fail silently: say what the browser said.
       console.warn('screen capture failed', e);
@@ -371,6 +381,8 @@ export class MediaSessionService {
     const video = tracks.find((t) => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
     // Publish only audio the browser actually returned (window capture on Windows has none).
     const audio = tracks.find((t) => t.kind === Track.Kind.Audio);
+    // Compatibility mode delivered sound: keep using it on this PC.
+    if (audio && compat && !this.mediaPrefs.prefs().screenAudioCompat) this.mediaPrefs.update({ screenAudioCompat: true });
     if (!video) {
       tracks.forEach((t) => t.stop());
       return 'failed';
