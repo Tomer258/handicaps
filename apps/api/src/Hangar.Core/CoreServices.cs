@@ -44,6 +44,8 @@ public static class CoreServices
         services.AddSingleton<LocalFileStore>();
         services.AddScoped<SoundboardService>();
         services.AddScoped<SoundPlaybackService>();
+        services.AddScoped<FileService>();
+        services.AddScoped<ValidationCollector>();
         return services;
     }
 }

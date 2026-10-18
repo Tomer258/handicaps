@@ -58,6 +58,7 @@ services:
       - ../.data/files/quarantine:/data/quarantine:ro
       - ../.data/files/spool:/data/spool
       - ../.data/files/sounds:/data/sounds
+      - ../.data/files/images:/data/images
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]

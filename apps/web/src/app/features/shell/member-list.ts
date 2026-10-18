@@ -29,7 +29,7 @@ interface Group {
           <div role="list" [attr.aria-labelledby]="'mg-' + g.label">
             @for (m of g.members; track m.userId) {
               <div role="listitem" class="vp" style="padding-left: 8px; height: 42px" [style.opacity]="m.status === 'offline' ? 0.5 : 1">
-                <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [size]="32" [status]="m.status" [speaking]="media.speaking().has(m.userId)" />
+                <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [assetId]="m.avatarAssetId" [size]="32" [status]="m.status" [speaking]="media.speaking().has(m.userId)" />
                 <span style="flex: 1; min-width: 0">
                   <span style="display: block; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto">{{ m.displayName }}</span>
                   <span style="display: block; font-size: 11.5px; color: var(--tx3)">&#64;{{ m.login }}</span>

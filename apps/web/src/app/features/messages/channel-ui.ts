@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Message } from '../../core/api/models';
+import { Attachment, Message } from '../../core/api/models';
 import { ToastService } from '../../core/ui/toast.service';
 import { ChatStore } from './chat.store';
 
@@ -17,6 +17,7 @@ export class ChannelUi {
   readonly highlightId = signal<string | null>(null);
   readonly pinsOpen = signal(false);
   readonly emojiOpen = signal(false);
+  readonly viewer = signal<{ attachment: Attachment; by: string } | null>(null);
 
   private highlightTimer?: ReturnType<typeof setTimeout>;
 
@@ -29,6 +30,7 @@ export class ChannelUi {
     this.highlightId.set(null);
     this.pinsOpen.set(false);
     this.emojiOpen.set(false);
+    this.viewer.set(null);
   }
 
   focusComposer(): void {

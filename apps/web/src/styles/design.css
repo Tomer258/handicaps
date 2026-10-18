@@ -34,6 +34,7 @@ input,select,textarea{font:inherit;color:var(--tx)}
 .vp:hover{background:var(--bg3);color:var(--tx)}
 .av{position:relative;border-radius:50%;display:grid;place-items:center;color:#0B0C0E;font-weight:600;flex:none}
 .av.s20{width:20px;height:20px;font-size:9px}.av.s28{width:28px;height:28px;font-size:11px}.av.s32{width:32px;height:32px;font-size:12px}.av.s40{width:40px;height:40px;font-size:14px}.av.s72{width:72px;height:72px;font-size:24px}.av.s80{width:80px;height:80px;font-size:26px}
+.av>img{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover}
 .av .st{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;border:3px solid var(--bg1)}
 .ring{transition:box-shadow .08s}
 .ring.talk{box-shadow:0 0 0 2px var(--bg1),0 0 0 4px var(--accent)}

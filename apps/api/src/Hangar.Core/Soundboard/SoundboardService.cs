@@ -60,8 +60,7 @@ public sealed class SoundboardService(
     LocalFileStore files,
     ISoundEventSink events,
     IOptions<SoundboardOptions> options,
-    TimeProvider clock,
-    ILogger<SoundboardService> log)
+    TimeProvider clock)
 {
     public const string NormalizeJob = "sound.normalize";
     private SoundboardOptions O => options.Value;
@@ -202,44 +201,14 @@ public sealed class SoundboardService(
         return files.PathOf(StorageArea.Sounds, key);
     }
 
-    // ---- validation results ---------------------------------------------------------------------
-
-    private sealed record ValidationResult(string JobId, bool Ok, string? Error, double? Loudness, double? TruePeak);
+    // ---- validation results (collected by ValidationCollector) ----------------------------------
 
     /// <summary>
-    /// Collects validator results. The API re-verifies the output itself (path, WAV format, duration, hash) instead of
-    /// trusting the descriptor, then publishes an immutable version. Stale jobs fail closed.
+    /// Applies a validator result for a sound job. The API re-verifies the output itself (path, WAV format, duration,
+    /// hash) instead of trusting the descriptor, then publishes an immutable version.
     /// </summary>
-    public async Task CollectAsync(CancellationToken ct)
+    public async Task ApplyResultAsync(AssetValidationJob job, ValidationResult result, CancellationToken ct)
     {
-        foreach (var name in files.ListJson($"{StorageArea.Spool}/results").ToList())
-        {
-            var path = files.SpoolPath($"{StorageArea.Spool}/results", name);
-            ValidationResult? result = null;
-            try
-            {
-                result = JsonSerializer.Deserialize<ValidationResult>(await File.ReadAllTextAsync(path, ct), JsonSerializerOptions.Web);
-            }
-            catch (Exception e) when (e is JsonException or IOException)
-            {
-                log.LogWarning(e, "Unreadable validation result {Name}", name);
-            }
-            if (result is not null && Guid.TryParseExact(result.JobId, "N", out var jobId) && name == $"{jobId:N}.json")
-                await ApplyResultAsync(jobId, result, ct);
-            File.Delete(path);
-        }
-
-        var now = clock.GetUtcNow();
-        var stale = await db.AssetValidationJobs
-            .Where(j => (j.State == ValidationJobState.Queued || j.State == ValidationJobState.Processing) && j.LeaseExpiresAt < now)
-            .ToListAsync(ct);
-        foreach (var job in stale) await FailAsync(job, "validator_timeout", ct);
-    }
-
-    private async Task ApplyResultAsync(Guid jobId, ValidationResult result, CancellationToken ct)
-    {
-        var job = await db.AssetValidationJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
-        if (job is null || job.State is not (ValidationJobState.Queued or ValidationJobState.Processing)) return;
         if (!result.Ok)
         {
             await FailAsync(job, CleanCode(result.Error), ct);
@@ -288,7 +257,7 @@ public sealed class SoundboardService(
         await events.CatalogChangedAsync(sound.ServerId, sound.Id, ct);
     }
 
-    private async Task FailAsync(AssetValidationJob job, string code, CancellationToken ct)
+    public async Task FailAsync(AssetValidationJob job, string code, CancellationToken ct)
     {
         job.State = ValidationJobState.Failed;
         job.ErrorCode = code;

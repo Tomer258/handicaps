@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { MediaSessionService, RoomPeer, StreamInfo } from '../../core/media/media-session.service';
-import { avatarColor, initials } from '../../shared/ui/avatar';
+import { avatarColor, avatarUrl, initials } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from '../shell/layout.service';
 import { PresenceStore } from '../presence/presence.store';
@@ -16,6 +16,7 @@ interface Card {
   name: string;
   color: string;
   ini: string;
+  avatar: string | null;
   speaking: boolean;
   muted: boolean;
   deafened: boolean;
@@ -116,7 +117,7 @@ interface Card {
                       @if (c.cam; as cam) {
                         <hx-stream-tile [stream]="cam" fit="cover" [showLoading]="false" />
                       } @else {
-                        <span class="av s72" [style.background]="c.color">{{ c.ini }}</span>
+                        <span class="av s72" [style.background]="c.color">@if (c.avatar; as u) {<img [src]="u" alt="" />} @else {{{ c.ini }}}</span>
                       }
                       <div class="foot">
                         <span class="tag" style="font-size: 12px; font-weight: 600; letter-spacing: 0">{{ c.name }}{{ c.peer.isLocal ? ' (you)' : '' }}</span>
@@ -269,6 +270,7 @@ export class VoiceRoomPage {
         name,
         color: avatarColor(m?.avatarHue ?? 210),
         ini: initials(name),
+        avatar: avatarUrl(m?.avatarAssetId),
         speaking: speaking.has(peer.userId) && !muted,
         muted,
         deafened,

@@ -272,7 +272,12 @@ public sealed partial class MessageService(
         message.Version++;
         message.Reactions.Clear();
         message.Mentions.Clear();
+        // Attachment bytes go with the message (the GC removes the files); they never become readable orphans.
+        var attachmentIds = message.Attachments.Select(a => a.FileAssetId).ToList();
         message.Attachments.Clear();
+        if (attachmentIds.Count > 0)
+            await db.FileAssets.Where(f => attachmentIds.Contains(f.Id))
+                .ExecuteUpdateAsync(u => u.SetProperty(f => f.State, Files.FileState.Deleted).SetProperty(f => f.DeletedAt, now), ct);
         await db.Notifications.Where(n => n.MessageId == messageId).ExecuteDeleteAsync(ct);
 
         var dto = await ToDtoAsync(message, ct);

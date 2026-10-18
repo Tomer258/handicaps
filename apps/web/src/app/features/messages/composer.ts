@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { Channel, Member, Perm, has } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
+import { ToastService } from '../../core/ui/toast.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { Avatar } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { AttachmentUploads, formatSize } from './attachment-uploads';
 import { ChannelUi } from './channel-ui';
 import { ChatStore } from './chat.store';
 import { EMOJIS, encodeMentions, previewText } from './message-text';
@@ -43,7 +45,7 @@ interface Suggestion {
                     style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: 8px; text-align: left"
                     [style.background]="i === active() ? 'var(--bg4)' : null">
               @if (s.member; as m) {
-                <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [size]="20" />
+                <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [assetId]="m.avatarAssetId" [size]="20" />
               } @else {
                 <span class="av s20" style="background: var(--accent); color: var(--accent-ink)">&#64;</span>
               }
@@ -53,17 +55,45 @@ interface Suggestion {
           }
         </div>
       }
+      @if (uploads().length) {
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px 0" aria-label="Attachments">
+          @for (u of uploads(); track u.key) {
+            <span class="chip" [attr.data-state]="u.state" [title]="u.error ?? u.name" [style.color]="u.state === 'failed' ? 'var(--danger)' : null"
+                  style="max-width: 280px; position: relative; overflow: hidden">
+              <hx-icon [name]="u.state === 'failed' ? 'alert-circle' : 'file'" size="sm" />
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ u.name }}</span>
+              <span class="mono" style="color: var(--tx3); white-space: nowrap">
+                @switch (u.state) {
+                  @case ('uploading') { {{ u.progress }}% }
+                  @case ('processing') { processing… }
+                  @case ('failed') { failed }
+                  @default { {{ size(u.size) }} }
+                }
+              </span>
+              <button [attr.aria-label]="'Remove attachment ' + u.name" (click)="attach.remove(u.key)" style="display: grid; place-items: center"><hx-icon name="x" size="sm" /></button>
+              @if (u.state === 'uploading') {
+                <i aria-hidden="true" style="position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent)" [style.width.%]="u.progress"></i>
+              }
+            </span>
+          }
+        </div>
+      }
       <div style="display: flex; align-items: flex-end; gap: 4px; padding: 0 8px">
+        @if (canAttach()) {
+          <button class="ibtn" aria-label="Attach a file" title="Attach a file" (click)="picker.click()" style="margin-bottom: 7px"><hx-icon name="paperclip" /></button>
+          <input #picker type="file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,.txt,.log,.md,.csv,.json,text/plain"
+                 (change)="onPick($event)" data-testid="attach-input" />
+        }
         <textarea #box id="composer" class="txt" rows="1" [attr.aria-label]="'Message ' + channel().name" autocomplete="off"
                   [placeholder]="canSend() ? 'Message #' + channel().name : 'You cannot send messages in this channel'"
                   [disabled]="!canSend()" [value]="draft()" [maxLength]="maxLength"
-                  (input)="onInput()" (keydown)="onKey($event)" (click)="refreshSuggestions()" (blur)="closeSuggestions()"></textarea>
+                  (input)="onInput()" (keydown)="onKey($event)" (click)="refreshSuggestions()" (blur)="closeSuggestions()" (paste)="onPaste($event)"></textarea>
         @if (draft().length > maxLength - 200) {
           <span class="mono" style="align-self: center; font-size: 11px" [style.color]="draft().length >= maxLength ? 'var(--danger)' : 'var(--tx3)'">{{ maxLength - draft().length }}</span>
         }
         <button class="ibtn" [class.on]="ui.emojiOpen()" aria-label="Emoji" [attr.aria-pressed]="ui.emojiOpen()" title="Emoji" (click)="ui.emojiOpen.set(!ui.emojiOpen())"
                 [disabled]="!canSend()" style="margin-bottom: 7px"><hx-icon name="smile" /></button>
-        <button class="ibtn" aria-label="Send message" title="Send" (click)="send()" [disabled]="!canSend() || !draft().trim()"
+        <button class="ibtn" aria-label="Send message" title="Send" (click)="send()" [disabled]="!sendable()"
                 style="color: var(--accent-tx); margin-bottom: 7px"><hx-icon name="send" /></button>
       </div>
       @if (ui.emojiOpen()) {
@@ -87,6 +117,8 @@ export class Composer {
   private readonly workspace = inject(WorkspaceStore);
   private readonly session = inject(SessionService);
   private readonly realtime = inject(RealtimeService);
+  readonly attach = inject(AttachmentUploads);
+  private readonly toast = inject(ToastService);
   private readonly box = viewChild.required<ElementRef<HTMLTextAreaElement>>('box');
 
   readonly emojis = EMOJIS;
@@ -98,6 +130,14 @@ export class Composer {
   private channelId = '';
 
   readonly canSend = computed(() => has(this.channel().permissions, Perm.SendMessages));
+  readonly canAttach = computed(() => this.attach.canAttach(this.channel()));
+  readonly uploads = computed(() => this.attach.byChannel().get(this.channel().id) ?? []);
+  readonly sendable = computed(() => {
+    const ups = this.uploads();
+    if (!this.canSend() || ups.some((u) => u.state !== 'ready')) return false;
+    return !!this.draft().trim() || ups.length > 0;
+  });
+  readonly size = formatSize;
   readonly canEveryone = computed(() => has(this.channel().permissions, Perm.MentionEveryone));
 
   private readonly replyAuthor = computed(() => {
@@ -172,7 +212,12 @@ export class Composer {
 
   async send(): Promise<void> {
     const text = this.draft().trim();
-    if (!text || !this.canSend()) return;
+    if (!this.sendable()) {
+      if (this.attach.busy(this.channelId)) this.toast.show('Wait for attachments to finish uploading.');
+      return;
+    }
+    const attachments = this.attach.take(this.channelId);
+    if (!attachments) return;
     const body = encodeMentions(text, this.workspace.members());
     const replyTo = this.ui.replyTo();
     this.draft.set('');
@@ -182,7 +227,24 @@ export class Composer {
     this.suggestions.set([]);
     this.lastTyping = 0;
     queueMicrotask(() => this.autosize());
-    await this.chat.send(this.channelId, body, replyTo);
+    const channelId = this.channelId;
+    if (!(await this.chat.send(channelId, body, replyTo, attachments)) && attachments.length) this.attach.restore(channelId, attachments);
+  }
+
+  onPick(e: Event): void {
+    const input = e.target as HTMLInputElement;
+    this.attach.add(this.channel(), Array.from(input.files ?? []));
+    input.value = '';
+    this.box().nativeElement.focus();
+  }
+
+  onPaste(e: ClipboardEvent): void {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (!files.length) return;
+    e.preventDefault();
+    // Screenshots arrive as "image.png"; give them a recognizable name.
+    const named = files.map((f) => (f.name === 'image.png' ? new File([f], `pasted-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`, { type: f.type }) : f));
+    this.attach.add(this.channel(), named);
   }
 
   insert(text: string): void {

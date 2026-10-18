@@ -1,9 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ApiError } from '../../core/api/api-error';
+import { Channel } from '../../core/api/models';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from '../shell/layout.service';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { AttachmentUploads } from './attachment-uploads';
 import { ChannelUi } from './channel-ui';
 import { ChatStore } from './chat.store';
 import { Composer } from './composer';
@@ -14,7 +16,7 @@ import { PinsPanel } from './pins-panel';
 @Component({
   selector: 'hx-text-channel-page',
   imports: [Icon, MessageList, Composer, PinsPanel],
-  providers: [ChannelUi],
+  providers: [ChannelUi, AttachmentUploads],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (channel(); as ch) {
@@ -37,7 +39,17 @@ import { PinsPanel } from './pins-panel';
                 title="Member list" (click)="layout.membersOpen.set(!layout.membersOpen())"><hx-icon name="users" /></button>
       </header>
 
-      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative"
+           (dragenter)="onDragOver($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event, ch)">
+        @if (dragOver()) {
+          <div data-testid="drop-zone" style="position: absolute; inset: 12px; border-radius: 18px; border: 2px dashed var(--accent); background: color-mix(in oklab,var(--bg2) 82%,var(--accent)); display: grid; place-items: center; z-index: 20; pointer-events: none">
+            <div style="text-align: center">
+              <hx-icon name="upload" style="width: 40px; height: 40px; color: var(--accent-tx)" />
+              <div class="disp" style="font-size: 22px; font-weight: 700; margin-top: 8px">Drop to share in #{{ ch.name }}</div>
+              <div style="color: var(--tx2); font-size: 13px">Images up to 10 MB · text files up to 1 MB</div>
+            </div>
+          </div>
+        }
         @if (loadError(); as err) {
           <div style="flex: 1; display: grid; place-items: center; padding: 24px">
             <div style="display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center">
@@ -71,6 +83,23 @@ import { PinsPanel } from './pins-panel';
         }
       </div>
 
+      @if (ui.viewer(); as v) {
+        <div class="scrim" role="dialog" aria-modal="true" [attr.aria-label]="'Image ' + v.attachment.name" style="background: rgba(0,0,0,.86)"
+             (click)="ui.viewer.set(null)" (keydown.escape)="ui.viewer.set(null)" tabindex="-1">
+          <div class="fade" style="max-width: min(1200px, 92%); display: flex; flex-direction: column; gap: 12px" (click)="$event.stopPropagation()">
+            <img [src]="'/api/v1/attachments/' + v.attachment.id" [alt]="v.attachment.name" data-testid="viewer-image"
+                 style="max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain; border-radius: 12px; align-self: center; background: var(--bg1)" />
+            <div style="display: flex; align-items: center; gap: 10px; color: #fff; min-width: 0">
+              <b style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ v.attachment.name }}</b>
+              <span style="opacity: .6; font-size: 12.5px; white-space: nowrap">shared by {{ v.by }}</span>
+              <span style="flex: 1"></span>
+              <a class="btn sec" [href]="'/api/v1/attachments/' + v.attachment.id + '?download=true'" download>Download</a>
+              <button class="btn sec" (click)="ui.viewer.set(null)" autofocus>Close</button>
+            </div>
+          </div>
+        </div>
+      }
+
       @if (ui.deleting()) {
         <div class="scrim" role="alertdialog" aria-modal="true" aria-labelledby="del-title" (click)="ui.deleting.set(null)" (keydown.escape)="ui.deleting.set(null)">
           <div class="pop fade" (click)="$event.stopPropagation()" style="width: 420px; max-width: calc(100% - 32px); padding: 22px; display: flex; flex-direction: column; gap: 12px">
@@ -98,6 +127,8 @@ export class TextChannelPage implements OnDestroy {
 
   readonly channel = computed(() => this.store.channel(this.channelId()));
   readonly loadError = signal<string | null>(null);
+  readonly dragOver = signal(false);
+  private readonly uploads = inject(AttachmentUploads);
   readonly realtimeDown = computed(() => this.realtime.state() === 'reconnecting' || this.realtime.state() === 'disconnected');
 
   readonly typing = computed(() => {
@@ -130,6 +161,28 @@ export class TextChannelPage implements OnDestroy {
     } catch (e) {
       if (id === this.channelId()) this.loadError.set(ApiError.from(e).message);
     }
+  }
+
+  onDragOver(e: DragEvent): void {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    const ch = this.channel();
+    const ok = !!ch && this.uploads.canAttach(ch);
+    e.dataTransfer.dropEffect = ok ? 'copy' : 'none';
+    if (ok && !this.dragOver()) this.dragOver.set(true);
+  }
+
+  onDragLeave(e: DragEvent): void {
+    if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) return;
+    this.dragOver.set(false);
+  }
+
+  onDrop(e: DragEvent, ch: Channel): void {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    this.dragOver.set(false);
+    this.uploads.add(ch, Array.from(e.dataTransfer.files));
+    this.ui.focusComposer();
   }
 
   async confirmDelete(): Promise<void> {

@@ -32,7 +32,7 @@ public sealed class SignalRSoundSink(
     }
 }
 
-/// <summary>Collects validator results and reconciles playback once a second (both are cheap indexed queries).</summary>
+/// <summary>Collects validator results (sounds and images) and reconciles playback once a second (cheap indexed queries).</summary>
 public sealed class SoundboardLoop(IServiceScopeFactory scopes, ILogger<SoundboardLoop> log) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,7 +43,7 @@ public sealed class SoundboardLoop(IServiceScopeFactory scopes, ILogger<Soundboa
             try
             {
                 using var scope = scopes.CreateScope();
-                await scope.ServiceProvider.GetRequiredService<SoundboardService>().CollectAsync(stoppingToken);
+                await scope.ServiceProvider.GetRequiredService<Hangar.Core.Files.ValidationCollector>().CollectAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<SoundPlaybackService>().ReconcileAsync(stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

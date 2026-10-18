@@ -95,7 +95,6 @@ public sealed class HttpSoundPublisher(HttpClient http, IOptions<SoundboardOptio
 public sealed class SoundPlaybackService(
     HangarDbContext db,
     PermissionService permissions,
-    LocalFileStore files,
     ISoundPublisher publisher,
     ISoundEventSink events,
     IOptions<SoundboardOptions> options,

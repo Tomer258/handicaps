@@ -26,7 +26,7 @@ import { Icon } from '../../shared/ui/icon';
       </button>
       @for (p of people(); track p.userId) {
         <div class="vp" role="group" [attr.aria-label]="p.name + (p.muted ? ', muted' : '') + (p.deafened ? ', deafened' : '') + (p.screen ? ', live' : '')">
-          <hx-avatar [name]="p.name" [hue]="p.hue" [size]="20" [speaking]="media.speaking().has(p.userId)" />
+          <hx-avatar [name]="p.name" [hue]="p.hue" [assetId]="p.assetId" [size]="20" [speaking]="media.speaking().has(p.userId)" />
           <span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto"
                 [style.color]="media.speaking().has(p.userId) ? 'var(--tx)' : null">{{ p.name }}</span>
           @if (p.screen) { <span class="tag live" style="height: 16px; font-size: 9.5px; padding: 0 5px">LIVE</span> }
@@ -51,7 +51,7 @@ export class VoiceRoster {
   readonly people = computed(() =>
     this.presence.inChannel(this.channel().id).map((m) => {
       const member = this.store.memberById().get(m.userId);
-      return { ...m, name: member?.displayName ?? 'Unknown', hue: member?.avatarHue ?? 200 };
+      return { ...m, name: member?.displayName ?? 'Unknown', hue: member?.avatarHue ?? 200, assetId: member?.avatarAssetId ?? null };
     }),
   );
   readonly liveCount = computed(() => this.people().filter((p) => p.screen).length);

@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { ApiService } from '../../core/api/api.service';
 import { ApiError } from '../../core/api/api-error';
 import {
+  Attachment,
   ChannelEvent,
   EventPage,
   Message,
@@ -172,9 +173,10 @@ export class ChatStore {
 
   // ---- commands -----------------------------------------------------------------------------
 
-  async send(channelId: string, body: string, replyTo: Message | null): Promise<void> {
+  /** Returns false when the server permanently rejected the message (the caller may restore attachments). */
+  async send(channelId: string, body: string, replyTo: Message | null, attachments: Attachment[] = []): Promise<boolean> {
     const me = this.session.userId();
-    if (!me) return;
+    if (!me) return false;
     const pending: ChatMessage = {
       id: `pending-${crypto.randomUUID()}`,
       channelId,
@@ -191,11 +193,11 @@ export class ChatStore {
       mentionsEveryone: false,
       mentions: [],
       reactions: [],
-      attachments: [],
+      attachments,
       pending: 'sending',
     };
     this.patch(channelId, (s) => ({ ...s, messages: [...s.messages, pending] }));
-    await this.deliver(pending);
+    return await this.deliver(pending);
   }
 
   /** Retries with the same clientMessageId: the server returns the original if the first attempt committed. */
@@ -466,24 +468,27 @@ export class ChatStore {
 
   // ---- helpers ------------------------------------------------------------------------------
 
-  private async deliver(m: ChatMessage): Promise<void> {
+  private async deliver(m: ChatMessage): Promise<boolean> {
     try {
       const dto = await this.api.post<Message>(`/channels/${m.channelId}/messages`, {
         clientMessageId: m.clientMessageId,
         body: m.body,
         replyToId: m.replyTo?.id ?? null,
+        attachmentIds: m.attachments.map((a) => a.id),
       });
       this.upsert(dto);
       if (this.activeChannelId() === m.channelId) this.scheduleRead(m.channelId);
+      return true;
     } catch (e) {
       const err = ApiError.from(e);
       if (err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429) {
         // Permanent rejection (permission, validation, conflict): never silently retry.
         this.discard(m);
         this.toast.show(err.message, 'danger');
-      } else {
-        this.replacePending(m.channelId, m.clientMessageId, { ...m, pending: 'failed' });
+        return false;
       }
+      this.replacePending(m.channelId, m.clientMessageId, { ...m, pending: 'failed' });
+      return true;
     }
   }
 

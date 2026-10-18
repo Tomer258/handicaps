@@ -5,7 +5,7 @@ import { Profile, SessionInfo } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { PreferredStatus, UserSettingsService } from '../../core/settings/user-settings.service';
 import { ToastService } from '../../core/ui/toast.service';
-import { avatarColor, initials } from '../../shared/ui/avatar';
+import { avatarColor, avatarUrl, initials } from '../../shared/ui/avatar';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 
 const HUES = [200, 160, 95, 45, 20, 340, 290, 250];
@@ -19,7 +19,9 @@ const HUES = [200, 160, 95, 45, 20, 340, 290, 250];
     <div class="card" style="padding: 0; overflow: hidden">
       <div style="height: 90px; background: linear-gradient(120deg, var(--accent), color-mix(in oklab,var(--accent) 40%,var(--bg4)))"></div>
       <div style="display: flex; align-items: flex-end; gap: 16px; padding: 0 20px 20px; margin-top: -36px; flex-wrap: wrap">
-        <span class="av s80" [style.background]="color(hue())" style="border: 5px solid var(--bg3)" aria-hidden="true">{{ ini() }}</span>
+        <span class="av s80" [style.background]="color(hue())" style="border: 5px solid var(--bg3)" aria-hidden="true" data-testid="account-avatar">
+          @if (avatarSrc(); as u) {<img [src]="u" alt="" />} @else {{{ ini() }}}
+        </span>
         <div style="flex: 1; min-width: 160px; padding-bottom: 6px">
           <div class="disp" style="font-size: 20px; font-weight: 700" dir="auto">{{ user()?.displayName }}</div>
           <div class="mono" style="font-size: 12px; color: var(--tx3)">&#64;{{ user()?.login }}{{ roleLabel() ? ' · ' + roleLabel() : '' }}</div>
@@ -32,6 +34,17 @@ const HUES = [200, 160, 95, 45, 20, 340, 290, 250];
       <div style="display: flex; gap: 8px">
         <input id="dn" class="inp" style="flex: 1" maxlength="32" [value]="name()" (input)="name.set($any($event.target).value)" (keydown.enter)="saveName()" dir="auto" />
         <button class="btn pri" (click)="saveName()" [disabled]="!nameDirty() || busy()">Save</button>
+      </div>
+    </div>
+    <div class="srow" style="margin-top: 14px">
+      <div><div class="t">Avatar picture</div><div class="d">PNG, JPEG, GIF or WebP up to 5 MB. Cropped to a square.</div></div>
+      <div style="display: flex; gap: 8px; align-items: center">
+        @if (avatarState(); as st) { <span role="status" style="font-size: 12px; color: var(--tx3)">{{ st }}</span> }
+        @if (user()?.avatarAssetId) {
+          <button class="btn ghost" (click)="removeAvatar()" [disabled]="avatarBusy()">Remove</button>
+        }
+        <button class="btn sec" (click)="avatarInput.click()" [disabled]="avatarBusy()">Upload</button>
+        <input #avatarInput type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" (change)="onAvatarPick($event)" data-testid="avatar-input" />
       </div>
     </div>
     <div class="field" style="margin-top: 14px">
@@ -109,6 +122,9 @@ export class AccountSection {
   readonly pwNew = signal('');
   readonly pwError = signal('');
 
+  readonly avatarSrc = computed(() => avatarUrl(this.user()?.avatarAssetId));
+  readonly avatarBusy = signal(false);
+  readonly avatarState = signal('');
   readonly ini = computed(() => initials(this.name() || this.user()?.displayName || '?'));
   readonly nameDirty = computed(() => this.name().trim().length > 0 && this.name().trim() !== this.user()?.displayName);
   readonly roleLabel = computed(() => {
@@ -139,6 +155,56 @@ export class AccountSection {
   async saveHue(h: number): Promise<void> {
     this.hue.set(h);
     await this.saveProfile({ avatarHue: h });
+  }
+
+  async onAvatarPick(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      this.toast.show('Avatar images can be up to 5 MB.', 'danger');
+      return;
+    }
+    const form = new FormData();
+    form.append('file', file, file.name);
+    this.avatarBusy.set(true);
+    this.avatarState.set('Uploading…');
+    try {
+      let st = await this.api.upload<{ id: string; state: string }>('/users/me/avatar', form, (p) => this.avatarState.set(`Uploading… ${p}%`));
+      this.avatarState.set('Processing…');
+      for (let i = 0; i < 180 && st.state === 'pending'; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        st = await this.api.get<{ id: string; state: string }>(`/files/${st.id}/status`);
+      }
+      if (st.state !== 'ready') throw new Error(st.state === 'pending' ? 'Processing timed out.' : 'That image could not be used.');
+      // memberUpdated usually arrives first; refresh anyway so the change shows without realtime.
+      await this.session.refreshMe();
+      const me = this.session.user();
+      if (me) this.store.patchMember(me.id, { avatarAssetId: me.avatarAssetId });
+      this.toast.show('Avatar updated', 'info');
+    } catch (err) {
+      this.toast.show(err instanceof ApiError ? err.message : (err as Error).message, 'danger');
+    } finally {
+      this.avatarBusy.set(false);
+      this.avatarState.set('');
+    }
+  }
+
+  async removeAvatar(): Promise<void> {
+    this.avatarBusy.set(true);
+    try {
+      await this.api.delete('/users/me/avatar');
+      const me = this.session.user();
+      if (me) {
+        this.session.updateProfile({ ...me, avatarAssetId: null });
+        this.store.patchMember(me.id, { avatarAssetId: null });
+      }
+    } catch (e) {
+      this.toast.show(ApiError.from(e).message, 'danger');
+    } finally {
+      this.avatarBusy.set(false);
+    }
   }
 
   async changePassword(): Promise<void> {

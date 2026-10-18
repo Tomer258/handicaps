@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S6 committed; starting S7)
+**Last update:** 2026-10-18 — session 2 (S6, S7a, S7b committed; next S7c notifications)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -14,7 +14,12 @@
 - [ ] S8 Prod infra: Caddy (+forward_auth gate), prod compose, livekit.yaml, backups, runbooks, CI, AGENTS.md
 
 ## In progress
-- S7 not started yet. Scope: settings dialog (profile/appearance/voice devices/soundboard prefs, sessions), admin (invites/roles), attachments/avatars, notifications, responsive.
+- S7 split into sub-slices: [x] S7a settings dialog + invites/roles (46a2d9f) · [x] S7b attachments + avatars · [ ] S7c notifications · [ ] S7d responsive + keyboard shortcuts/a11y.
+
+## S7a/S7b notes (done)
+- S7a: core/settings/user-settings.service.ts (PATCH /users/me/settings debounced w/ expectedVersion, 412 → reload+retry; preferredStatus normalized; notification prefs {messages all|mentions|none, mentionsInVoice, chimes}); core/media/media-prefs.service.ts (localStorage 'hangar.mediaPrefs'); features/settings/* sections.
+- S7b backend: Core/Files/FileService.cs (attachments: images → validator 'image.normalize' → WebP; text .txt/.log/.md/.csv/.json UTF-8 checked, always download; avatars 256×256 crop; reads authorized via parent message channel ViewChannel / avatars via shared server; GC orphans 24h + deleted-message attachments), Core/Files/ValidationCollector.cs (single spool reader, dispatch by JobType), Api/Endpoints/FileEndpoints.cs (nosniff + sandbox CSP + CORP). Validator mounts ../.data/files/images. Tests: FileTests (4) + FakeValidator → 55 pass.
+- S7b frontend: features/messages/attachment-uploads.ts (per-channel tray provided by TextChannelPage; upload → poll /files/{id}/status), composer paperclip/paste chips, page drag&drop zone + image viewer (ChannelUi.viewer), message-item .att-img / .att-file; hx-avatar [assetId] + avatarUrl(); account section avatar upload/remove (memberUpdated pushes to others).
 
 ## S6 notes (done)
 - Backend: Core/Files/FileStore.cs, Core/Soundboard/{SoundboardService,SoundPlaybackService}.cs, Api/Endpoints/SoundboardEndpoints.cs, Api/Realtime/SoundboardRealtime.cs (SignalR soundCatalogChanged / soundPlaybackChanged, SoundboardLoop 1s). Workers: workers/asset-validator (ffmpeg), workers/sound-publisher (livekit rtc 1.1.20; shares livekit netns; 127.0.0.1:8090).
@@ -23,21 +28,24 @@
 - Frontend: features/soundboard/{soundboard.store,soundboard-popover,sound-upload.dialog}.ts; media-session subscribes sb_* participants' sfx_<userId> tracks (soundVolume/soundMuted/mutedActors in localStorage 'hangar.soundboard'); detach on TrackSubscriptionStatusChanged(Unsubscribed) because tracks only end after SFU renegotiation; re-attach on Subscribed. Dock z-index 26 above popover backdrop. Card menu: "Mute their soundboard".
 
 ## Next exact step
-1. S7: read docs/architecture roadmap for S7 scope + Main.dc.html settings (~1100-1200) and existing features/settings/settings.dialog.ts; plan sub-slices (settings → admin invites/roles → attachments/avatars → notifications → responsive), commit after each.
+1. S7c notifications: browser Notification API per UserSettingsService prefs (messages all/mentions/none; DND suppresses), mention in voice, join/leave chimes; realtime 'notificationCreated' handler exists in realtime.service.ts. Then S7d (Ctrl+Shift+M/D shortcuts advertised but not implemented, narrow layouts, a11y), then S8.
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
-- `cd apps/api && dotnet build` ; `dotnet test` (51 pass; stop the running API first — it locks bin/; integration uses Testcontainers postgres:18-alpine)
+- `cd apps/api && dotnet build` ; `dotnet test` (55 pass; stop the running API first — it locks bin/; integration uses Testcontainers postgres:18-alpine)
 - `cd apps/api && dotnet run --project src/Hangar.Api` → http://localhost:5080, migrates + seeds, logs one-time owner invite link
 - `cd apps/web && npx ng build --configuration development` ; `npx ng serve` (proxy → :5080). npm installs: `npx -y npm@11.6.2 install ...` (system npm 11.0.0 has arborist bug)
 - Voice smoke (real LiveKit, fake mic, 2 browsers): `cd tests/e2e && node scripts/smoke-voice.mjs ../../.tmp/shots` (needs compose livekit up)
 - Stream smoke (camera + screen share, live banner, stream view, flags): `cd tests/e2e && node scripts/smoke-stream.mjs ../../.tmp/shots`
 - Soundboard smoke (upload+trim via validator, play via publisher, receive sfx track, cooldown, favorites, per-actor mute): `cd tests/e2e && node scripts/smoke-soundboard.mjs ../../.tmp/shots` (needs full compose + API + ng serve)
+- Settings smoke: `cd tests/e2e && node scripts/smoke-settings.mjs ../../.tmp/shots`
+- Attachments smoke (real validator: image→webp, text card, drop, viewer, avatar 256² to friend, removal): `node scripts/smoke-attachments.mjs ../../.tmp/shots`
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
 - `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations`
 
 ## Known issues / notes
+- ng serve logs to .tmp/ng.log; API to .tmp/api.log.
 - Docker Desktop may need launching: user allowed `Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"`.
 - Backend layout: Hangar.Api (host, Endpoints/, Infrastructure/, Realtime/) + Hangar.Core (modules by folder; DbContext in Persistence/). Realtime: core/realtime/realtime.service.ts (single hub conn, presence heartbeat, policy reload); features/messages/chat.store.ts (per-channel cursor, gap resync, optimistic sends, unread badges, typing). Dev user 'friend' exists (same password). Voice: core/media/media-session.service.ts (one Room, explicit audio subs, webAudioMix per-user volume 0-200%), Core/Media/VoiceService.cs (leases, JWT, admission, webhook, reconcile).
 - Full DB schema (incl. media/soundboard tables) is in migration Initial.

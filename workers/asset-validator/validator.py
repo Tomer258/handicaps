@@ -1,8 +1,12 @@
-"""Hangar asset validator (soundboard.md §4).
+"""Hangar asset validator (soundboard.md §4, security-and-operations.md file checks).
 
 Runs with no network, no secrets and no Docker socket. Polls trusted job descriptors written by the API into
-spool/jobs, decodes the quarantined upload with ffprobe/ffmpeg under resource limits, normalizes it to the canonical
-48 kHz stereo s16 WAV and writes the output plus a result descriptor atomically. The API re-verifies everything.
+spool/jobs, decodes the quarantined upload with ffprobe/ffmpeg under resource limits and writes a normalized output
+plus a result descriptor atomically. The API re-verifies everything.
+
+- sound.normalize: canonical 48 kHz stereo s16 WAV, loudness-normalized, trimmed.
+- image.normalize: decoded and re-encoded to WebP (metadata dropped) under pixel limits; avatars are
+  centre-cropped to a square. GIFs become animated WebP.
 """
 
 import hashlib
@@ -22,6 +26,9 @@ POLL_SECONDS = float(os.environ.get("POLL_SECONDS", "0.5"))
 
 INPUT_RE = re.compile(r"^quarantine/[0-9a-f]{32}$")
 OUTPUT_RE = re.compile(r"^sounds/[0-9a-f]{32}\.wav$")
+IMAGE_OUTPUT_RE = re.compile(r"^images/[0-9a-f]{32}\.webp$")
+IMAGE_FORMATS = {"png_pipe", "jpeg_pipe", "webp_pipe", "gif", "image2"}
+IMAGE_CODECS = {"png", "mjpeg", "webp", "gif"}
 JOB_RE = re.compile(r"^[0-9a-f]{32}$")
 FORMATS = {"mp3", "wav", "ogg"}
 CODECS = {"mp3", "vorbis", "opus", "pcm_s16le", "pcm_s24le", "pcm_s32le", "pcm_f32le", "pcm_u8"}
@@ -147,12 +154,96 @@ def write_result(job_id: str, result: dict) -> None:
     os.replace(tmp, os.path.join(RESULTS, f"{job_id}.json"))
 
 
+def probe_image(path: str, max_pixels: int, max_side: int) -> tuple[str, int, int]:
+    p = run(["ffprobe", "-v", "error", "-protocol_whitelist", "file", "-print_format", "json",
+             "-show_format", "-show_streams", path], timeout=15)
+    if p.returncode != 0:
+        raise Reject("malformed")
+    try:
+        info = json.loads(p.stdout)
+    except json.JSONDecodeError:
+        raise Reject("malformed")
+    fmt = set((info.get("format", {}).get("format_name") or "").split(","))
+    if not fmt & IMAGE_FORMATS:
+        raise Reject("unsupported_format")
+    streams = info.get("streams", [])
+    if len(streams) != 1 or streams[0].get("codec_type") != "video":
+        raise Reject("unexpected_streams")
+    v = streams[0]
+    codec = v.get("codec_name")
+    if codec not in IMAGE_CODECS:
+        raise Reject("unsupported_codec")
+    w, h = int(v.get("width") or 0), int(v.get("height") or 0)
+    if w <= 0 or h <= 0:
+        raise Reject("malformed")
+    if w > max_side or h > max_side or w * h > max_pixels:
+        raise Reject("too_many_pixels")
+    return codec, w, h
+
+
+def image_size(path: str) -> tuple[int, int]:
+    p = run(["ffprobe", "-v", "error", "-protocol_whitelist", "file", "-print_format", "json", "-show_streams", path], timeout=15)
+    try:
+        v = json.loads(p.stdout)["streams"][0]
+        return int(v["width"]), int(v["height"])
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError):
+        raise Reject("output_format")
+
+
+def process_image(job: dict, job_id: str) -> None:
+    src_rel, out_rel = str(job.get("input", "")), str(job.get("output", ""))
+    if not INPUT_RE.match(src_rel) or not IMAGE_OUTPUT_RE.match(out_rel):
+        write_result(job_id, {"jobId": job_id, "ok": False, "error": "bad_descriptor"})
+        return
+    src, out = os.path.join(ROOT, src_rel), os.path.join(ROOT, out_rel)
+    tmp = os.path.join(ROOT, "images", f".{job_id}.tmp.webp")
+    avatar = job.get("mode") == "avatar"
+    max_out = 256 if avatar else int(job.get("maxOutputSide", 2560))
+    try:
+        if not os.path.isfile(src):
+            raise Reject("missing_source")
+        codec, w, h = probe_image(src, int(job.get("maxPixels", 40_000_000)), int(job.get("maxSide", 12000)))
+        if avatar:
+            side = min(w, h)
+            vf = f"crop={side}:{side}:(iw-{side})/2:(ih-{side})/2,scale={max_out}:{max_out}:flags=lanczos"
+        else:
+            vf = f"scale='min({max_out},iw)':'min({max_out},ih)':force_original_aspect_ratio=decrease:flags=lanczos"
+        animated = codec == "gif" and not avatar
+        args = ["ffmpeg", "-nostdin", "-v", "error", "-xerror", "-protocol_whitelist", "file", "-i", src,
+                "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", vf, "-map_metadata", "-1"]
+        if animated:
+            args += ["-t", "30", "-c:v", "libwebp_anim", "-loop", "0", "-quality", "80"]
+        else:
+            args += ["-frames:v", "1", "-c:v", "libwebp", "-quality", "88"]
+        args += ["-f", "webp", "-y", tmp]
+        p = run(args, timeout=60)
+        if p.returncode != 0 or not os.path.exists(tmp):
+            raise Reject("decode_failed")
+        ow, oh = image_size(tmp)
+        os.replace(tmp, out)
+        with open(out, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()
+        write_result(job_id, {"jobId": job_id, "ok": True, "error": None, "width": ow, "height": oh, "sha256": digest})
+        print(f"job {job_id}: image ok {w}x{h} -> {ow}x{oh}{' animated' if animated else ''}", flush=True)
+    except Reject as r:
+        write_result(job_id, {"jobId": job_id, "ok": False, "error": r.code})
+        print(f"job {job_id}: image rejected {r.code}", flush=True)
+    except subprocess.TimeoutExpired:
+        write_result(job_id, {"jobId": job_id, "ok": False, "error": "timeout"})
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
 def process(job_path: str) -> None:
     with open(job_path, encoding="utf-8") as f:
         job = json.load(f)
     job_id = str(job.get("jobId", ""))
     if not JOB_RE.match(job_id):
         raise ValueError("bad job id")
+    if job.get("type") == "image.normalize":
+        process_image(job, job_id)
+        return
     src_rel, out_rel = str(job.get("input", "")), str(job.get("output", ""))
     if not INPUT_RE.match(src_rel) or not OUTPUT_RE.match(out_rel):
         write_result(job_id, {"jobId": job_id, "ok": False, "error": "bad_descriptor"})

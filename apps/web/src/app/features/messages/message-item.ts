@@ -1,9 +1,11 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { Perm, has } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
-import { avatarColor, initials } from '../../shared/ui/avatar';
+import { avatarColor, avatarUrl, initials } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { Attachment } from '../../core/api/models';
+import { formatSize } from './attachment-uploads';
 import { ChannelUi } from './channel-ui';
 import { ChatMessage, ChatStore } from './chat.store';
 import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime, parseBody, previewText } from './message-text';
@@ -19,7 +21,7 @@ import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime
              [style.opacity]="m.pending === 'sending' ? 0.6 : null" [attr.aria-label]="aria()">
       <div class="gut">
         @if (!grouped()) {
-          <span class="av s40" [style.background]="color()" aria-hidden="true">{{ ini() }}</span>
+          <span class="av s40" [style.background]="color()" aria-hidden="true">@if (avatarSrc(); as u) {<img [src]="u" alt="" />} @else {{{ ini() }}}</span>
         } @else {
           <div class="ts mono" [title]="full()">{{ time() }}</div>
         }
@@ -60,6 +62,25 @@ import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime
           </div>
         } @else {
           <div class="mtext">@for (p of parts(); track $index) {@switch (p.kind) {@case ('mention') {<span class="mention">{{ p.text }}</span>}@case ('everyone') {<span class="mention">{{ p.text }}</span>}@case ('link') {<a [href]="p.href" target="_blank" rel="noopener noreferrer nofollow" style="color: var(--accent-tx); text-decoration: underline">{{ p.text }}</a>}@default {<span>{{ p.text }}</span>}}}@if (m.editedAt) {<span style="font-size: 11px; color: var(--tx3)" [title]="'Edited ' + fullEdited()"> (edited)</span>}</div>
+        }
+        @for (a of m.attachments; track a.id) {
+          @if (isImage(a)) {
+            <button class="img att-img" (click)="ui.viewer.set({ attachment: a, by: name() })" [attr.aria-label]="'Open image ' + a.name"
+                    [style.aspect-ratio]="a.width && a.height ? a.width + ' / ' + a.height : null"
+                    [style.width.px]="imgWidth(a)" style="background: var(--bg3)">
+              <img [src]="'/api/v1/attachments/' + a.id" [alt]="a.name" loading="lazy" decoding="async"
+                   style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover" />
+            </button>
+          } @else {
+            <div class="att-file" style="display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--line)">
+              <hx-icon name="file" style="color: var(--accent-tx); flex: none" />
+              <div style="min-width: 0">
+                <div style="font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ a.name }}</div>
+                <div class="mono" style="font-size: 11px; color: var(--tx3)">{{ size(a.size) }}</div>
+              </div>
+              <a class="ibtn" [href]="'/api/v1/attachments/' + a.id + '?download=true'" download [attr.aria-label]="'Download ' + a.name" title="Download"><hx-icon name="download" size="sm" /></a>
+            </div>
+          }
         }
         @if (m.pending === 'failed') {
           <div role="alert" style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; color: var(--danger)">
@@ -131,6 +152,7 @@ export class MessageItem {
   readonly name = computed(() => this.author()?.displayName ?? 'Former member');
   readonly color = computed(() => avatarColor(this.author()?.avatarHue ?? 210));
   readonly ini = computed(() => initials(this.name()));
+  readonly avatarSrc = computed(() => avatarUrl(this.author()?.avatarAssetId));
   readonly time = computed(() => formatTime(this.message().createdAt));
   readonly full = computed(() => formatFull(this.message().createdAt));
   readonly fullEdited = computed(() => (this.message().editedAt ? formatFull(this.message().editedAt!) : ''));
@@ -156,6 +178,18 @@ export class MessageItem {
   readonly replyColor = computed(() => avatarColor(this.replyAuthor()?.avatarHue ?? 210));
   readonly replyIni = computed(() => initials(this.replyName()));
   readonly replyText = computed(() => previewText(this.message().replyTo?.bodyPreview ?? '', this.workspace.memberById()));
+
+  readonly size = formatSize;
+
+  isImage(a: Attachment): boolean {
+    return a.mime.startsWith('image/');
+  }
+
+  /** Fits the image in a 380×300 box keeping its aspect ratio (prototype `.img` is 380 px wide). */
+  imgWidth(a: Attachment): number | null {
+    if (!a.width || !a.height) return null;
+    return Math.max(80, Math.round(Math.min(380, a.width, (300 * a.width) / a.height)));
+  }
 
   constructor() {
     effect(() => {

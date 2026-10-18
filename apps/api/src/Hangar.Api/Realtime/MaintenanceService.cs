@@ -15,6 +15,7 @@ public sealed class MaintenanceService(IServiceScopeFactory scopes, ILogger<Main
             {
                 using var scope = scopes.CreateScope();
                 var removed = await scope.ServiceProvider.GetRequiredService<RetentionService>().RunAsync(stoppingToken);
+                removed += await scope.ServiceProvider.GetRequiredService<Hangar.Core.Files.FileService>().CollectGarbageAsync(stoppingToken);
                 if (removed > 0) log.LogInformation("Retention removed {Count} rows", removed);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

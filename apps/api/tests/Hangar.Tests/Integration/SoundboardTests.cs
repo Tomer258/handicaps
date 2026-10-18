@@ -56,23 +56,7 @@ public class SoundboardTests(ApiFactory factory)
         return c.Http.PostAsync($"/api/v1/servers/{serverId}/sounds", form);
     }
 
-    /// <summary>Plays the validator's role: copies the (already canonical) input to the job's output and reports ok/error.</summary>
-    private async Task ValidateAllAsync(string? error = null)
-    {
-        var jobs = Path.Combine(StorageRoot, "spool", "jobs");
-        foreach (var path in Directory.GetFiles(jobs, "*.json"))
-        {
-            var job = JsonDocument.Parse(await File.ReadAllTextAsync(path)).RootElement;
-            var id = job.GetProperty("jobId").GetString()!;
-            if (error is null)
-                File.Copy(Path.Combine(StorageRoot, job.GetProperty("input").GetString()!), Path.Combine(StorageRoot, job.GetProperty("output").GetString()!), true);
-            File.Delete(path);
-            await File.WriteAllTextAsync(Path.Combine(StorageRoot, "spool", "results", $"{id}.json"),
-                JsonSerializer.Serialize(new { jobId = id, ok = error is null, error }));
-        }
-        using var scope = factory.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<SoundboardService>().CollectAsync(CancellationToken.None);
-    }
+    private Task ValidateAllAsync(string? error = null) => FakeValidator.RunAsync(factory, error);
 
     private async Task<Guid> ReadySoundAsync(TestClient c, Guid serverId, string? name = null)
     {

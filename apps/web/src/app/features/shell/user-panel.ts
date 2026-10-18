@@ -20,7 +20,7 @@ import { SettingsDialog } from '../settings/settings.dialog';
          [style.border-radius]="voice.connected() ? '0 0 12px 12px' : '12px'">
       <button (click)="openSettings('account')" style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 2px 4px; border-radius: 8px; text-align: left"
               aria-label="Your profile and settings">
-        <hx-avatar [name]="name()" [hue]="session.user()?.avatarHue ?? 200" [size]="32" [status]="presence.myStatus()" surface="var(--bg2)" [speaking]="meSpeaking()" />
+        <hx-avatar [name]="name()" [hue]="session.user()?.avatarHue ?? 200" [assetId]="session.user()?.avatarAssetId" [size]="32" [status]="presence.myStatus()" surface="var(--bg2)" [speaking]="meSpeaking()" />
         <span style="min-width: 0">
           <span style="display: block; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto">{{ name() }}</span>
           <span style="display: block; font-size: 11.5px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ subtitle() }}</span>

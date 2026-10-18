@@ -27,6 +27,7 @@ builder.Services.Configure<HangarIdentityOptions>(config.GetSection("Hangar:Iden
 builder.Services.Configure<LiveKitOptions>(config.GetSection("Hangar:LiveKit"));
 builder.Services.Configure<Hangar.Core.Soundboard.SoundboardOptions>(config.GetSection("Hangar:Soundboard"));
 builder.Services.Configure<Hangar.Core.Files.StorageOptions>(config.GetSection("Hangar:Storage"));
+builder.Services.Configure<Hangar.Core.Files.AttachmentOptions>(config.GetSection("Hangar:Files"));
 // Relative storage roots resolve from the content root (not the process working directory).
 builder.Services.PostConfigure<Hangar.Core.Files.StorageOptions>(o =>
     o.Root = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, o.Root)));
@@ -169,6 +170,7 @@ api.MapWorkspaces();
 api.MapMessages();
 api.MapVoice();
 api.MapSoundboard();
+api.MapFiles();
 app.MapLiveKitInternal();
 app.MapSoundboardInternal();
 app.MapHub<HangarHub>(HangarHub.Path);

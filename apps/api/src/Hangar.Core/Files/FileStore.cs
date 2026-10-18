@@ -11,13 +11,15 @@ public sealed class StorageOptions
     public string Root { get; set; } = "data/files";
 }
 
-/// <summary>Storage areas. Each worker mounts only what it needs (validator: quarantine ro, spool rw, sounds rw; publisher: sounds ro).</summary>
+/// <summary>Storage areas. Each worker mounts only what it needs (validator: quarantine ro, spool/sounds/images rw; publisher: sounds ro).</summary>
 public static class StorageArea
 {
     public const string Quarantine = "quarantine";
     public const string Spool = "spool";
     public const string Sounds = "sounds";
     public const string Attachments = "attachments";
+    /// <summary>Validator-normalized raster images (attachments and avatars).</summary>
+    public const string Images = "images";
 }
 
 /// <summary>
@@ -31,7 +33,7 @@ public sealed class LocalFileStore
     public LocalFileStore(IOptions<StorageOptions> options)
     {
         root = Path.GetFullPath(options.Value.Root);
-        foreach (var area in new[] { StorageArea.Quarantine, StorageArea.Sounds, StorageArea.Attachments, $"{StorageArea.Spool}/jobs", $"{StorageArea.Spool}/results" })
+        foreach (var area in new[] { StorageArea.Quarantine, StorageArea.Sounds, StorageArea.Attachments, StorageArea.Images, $"{StorageArea.Spool}/jobs", $"{StorageArea.Spool}/results" })
             Directory.CreateDirectory(Path.Combine(root, area));
     }
 
