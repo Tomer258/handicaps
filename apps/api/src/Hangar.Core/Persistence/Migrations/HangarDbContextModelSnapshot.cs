@@ -408,9 +408,26 @@ namespace Hangar.Core.Persistence.Migrations
                         .HasColumnType("character varying(512)")
                         .HasColumnName("password_hash");
 
+                    b.PrimitiveCollection<string[]>("RecoveryCodeHashes")
+                        .HasColumnType("text[]")
+                        .HasColumnName("recovery_code_hashes");
+
                     b.Property<int>("SecurityVersion")
                         .HasColumnType("integer")
                         .HasColumnName("security_version");
+
+                    b.Property<long?>("TotpLastStep")
+                        .HasColumnType("bigint")
+                        .HasColumnName("totp_last_step");
+
+                    b.Property<string>("TotpSecret")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("totp_secret");
+
+                    b.Property<DateTimeOffset?>("TwoFactorEnabledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("two_factor_enabled_at");
 
                     b.HasKey("Id")
                         .HasName("pk_users");

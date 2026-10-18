@@ -7,12 +7,14 @@ import { PreferredStatus, UserSettingsService } from '../../core/settings/user-s
 import { ToastService } from '../../core/ui/toast.service';
 import { avatarColor, avatarUrl, initials } from '../../shared/ui/avatar';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { TwoFactorBlock } from './two-factor.block';
 
 const HUES = [200, 160, 95, 45, 20, 340, 290, 250];
 
-/** My account: profile (name, avatar colour), status, password and signed-in sessions. */
+/** My account: profile (name, avatar colour), status, password, two-step login and signed-in sessions. */
 @Component({
   selector: 'hx-account-section',
+  imports: [TwoFactorBlock],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h2 class="disp" style="margin: 0 0 20px; font-size: 26px">My account</h2>
@@ -85,6 +87,7 @@ const HUES = [200, 160, 95, 45, 20, 340, 290, 250];
         </div>
       </form>
     }
+    <hx-two-factor-block />
     @for (s of sessions(); track s.id) {
       <div class="srow">
         <div><div class="t">{{ s.deviceLabel || 'Unknown device' }}</div>

@@ -77,6 +77,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.Services.AddDataProtection()
     .SetApplicationName("hangar")
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataDir, "keys")));
+builder.Services.AddSingleton<Hangar.Core.Identity.ISecretProtector, DataProtectionSecretProtector>();
+builder.Services.AddSingleton<LoginChallenges>();
 
 builder.Services.AddAntiforgery(o =>
 {

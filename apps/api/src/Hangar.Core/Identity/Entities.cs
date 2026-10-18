@@ -14,6 +14,14 @@ public sealed class User
     /// <summary>Incremented on password reset/disable; sessions carrying an older value are rejected.</summary>
     public int SecurityVersion { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>Authenticator (TOTP) secret, encrypted with Data Protection. Set while enrolling or enabled.</summary>
+    public string? TotpSecret { get; set; }
+    /// <summary>When two-step login was turned on; null = off (a TotpSecret without it is an unfinished setup).</summary>
+    public DateTimeOffset? TwoFactorEnabledAt { get; set; }
+    /// <summary>Highest TOTP time step accepted so far: a code cannot be used twice.</summary>
+    public long? TotpLastStep { get; set; }
+    /// <summary>SHA-256 hashes of the unused single-use recovery codes.</summary>
+    public string[]? RecoveryCodeHashes { get; set; }
 }
 
 public sealed class UserSession

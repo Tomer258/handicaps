@@ -17,7 +17,9 @@ public sealed class LoginThrottle(TimeProvider clock)
     }
 
     private readonly ConcurrentDictionary<string, Entry> _entries = new();
-    private const int FreeAttempts = 5;
+    private const int FreeAttemptsPerAccount = 5;
+    // An IP may be a household or a dorm behind one NAT: looser, so friends' typos don't lock each other out.
+    private const int FreeAttemptsPerIp = 20;
     private static readonly TimeSpan MaxLock = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan Forget = TimeSpan.FromHours(1);
 
@@ -42,9 +44,10 @@ public sealed class LoginThrottle(TimeProvider clock)
                 if (now - e.LastFailure > Forget) e.Failures = 0;
                 e.Failures++;
                 e.LastFailure = now;
-                if (e.Failures > FreeAttempts)
+                var free = key.StartsWith("i:", StringComparison.Ordinal) ? FreeAttemptsPerIp : FreeAttemptsPerAccount;
+                if (e.Failures > free)
                 {
-                    var seconds = Math.Min(Math.Pow(2, e.Failures - FreeAttempts), MaxLock.TotalSeconds);
+                    var seconds = Math.Min(Math.Pow(2, e.Failures - free), MaxLock.TotalSeconds);
                     e.LockedUntil = now + TimeSpan.FromSeconds(seconds);
                 }
             }

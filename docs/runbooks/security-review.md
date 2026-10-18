@@ -12,7 +12,8 @@ deployment. Repeat it before inviting people from outside the group, and after a
 | CSRF | every unsafe `/api/v1` request (including login, register-by-invite, logout) goes through `CsrfFilter`: Origin must be self or allow-listed, then the antiforgery token is validated | `RequestProtection.cs`, `Program.cs` (group filter) |
 | Hub | Origin enforced on `/hubs` (CORS does not cover WebSockets); 32 KB message cap; session revalidated on every invocation; per-connection invocation budget | `Program.cs`, `SessionHubFilter` |
 | Sessions | the database `UserSession` is checked on every request (`OnValidatePrincipal`); password change revokes the other sessions and notifies their connections and voice | `AuthService`, `SessionRevocationNotifier` |
-| Login | per-account + per-IP throttle with increasing lockout; one message for unknown / wrong / disabled; **constant work for unknown logins (fixed in this review)** | `AuthService.LoginAsync`, `LoginThrottle` |
+| Two-step login | TOTP (RFC 6238, ±1 step, replay-proof compare-and-set) or a single-use recovery code (SHA-256 hashed); stateless 5-minute Data Protection challenge bound to the security version | `TwoFactorService`, `LoginChallenges` |
+| Login | per-account (5) + per-IP (20, NAT-friendly) throttle with increasing lockout; one message for unknown / wrong / disabled; **constant work for unknown logins (fixed in this review)** | `AuthService.LoginAsync`, `LoginThrottle` |
 | Abuse | per-user token buckets on REST; 429 + Retry-After | `RateLimits.cs` |
 | LiveKit admission | every `/rtc` entry point goes through Caddy `forward_auth` → `/internal/livekit/admission` (signature, lease, session, membership, Origin); LiveKit HTTP only on loopback; `access_token` and Authorization are removed from RTC access logs | `Caddyfile`, `VoiceService.AdmitAsync` |
 | Webhook | signed JWT with a body sha256 claim; **body capped at 64 KB before buffering (fixed in this review; oversize → 413)**; handlers are idempotent compare-and-set updates | `VoiceEndpoints.cs`, `VoiceService.HandleWebhookAsync` |
@@ -27,8 +28,11 @@ deployment. Repeat it before inviting people from outside the group, and after a
 
 ## Open (decide before inviting people from outside the group)
 
-- **Administrator 2FA + recovery codes**: the design strongly recommends this before public exposure. It isn't
-  built. Today the owner account is protected only by its password and the login throttle.
+- ~~Administrator 2FA~~: **built** (2026-10-18). Two-step login with an authenticator app (TOTP) and ten
+  single-use recovery codes. It is optional per account, and the setup row recommends it for admins. Policy: the
+  owner and anyone with Administrator should turn it on before outside invites. Enforcing it server-side is a
+  possible follow-up. Secrets are Data-Protection-encrypted, codes can't be replayed, the challenge lasts 5 minutes
+  and dies on a password change, and failures count toward the login throttle.
 - **Malware scanning**: not needed while uploads are limited to re-encoded images and plain text. Adding any other
   type requires a scanning stage first.
 - **HSTS preload / includeSubDomains**: deliberately not set until the domain's subdomains are known.

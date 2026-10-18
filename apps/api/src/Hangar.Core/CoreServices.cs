@@ -32,6 +32,7 @@ public static class CoreServices
         services.AddScoped<PermissionService>();
         services.AddScoped<SessionRevocationNotifier>();
         services.AddScoped<AuthService>();
+        services.AddScoped<TwoFactorService>();
         services.AddScoped<InvitationService>();
         services.AddScoped<WorkspaceBootstrapper>();
         services.AddScoped<WorkspaceService>();

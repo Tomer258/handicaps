@@ -6,8 +6,9 @@ the date and version.
 ## Automated (development stack)
 
 - `cd apps/api && dotnet test`: includes the admission/revocation, permission, soundboard and file-access tests.
-- Playwright smokes in `tests/e2e/scripts/`: chat, voice, stream, soundboard, settings, attachments, notifications
-  and responsive.
+- Playwright smokes in `tests/e2e/scripts/`: chat, voice, stream, soundboard, settings, attachments, notifications,
+  responsive, search, admin, moderation, voice panel and two-step login (`smoke-2fa.mjs`: QR enrolment, code and
+  recovery-code sign-in, turning it off).
 - Gate check through a real Caddy forward_auth (`infra/caddy/Caddyfile.gate-dev` plus `node scripts/gate-check.mjs`;
   steps are in the Caddyfile header). Expected: a live token is admitted. Refused on `/rtc`, `/rtc/validate`, `/rtc/v1`
   and `/rtc/v1/validate`: a foreign Origin, a garbage or missing token, Twirp paths, and a token replayed after

@@ -1,4 +1,5 @@
 using Hangar.Api.Infrastructure;
+using Hangar.Core.Common;
 using Hangar.Core.Identity;
 using Hangar.Core.Users;
 using Hangar.Core.Workspaces;
@@ -11,6 +12,11 @@ namespace Hangar.Api.Endpoints;
 
 public sealed record RegisterRequest(string InviteSecret, string Login, string Password, string DisplayName, bool Remember);
 public sealed record LoginRequest(string Login, string Password, bool Remember);
+public sealed record LoginCodeRequest(string Challenge, string Code);
+public sealed record TwoFactorRequiredResponse(bool TwoFactorRequired, string Challenge);
+public sealed record TwoFactorCodeRequest(string Code);
+public sealed record PasswordConfirmRequest(string Password);
+public sealed record RecoveryCodesResponse(IReadOnlyList<string> RecoveryCodes);
 public sealed record InvitePreviewRequest(string Secret);
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public sealed record SessionDto(Guid Id, string? DeviceLabel, DateTimeOffset CreatedAt, DateTimeOffset LastSeenAt, bool Current, bool Persistent);
@@ -41,15 +47,43 @@ public static class AuthEndpoints
             })
             .AllowAnonymous().RequireRateLimiting("auth");
 
-        auth.MapPost("/login", async (LoginRequest req, HttpContext http, AuthService svc, IAntiforgery af,
+        auth.MapPost("/login", async (LoginRequest req, HttpContext http, AuthService svc, IAntiforgery af, LoginChallenges challenges,
                 IOptions<HangarOptions> opt, UserService users, WorkspaceService ws, CancellationToken ct) =>
             {
                 var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                var result = await svc.LoginAsync(req.Login, req.Password, req.Remember, DeviceLabel(http), ip, ct);
+                var outcome = await svc.LoginAsync(req.Login, req.Password, req.Remember, DeviceLabel(http), ip, ct);
+                if (outcome.SignedIn is not { } result)
+                    return Results.Ok(new TwoFactorRequiredResponse(true, challenges.Issue(outcome.PendingUserId, outcome.PendingSecurityVersion, req.Remember)));
                 await SignInAsync(http, result, af, opt.Value);
                 return Results.Ok(await Me(result.User.Id, result.Session.Id, users, ws, ct));
             })
             .AllowAnonymous().RequireRateLimiting("auth");
+
+        auth.MapPost("/login/code", async (LoginCodeRequest req, HttpContext http, AuthService svc, IAntiforgery af, LoginChallenges challenges,
+                IOptions<HangarOptions> opt, UserService users, WorkspaceService ws, CancellationToken ct) =>
+            {
+                var c = challenges.Read(req.Challenge) ?? throw AppProblem.Unauthorized("auth.challenge_expired", "Sign in again.");
+                var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var result = await svc.CompleteTwoFactorLoginAsync(c.UserId, c.SecurityVersion, req.Code, c.Remember, DeviceLabel(http), ip, ct);
+                await SignInAsync(http, result, af, opt.Value);
+                return Results.Ok(await Me(result.User.Id, result.Session.Id, users, ws, ct));
+            })
+            .AllowAnonymous().RequireRateLimiting("auth");
+
+        var twoFactor = auth.MapGroup("/2fa");
+        twoFactor.MapGet("", async (HttpContext http, TwoFactorService tf, CancellationToken ct) =>
+            Results.Ok(await tf.StatusAsync(http.User.UserId(), ct)));
+        twoFactor.MapPost("/setup", async (HttpContext http, TwoFactorService tf, CancellationToken ct) =>
+            Results.Ok(await tf.BeginSetupAsync(http.User.UserId(), ct)));
+        twoFactor.MapPost("/enable", async (TwoFactorCodeRequest req, HttpContext http, TwoFactorService tf, CancellationToken ct) =>
+            Results.Ok(new RecoveryCodesResponse(await tf.EnableAsync(http.User.UserId(), req.Code, ct)))).RequireRateLimiting("auth");
+        twoFactor.MapPost("/disable", async (PasswordConfirmRequest req, HttpContext http, TwoFactorService tf, CancellationToken ct) =>
+        {
+            await tf.DisableAsync(http.User.UserId(), req.Password, ct);
+            return Results.NoContent();
+        }).RequireRateLimiting("auth");
+        twoFactor.MapPost("/recovery-codes", async (PasswordConfirmRequest req, HttpContext http, TwoFactorService tf, CancellationToken ct) =>
+            Results.Ok(new RecoveryCodesResponse(await tf.RegenerateRecoveryCodesAsync(http.User.UserId(), req.Password, ct)))).RequireRateLimiting("auth");
 
         auth.MapPost("/logout", async (HttpContext http, AuthService svc, IAntiforgery af, IOptions<HangarOptions> opt, CancellationToken ct) =>
         {

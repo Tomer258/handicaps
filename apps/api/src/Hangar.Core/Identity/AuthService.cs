@@ -12,6 +12,9 @@ namespace Hangar.Core.Identity;
 
 public sealed record AuthResult(User User, UserSession Session);
 
+/// <summary>Password step result: signed in, or (two-step login on) a pending user that still owes a code.</summary>
+public sealed record LoginOutcome(AuthResult? SignedIn, Guid PendingUserId = default, int PendingSecurityVersion = 0);
+
 public sealed partial class AuthService(
     HangarDbContext db,
     IPasswordHasher<User> hasher,
@@ -19,6 +22,7 @@ public sealed partial class AuthService(
     AuditService audit,
     LoginThrottle throttle,
     SessionRevocationNotifier revocation,
+    TwoFactorService twoFactor,
     IOptions<HangarIdentityOptions> options)
 {
     private readonly HangarIdentityOptions _opt = options.Value;
@@ -100,7 +104,7 @@ public sealed partial class AuthService(
         return new AuthResult(user, session);
     }
 
-    public async Task<AuthResult> LoginAsync(string login, string password, bool remember, string? deviceLabel, string clientIp, CancellationToken ct)
+    public async Task<LoginOutcome> LoginAsync(string login, string password, bool remember, string? deviceLabel, string clientIp, CancellationToken ct)
     {
         var normalized = NormalizeLogin(login ?? "");
         throttle.EnsureAllowed(normalized, clientIp);
@@ -120,7 +124,30 @@ public sealed partial class AuthService(
         var now = clock.GetUtcNow();
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
             user.PasswordHash = hasher.HashPassword(user, password!);
+        if (user.TwoFactorEnabledAt is not null)
+        {
+            await db.SaveChangesAsync(ct); // a rehash, if any; no session until the code step
+            return new LoginOutcome(null, user.Id, user.SecurityVersion);
+        }
+        return new LoginOutcome(await StartSessionAsync(user, remember, deviceLabel, now, ct));
+    }
 
+    /// <summary>
+    /// Second login step. <paramref name="securityVersion"/> comes from the protected challenge: a password change or
+    /// disable between the two steps invalidates it.
+    /// </summary>
+    public async Task<AuthResult> CompleteTwoFactorLoginAsync(Guid userId, int securityVersion, string code, bool remember,
+        string? deviceLabel, string clientIp, CancellationToken ct)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null || user.DisabledAt is not null || user.SecurityVersion != securityVersion || user.TwoFactorEnabledAt is null)
+            throw AppProblem.Unauthorized("auth.challenge_expired", "Sign in again.");
+        await twoFactor.VerifyLoginAsync(user, code, clientIp, ct);
+        return await StartSessionAsync(user, remember, deviceLabel, clock.GetUtcNow(), ct);
+    }
+
+    private async Task<AuthResult> StartSessionAsync(User user, bool remember, string? deviceLabel, DateTimeOffset now, CancellationToken ct)
+    {
         var session = NewSession(user, remember, deviceLabel, now);
         db.UserSessions.Add(session);
         audit.Record(user.Id, "session", session.Id.ToString(), "auth.login");

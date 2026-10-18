@@ -52,9 +52,17 @@ export class SessionService {
     return this.restoring;
   }
 
-  async login(login: string, password: string, remember: boolean): Promise<void> {
+  /** Password step. Returns a challenge when the account has two-step login on (then call {@link loginCode}). */
+  async login(login: string, password: string, remember: boolean): Promise<string | null> {
     await this.api.get('/auth/csrf');
-    this.apply(await this.api.post<MeResponse>('/auth/login', { login, password, remember }));
+    const r = await this.api.post<MeResponse | { twoFactorRequired: true; challenge: string }>('/auth/login', { login, password, remember });
+    if ('twoFactorRequired' in r) return r.challenge;
+    this.apply(r);
+    return null;
+  }
+
+  async loginCode(challenge: string, code: string): Promise<void> {
+    this.apply(await this.api.post<MeResponse>('/auth/login/code', { challenge, code }));
   }
 
   async register(inviteSecret: string, login: string, password: string, displayName: string, remember: boolean): Promise<void> {

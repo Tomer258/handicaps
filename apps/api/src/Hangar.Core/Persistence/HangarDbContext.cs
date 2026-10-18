@@ -56,6 +56,7 @@ public sealed class HangarDbContext(DbContextOptions<HangarDbContext> options) :
             e.Property(x => x.NormalizedLogin).HasMaxLength(32);
             e.Property(x => x.DisplayName).HasMaxLength(32);
             e.Property(x => x.PasswordHash).HasMaxLength(512);
+            e.Property(x => x.TotpSecret).HasMaxLength(512);
         });
         b.Entity<UserSession>(e =>
         {
