@@ -22,6 +22,8 @@ public sealed class User
     public long? TotpLastStep { get; set; }
     /// <summary>SHA-256 hashes of the unused single-use recovery codes.</summary>
     public string[]? RecoveryCodeHashes { get; set; }
+    /// <summary>When the user's last realtime connection went away ("Maya was last here 40 min ago"); null = never recorded.</summary>
+    public DateTimeOffset? LastOnlineAt { get; set; }
 }
 
 public sealed class UserSession

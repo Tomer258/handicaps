@@ -390,6 +390,10 @@ namespace Hangar.Core.Persistence.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("display_name");
 
+                    b.Property<DateTimeOffset?>("LastOnlineAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_online_at");
+
                     b.Property<string>("Login")
                         .IsRequired()
                         .HasMaxLength(32)

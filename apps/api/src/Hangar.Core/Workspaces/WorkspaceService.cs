@@ -17,7 +17,7 @@ public sealed record ServerDetailDto(Guid Id, string Name, Guid? OwnerUserId, lo
     IReadOnlyList<ChannelDto> Channels, IReadOnlyList<RoleDto> Roles);
 
 public sealed record MemberDto(Guid UserId, string Login, string DisplayName, int AvatarHue, Guid? AvatarAssetId,
-    IReadOnlyList<Guid> RoleIds, bool IsOwner, DateTimeOffset JoinedAt);
+    IReadOnlyList<Guid> RoleIds, bool IsOwner, DateTimeOffset JoinedAt, DateTimeOffset? LastOnlineAt);
 
 public sealed class WorkspaceService(HangarDbContext db, PermissionService permissions, AuditService audit, IPolicyChangeSink policySink)
 {
@@ -60,7 +60,7 @@ public sealed class WorkspaceService(HangarDbContext db, PermissionService permi
         var byUser = roleRows.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(x => x.RoleId).ToList());
 
         return rows.Select(x => new MemberDto(x.u.Id, x.u.Login, x.u.DisplayName, x.u.AvatarHue, x.u.AvatarAssetId,
-                byUser.GetValueOrDefault(x.u.Id) ?? [], x.u.Id == ownerId, x.m.JoinedAt))
+                byUser.GetValueOrDefault(x.u.Id) ?? [], x.u.Id == ownerId, x.m.JoinedAt, x.u.LastOnlineAt))
             .OrderBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
     }
 

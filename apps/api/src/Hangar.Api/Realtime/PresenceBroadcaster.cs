@@ -18,6 +18,7 @@ public sealed class PresenceBroadcaster(IHubContext<HangarHub> hub, ConnectionRe
 
     public async Task PublishAsync(Guid userId, string status)
     {
+        if (status == "offline") await RecordLastOnlineAsync(userId);
         var targets = await PeersAsync(userId);
         if (targets.Count > 0)
             await hub.Clients.Clients(targets).SendAsync("presenceChanged", new { userId, status });
@@ -44,6 +45,14 @@ public sealed class PresenceBroadcaster(IHubContext<HangarHub> hub, ConnectionRe
         }
         if (targets.Count > 0)
             await hub.Clients.Clients(targets).SendAsync("typingChanged", new { channelId = channel.Id, userId });
+    }
+
+    private async Task RecordLastOnlineAsync(Guid userId)
+    {
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HangarDbContext>();
+        var now = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
+        await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastOnlineAt, now));
     }
 
     /// <summary>Connections of every active member of any server this user belongs to.</summary>

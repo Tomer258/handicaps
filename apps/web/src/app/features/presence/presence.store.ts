@@ -7,6 +7,9 @@ import { PresenceStatus } from '../../shared/ui/avatar';
 export class PresenceStore {
   private readonly session = inject(SessionService);
   private readonly _status = signal<Record<string, PresenceStatus>>({});
+  /** Epoch ms when someone went offline while I was watching; fresher than the member list's lastOnlineAt. */
+  private readonly _wentOffline = signal<Record<string, number>>({});
+  readonly wentOffline = this._wentOffline.asReadonly();
 
   readonly statusMap = this._status.asReadonly();
   readonly myStatus = computed<PresenceStatus>(() => {
@@ -19,6 +22,7 @@ export class PresenceStore {
   }
 
   set(userId: string, status: PresenceStatus): void {
+    if (status === 'offline' && this.status(userId) !== 'offline') this._wentOffline.update((m) => ({ ...m, [userId]: Date.now() }));
     this._status.update((m) => ({ ...m, [userId]: status }));
   }
 

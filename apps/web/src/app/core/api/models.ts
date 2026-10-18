@@ -63,6 +63,8 @@ export interface Member {
   roleIds: string[];
   isOwner: boolean;
   joinedAt: string;
+  /** When their last connection went away; null if never recorded. */
+  lastOnlineAt: string | null;
 }
 
 export interface InvitePreview {

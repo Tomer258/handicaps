@@ -70,6 +70,29 @@ public class RealtimeTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Going_offline_records_when_the_member_was_last_here()
+    {
+        var (owner, serverId) = await OwnerAsync(factory);
+        var (member, memberId) = await MemberAsync(factory, owner, serverId);
+        JsonElement Row(JsonElement list) => list.EnumerateArray().First(m => m.GetProperty("userId").GetGuid() == memberId);
+
+        var before = Row(await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/members")));
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("lastOnlineAt").ValueKind);
+
+        var hub = Hub(member);
+        await hub.StartAsync();
+        var start = DateTimeOffset.UtcNow.AddSeconds(-1);
+        await hub.DisposeAsync();
+        JsonElement after = default;
+        await WaitUntil(() =>
+        {
+            after = Row(Json(owner.Http.GetAsync($"/api/v1/servers/{serverId}/members").Result).Result);
+            return after.GetProperty("lastOnlineAt").ValueKind != JsonValueKind.Null;
+        });
+        Assert.True(after.GetProperty("lastOnlineAt").GetDateTimeOffset() >= start);
+    }
+
+    [Fact]
     public async Task Revoked_session_hub_cannot_invoke_and_is_closed()
     {
         var (owner, serverId) = await OwnerAsync(factory);

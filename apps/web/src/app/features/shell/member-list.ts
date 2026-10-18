@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { SessionService } from '../../core/auth/session.service';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { PresenceStore } from '../presence/presence.store';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { Avatar } from '../../shared/ui/avatar';
-import { Member } from '../../core/api/models';
+import { Member, Perm } from '../../core/api/models';
 
 interface Group {
   label: string;
@@ -24,6 +26,26 @@ interface Group {
   },
   template: `
     <div class="scroll" style="flex: 1; padding: 8px">
+      @if (quiet(); as q) {
+        <div class="fade" role="status" style="margin: 6px 4px 10px; padding: 16px 12px; border-radius: 14px; border: 1px dashed var(--line2); display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center">
+          <div style="display: flex">
+            @for (m of q.faces; track m.userId; let i = $index) {
+              <span style="opacity: .4; border-radius: 50%; border: 2px solid var(--bg1)" [style.margin-left.px]="i ? -10 : 0">
+                <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [assetId]="m.avatarAssetId" [size]="32" />
+              </span>
+            }
+          </div>
+          <b style="font-size: 14px">Quiet hangar tonight</b>
+          <span style="font-size: 12.5px; color: var(--tx3)">
+            Nobody's online.@if (q.last) { {{ q.last.name }} was last here {{ q.last.ago }}.}
+            @if (q.waiting) { You're in {{ q.channel?.name }} — friends see you there when they arrive. }
+            @else if (q.channel) { Hop in {{ q.channel.name }} — friends see you there when they arrive. }
+          </span>
+          @if (q.channel && !q.waiting) {
+            <button class="btn sec" style="margin-top: 4px" (click)="wait(q.channel.id)">Wait in {{ q.channel.name }}</button>
+          }
+        </div>
+      }
       @for (g of groups(); track $index; let gi = $index) {
         @if (g.members.length) {
           <h3 class="grp" style="margin: 0" [id]="'mg-' + gi" [style.color]="g.color">{{ g.label }} — {{ g.members.length }}</h3>
@@ -49,6 +71,32 @@ export class MemberList {
   private readonly presence = inject(PresenceStore);
   private readonly voice = inject(VoicePresenceStore);
   readonly media = inject(MediaSessionService);
+  private readonly session = inject(SessionService);
+  private readonly router = inject(Router);
+
+  /** States 04: nobody else is online — say who was here last and offer to wait in voice. */
+  readonly quiet = computed(() => {
+    const me = this.session.userId();
+    const others = this.store.members().filter((m) => m.userId !== me);
+    if (!others.length || others.some((m) => this.presence.status(m.userId) !== 'offline')) return null;
+    const live = this.presence.wentOffline();
+    const seen = others
+      .map((m) => ({ m, at: live[m.userId] ?? (m.lastOnlineAt ? Date.parse(m.lastOnlineAt) : 0) }))
+      .sort((a, b) => b.at - a.at);
+    const channel = this.store.voiceChannels().find((c) => (c.permissions & Perm.JoinVoice) !== 0) ?? null;
+    return {
+      faces: seen.slice(0, 3).map((x) => x.m),
+      last: seen[0].at ? { name: seen[0].m.displayName, ago: ago(Date.now() - seen[0].at) } : null,
+      channel,
+      waiting: this.media.connected() && !!channel && this.media.channelId() === channel.id,
+    };
+  });
+
+  wait(channelId: string): void {
+    const serverId = this.store.serverId();
+    if (serverId) void this.router.navigate(['/s', serverId, 'v', channelId]);
+    void this.media.join(channelId);
+  }
 
   readonly groups = computed<Group[]>(() => {
     const server = this.store.server();
@@ -76,4 +124,14 @@ export class MemberList {
       { label: 'Offline', members: rest.filter((m) => m.status === 'offline') },
     ];
   });
+}
+
+function ago(ms: number): string {
+  const min = Math.round(ms / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} ${h === 1 ? 'hour' : 'hours'} ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
 }
