@@ -7,6 +7,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hangar.Api.Realtime;
 
+/// <summary>Server name/icon/settings changed → every connected member refetches the server.</summary>
+public sealed class SignalRServerSink(IHubContext<HangarHub> hub, ConnectionRegistry registry, HangarDbContext db) : IServerChangeSink
+{
+    public async Task ServerUpdatedAsync(Guid serverId, CancellationToken ct)
+    {
+        var members = (await db.ServerMembers.AsNoTracking().Where(m => m.ServerId == serverId && m.RemovedAt == null)
+            .Select(m => m.UserId).ToListAsync(ct)).ToHashSet();
+        var conns = registry.All().Where(c => members.Contains(c.UserId)).Select(c => c.ConnectionId).ToList();
+        if (conns.Count > 0) await hub.Clients.Clients(conns).SendAsync("serverUpdated", new { serverId }, ct);
+    }
+}
+
 /// <summary>Policy change → tell affected clients to refetch server detail and resubscribe.</summary>
 public sealed class SignalRPolicySink(IHubContext<HangarHub> hub, ConnectionRegistry registry) : IPolicyChangeSink
 {

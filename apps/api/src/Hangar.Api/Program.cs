@@ -45,6 +45,7 @@ builder.Services.AddSingleton<Hangar.Core.Messaging.IOutboxSignal>(sp => sp.GetR
 builder.Services.AddSingleton<PresenceBroadcaster>();
 builder.Services.AddScoped<IPolicyChangeSink, SignalRPolicySink>();
 builder.Services.AddScoped<IProfileChangeSink, SignalRProfileSink>();
+builder.Services.AddScoped<IServerChangeSink, SignalRServerSink>();
 builder.Services.AddScoped<ISessionRevocationListener, RealtimeRevocationListener>();
 builder.Services.AddHostedService<OutboxDispatcher>();
 builder.Services.AddHostedService<PresenceSweeper>();

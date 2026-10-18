@@ -43,6 +43,7 @@ public sealed class FileService(
     PermissionService permissions,
     LocalFileStore files,
     IProfileChangeSink profiles,
+    Workspaces.IServerChangeSink servers,
     IOptions<AttachmentOptions> options,
     TimeProvider clock,
     ILogger<FileService> log)
@@ -101,6 +102,43 @@ public sealed class FileService(
         }
     }
 
+    public async Task<FileStatusDto> UploadServerIconAsync(Guid userId, Guid serverId, string? fileName, Stream body, CancellationToken ct)
+    {
+        await permissions.RequireServerAsync(userId, serverId, Permission.Administrator, ct);
+        var (key, size, sha) = await files.SaveAsync(StorageArea.Quarantine, body, O.MaxAvatarBytes, ct);
+        try
+        {
+            if (await SniffAsync(key, ct) != "image") throw AppProblem.Unprocessable("file.unsupported", "Use a PNG, JPEG, GIF or WebP image.");
+            return ToDto(await QueueImageAsync(userId, serverId, FilePurpose.ServerIcon, SafeName(fileName), key, size, sha, "avatar", ct));
+        }
+        catch
+        {
+            files.TryDelete(StorageArea.Quarantine, key);
+            throw;
+        }
+    }
+
+    public async Task RemoveServerIconAsync(Guid userId, Guid serverId, CancellationToken ct)
+    {
+        await permissions.RequireServerAsync(userId, serverId, Permission.Administrator, ct);
+        var server = await db.Servers.FirstAsync(s => s.Id == serverId, ct);
+        if (server.IconAssetId is not { } old) return;
+        server.IconAssetId = null;
+        await db.SaveChangesAsync(ct);
+        await DeleteAssetAsync(old, ct);
+        await servers.ServerUpdatedAsync(serverId, ct);
+    }
+
+    /// <summary>Server icon read: members of that server.</summary>
+    public async Task<FileContent> ReadServerIconAsync(Guid userId, Guid id, CancellationToken ct)
+    {
+        var asset = await db.FileAssets.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id && f.Purpose == FilePurpose.ServerIcon && f.State == FileState.Ready, ct)
+                    ?? throw AppProblem.NotFound("file.not_found", "File not found.");
+        if (!await db.ServerMembers.AnyAsync(m => m.UserId == userId && m.ServerId == asset.ServerId && m.RemovedAt == null, ct))
+            throw AppProblem.NotFound("file.not_found", "File not found.");
+        return new FileContent(files.PathOf(StorageArea.Images, asset.StorageKey), asset.Mime, "icon.webp", true);
+    }
+
     public async Task RemoveAvatarAsync(Guid userId, CancellationToken ct)
     {
         var user = await db.Users.FirstAsync(u => u.Id == userId, ct);
@@ -115,7 +153,7 @@ public sealed class FileService(
     public async Task<FileStatusDto> StatusAsync(Guid userId, Guid id, CancellationToken ct)
     {
         var asset = await db.FileAssets.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id && f.OwnerUserId == userId &&
-                        (f.Purpose == FilePurpose.Attachment || f.Purpose == FilePurpose.Avatar), ct)
+                        (f.Purpose == FilePurpose.Attachment || f.Purpose == FilePurpose.Avatar || f.Purpose == FilePurpose.ServerIcon), ct)
                     ?? throw AppProblem.NotFound("file.not_found", "File not found.");
         var reason = asset.State == FileState.Rejected
             ? await db.AssetValidationJobs.Where(j => j.AssetId == id).OrderByDescending(j => j.CreatedAt).Select(j => j.ErrorCode).FirstOrDefaultAsync(ct)
@@ -181,7 +219,7 @@ public sealed class FileService(
         }
         var outKey = ImageOutputKey(job.Id);
         var dims = files.Exists(StorageArea.Images, outKey) ? ReadWebp(files.PathOf(StorageArea.Images, outKey)) : null;
-        var maxSide = asset.Purpose == FilePurpose.Avatar ? 256 : O.MaxOutputSide;
+        var maxSide = asset.Purpose is FilePurpose.Avatar or FilePurpose.ServerIcon ? 256 : O.MaxOutputSide;
         if (dims is not { } d || d.Width > maxSide || d.Height > maxSide)
         {
             files.TryDelete(StorageArea.Images, outKey);
@@ -207,12 +245,23 @@ public sealed class FileService(
             replaced = user.AvatarAssetId;
             user.AvatarAssetId = asset.Id;
         }
+        else if (asset.Purpose == FilePurpose.ServerIcon)
+        {
+            var server = await db.Servers.FirstAsync(s => s.Id == asset.ServerId, ct);
+            replaced = server.IconAssetId;
+            server.IconAssetId = asset.Id;
+        }
         await db.SaveChangesAsync(ct);
         files.TryDelete(StorageArea.Quarantine, quarantineKey);
         if (asset.Purpose == FilePurpose.Avatar)
         {
             if (replaced is { } old) await DeleteAssetAsync(old, ct);
             await profiles.ProfileChangedAsync(asset.OwnerUserId, ct);
+        }
+        else if (asset.Purpose == FilePurpose.ServerIcon)
+        {
+            if (replaced is { } old) await DeleteAssetAsync(old, ct);
+            await servers.ServerUpdatedAsync(asset.ServerId, ct);
         }
     }
 
@@ -247,7 +296,8 @@ public sealed class FileService(
         var ids = deleted.Select(d => d.Id).ToList();
         await db.FileAssets.Where(f => ids.Contains(f.Id)).ExecuteDeleteAsync(ct);
         var rejected = await db.FileAssets
-            .Where(f => (f.Purpose == FilePurpose.Attachment || f.Purpose == FilePurpose.Avatar) && f.State == FileState.Rejected && f.CreatedAt < now.AddHours(-1))
+            .Where(f => (f.Purpose == FilePurpose.Attachment || f.Purpose == FilePurpose.Avatar || f.Purpose == FilePurpose.ServerIcon) &&
+                        f.State == FileState.Rejected && f.CreatedAt < now.AddHours(-1))
             .ExecuteDeleteAsync(ct);
         return orphans.Count + deleted.Count + rejected;
     }

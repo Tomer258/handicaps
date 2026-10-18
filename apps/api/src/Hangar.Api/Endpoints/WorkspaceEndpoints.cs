@@ -32,6 +32,9 @@ public static class WorkspaceEndpoints
         servers.MapGet("/{serverId:guid}", async (Guid serverId, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
             Results.Ok(await ws.GetServerAsync(http.User.UserId(), serverId, ct)));
 
+        servers.MapPatch("/{serverId:guid}", async (Guid serverId, UpdateServerRequest req, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
+            Results.Ok(await ws.UpdateServerAsync(http.User.UserId(), serverId, req, ct)));
+
         servers.MapGet("/{serverId:guid}/members", async (Guid serverId, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
             Results.Ok(await ws.ListMembersAsync(http.User.UserId(), serverId, ct)));
 

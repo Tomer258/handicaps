@@ -10,16 +10,17 @@ import { AuditSection } from './audit.section';
 import { InvitesSection } from './invites.section';
 import { MembersSection } from './members.section';
 import { RolesSection } from './roles.section';
+import { ServerSection } from './server.section';
 import { SoundboardSection } from './soundboard.section';
 import { VideoSection } from './video.section';
 import { VoiceSection } from './voice.section';
 
-export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' | 'notif' | 'invites' | 'members' | 'roles' | 'audit';
+export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' | 'notif' | 'server' | 'invites' | 'members' | 'roles' | 'audit';
 
 /** Full-window settings layer (prototype SETTINGS). Esc or the close button returns to the app. */
 @Component({
   selector: 'hx-settings',
-  imports: [AccountSection, VoiceSection, VideoSection, SoundboardSection, AppearanceSection, NotificationsSection, InvitesSection, MembersSection, RolesSection, AuditSection],
+  imports: [AccountSection, VoiceSection, VideoSection, SoundboardSection, AppearanceSection, NotificationsSection, InvitesSection, MembersSection, RolesSection, AuditSection, ServerSection],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { style: 'display: contents' },
   template: `
@@ -55,6 +56,7 @@ export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' |
             @case ('sound') { <hx-soundboard-section /> }
             @case ('look') { <hx-appearance-section /> }
             @case ('notif') { <hx-notifications-section /> }
+            @case ('server') { <hx-server-section /> }
             @case ('invites') { <hx-invites-section /> }
             @case ('members') { <hx-members-section /> }
             @case ('roles') { <hx-roles-section /> }
@@ -91,6 +93,7 @@ export class SettingsDialog {
   readonly adminTabs = computed(() => {
     const p = this.store.server()?.myPermissions ?? 0;
     const tabs: { id: SettingsSection; label: string; dot: string }[] = [];
+    if (has(p, Perm.Administrator)) tabs.push({ id: 'server', label: 'Server', dot: 'var(--accent)' });
     if (has(p, Perm.ManageInvites)) tabs.push({ id: 'invites', label: 'Invites', dot: 'var(--accent)' });
     if (has(p, Perm.ManageRoles)) {
       tabs.push({ id: 'members', label: 'Members', dot: 'var(--accent)' });

@@ -7,26 +7,65 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hangar.Core.Workspaces;
 
-public sealed record ServerSummaryDto(Guid Id, string Name, bool IsOwner);
+public sealed record ServerSummaryDto(Guid Id, string Name, bool IsOwner, Guid? IconAssetId = null);
 
 public sealed record ChannelDto(Guid Id, Guid ServerId, string Type, string Name, string? Topic, int Position, long Permissions, string LastMessageSequence);
 
 public sealed record RoleDto(Guid Id, string Name, long Permissions, bool IsDefault, int Position, string? Color, bool Hoist);
 
 public sealed record ServerDetailDto(Guid Id, string Name, Guid? OwnerUserId, long MyPermissions, string PolicyVersion,
-    IReadOnlyList<ChannelDto> Channels, IReadOnlyList<RoleDto> Roles);
+    IReadOnlyList<ChannelDto> Channels, IReadOnlyList<RoleDto> Roles, Guid? IconAssetId = null, Guid? JoinMessageChannelId = null,
+    bool JoinMessages = true);
+
+/// <summary>Null fields stay as they are; ClearJoinMessageChannel returns to "first visible text channel".</summary>
+public sealed record UpdateServerRequest(string? Name, bool? JoinMessages, Guid? JoinMessageChannelId, bool ClearJoinMessageChannel = false);
+
+/// <summary>Name/icon/settings changed: every member refetches the server.</summary>
+public interface IServerChangeSink
+{
+    Task ServerUpdatedAsync(Guid serverId, CancellationToken ct);
+}
 
 public sealed record MemberDto(Guid UserId, string Login, string DisplayName, int AvatarHue, Guid? AvatarAssetId,
     IReadOnlyList<Guid> RoleIds, bool IsOwner, DateTimeOffset JoinedAt, DateTimeOffset? LastOnlineAt, Guid? InvitedBy = null);
 
-public sealed class WorkspaceService(HangarDbContext db, PermissionService permissions, AuditService audit, IPolicyChangeSink policySink)
+public sealed class WorkspaceService(HangarDbContext db, PermissionService permissions, AuditService audit, IPolicyChangeSink policySink,
+    IServerChangeSink serverSink)
 {
+    public async Task<ServerDetailDto> UpdateServerAsync(Guid actor, Guid serverId, UpdateServerRequest req, CancellationToken ct)
+    {
+        await permissions.RequireServerAsync(actor, serverId, Permission.Administrator, ct);
+        var server = await db.Servers.FirstAsync(s => s.Id == serverId, ct);
+        var changes = new List<string>();
+        if (req.Name is not null)
+        {
+            var name = Guard.Text(req.Name, "name", 1, 48);
+            if (name != server.Name) { server.Name = name; changes.Add("name"); }
+        }
+        if (req.JoinMessages is { } on && on == server.JoinMessagesOff) { server.JoinMessagesOff = !on; changes.Add("joinMessages"); }
+        if (req.ClearJoinMessageChannel && server.JoinMessageChannelId is not null) { server.JoinMessageChannelId = null; changes.Add("joinChannel"); }
+        else if (req.JoinMessageChannelId is { } ch && ch != server.JoinMessageChannelId)
+        {
+            if (!await db.Channels.AnyAsync(c => c.Id == ch && c.ServerId == serverId && c.Type == ChannelType.Text && c.ArchivedAt == null, ct))
+                throw AppProblem.BadRequest("validation.joinMessageChannelId", "Pick a text channel of this server.");
+            server.JoinMessageChannelId = ch;
+            changes.Add("joinChannel");
+        }
+        if (changes.Count > 0)
+        {
+            audit.Record(actor, "server", serverId.ToString(), "server.update", detail: string.Join(',', changes));
+            await db.SaveChangesAsync(ct);
+            await serverSink.ServerUpdatedAsync(serverId, ct);
+        }
+        return await GetServerAsync(actor, serverId, ct);
+    }
+
     public async Task<List<ServerSummaryDto>> ListServersAsync(Guid userId, CancellationToken ct) =>
         await db.ServerMembers.AsNoTracking()
             .Where(m => m.UserId == userId && m.RemovedAt == null)
             .Join(db.Servers, m => m.ServerId, s => s.Id, (m, s) => s)
             .OrderBy(s => s.CreatedAt)
-            .Select(s => new ServerSummaryDto(s.Id, s.Name, s.OwnerUserId == userId))
+            .Select(s => new ServerSummaryDto(s.Id, s.Name, s.OwnerUserId == userId, s.IconAssetId))
             .ToListAsync(ct);
 
     public async Task<ServerDetailDto> GetServerAsync(Guid userId, Guid serverId, CancellationToken ct)
@@ -43,7 +82,8 @@ public sealed class WorkspaceService(HangarDbContext db, PermissionService permi
             .Select(r => new RoleDto(r.Id, r.Name, (long)r.PermissionMask, r.IsDefault, r.Position, r.Color, r.Hoist)).ToListAsync(ct);
 
         return new ServerDetailDto(server.Id, server.Name, server.OwnerUserId, (long)mine, server.PolicyVersion.ToString(),
-            channels.Where(c => visible.ContainsKey(c.Id)).Select(c => ToDto(c, visible[c.Id])).ToList(), roles);
+            channels.Where(c => visible.ContainsKey(c.Id)).Select(c => ToDto(c, visible[c.Id])).ToList(), roles,
+            server.IconAssetId, server.JoinMessageChannelId, !server.JoinMessagesOff);
     }
 
     public async Task<List<MemberDto>> ListMembersAsync(Guid userId, Guid serverId, CancellationToken ct)

@@ -41,6 +41,28 @@ public static class FileEndpoints
             return Results.NoContent();
         });
 
+        g.MapPost("/servers/{serverId:guid}/icon", async (Guid serverId, HttpContext http, FileService svc, IOptions<AttachmentOptions> opt, CancellationToken ct) =>
+        {
+            var file = await ReadSingleFileAsync(http, opt.Value.MaxAvatarBytes, ct);
+            await using var stream = file.OpenReadStream();
+            var dto = await svc.UploadServerIconAsync(http.User.UserId(), serverId, file.FileName, stream, ct);
+            return Results.Accepted($"/api/v1/files/{dto.Id}/status", dto);
+        });
+
+        g.MapDelete("/servers/{serverId:guid}/icon", async (Guid serverId, HttpContext http, FileService svc, CancellationToken ct) =>
+        {
+            await svc.RemoveServerIconAsync(http.User.UserId(), serverId, ct);
+            return Results.NoContent();
+        });
+
+        g.MapGet("/server-icons/{id:guid}", async (Guid id, HttpContext http, FileService svc, CancellationToken ct) =>
+        {
+            var content = await svc.ReadServerIconAsync(http.User.UserId(), id, ct);
+            // Icon asset ids are immutable (a new upload gets a new id).
+            http.Response.Headers.CacheControl = "private, max-age=604800, immutable";
+            return Serve(http, content, false, setCache: false);
+        });
+
         g.MapGet("/avatars/{id:guid}", async (Guid id, HttpContext http, FileService svc, CancellationToken ct) =>
         {
             var content = await svc.ReadAvatarAsync(http.User.UserId(), id, ct);

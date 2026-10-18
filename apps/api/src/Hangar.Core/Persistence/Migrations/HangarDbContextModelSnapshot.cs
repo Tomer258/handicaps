@@ -1422,6 +1422,18 @@ namespace Hangar.Core.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<Guid?>("IconAssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("icon_asset_id");
+
+                    b.Property<Guid?>("JoinMessageChannelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("join_message_channel_id");
+
+                    b.Property<bool>("JoinMessagesOff")
+                        .HasColumnType("boolean")
+                        .HasColumnName("join_messages_off");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)

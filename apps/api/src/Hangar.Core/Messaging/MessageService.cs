@@ -254,14 +254,17 @@ public sealed partial class MessageService(
     }
 
     /// <summary>
-    /// "X joined" in the first text channel (by position) the new member can see. Best effort: the caller ignores
+    /// "X joined" in the server's chosen join channel, else the first text channel (by position) the new member can see. Best effort: the caller ignores
     /// failures, and a server without a visible text channel simply gets no welcome.
     /// </summary>
     public async Task<MessageDto?> PostMemberJoinedAsync(Guid userId, Guid serverId, CancellationToken ct)
     {
+        var settings = await db.Servers.AsNoTracking().Where(s => s.Id == serverId)
+            .Select(s => new { s.JoinMessagesOff, s.JoinMessageChannelId }).FirstOrDefaultAsync(ct);
+        if (settings is null || settings.JoinMessagesOff) return null;
         var candidates = await db.Channels.AsNoTracking()
             .Where(c => c.ServerId == serverId && c.Type == ChannelType.Text && c.ArchivedAt == null)
-            .OrderBy(c => c.Position).ThenBy(c => c.CreatedAt).ToListAsync(ct);
+            .OrderBy(c => c.Id == settings.JoinMessageChannelId ? 0 : 1).ThenBy(c => c.Position).ThenBy(c => c.CreatedAt).ToListAsync(ct);
         Guid? target = null;
         foreach (var c in candidates)
             if ((await permissions.ChannelPermissionsAsync(userId, c, ct)).HasFlag(Permission.ViewChannel)) { target = c.Id; break; }

@@ -6,6 +6,7 @@ public enum FilePurpose
     Avatar = 1,
     SoundSource = 2,
     SoundReady = 3,
+    ServerIcon = 4,
 }
 
 public enum FileState

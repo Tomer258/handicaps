@@ -13,6 +13,7 @@ export interface ServerSummary {
   id: string;
   name: string;
   isOwner: boolean;
+  iconAssetId?: string | null;
 }
 
 export interface MeResponse {
@@ -52,6 +53,10 @@ export interface ServerDetail {
   policyVersion: string;
   channels: Channel[];
   roles: Role[];
+  iconAssetId?: string | null;
+  /** Where "X joined" goes; null = automatic. */
+  joinMessageChannelId?: string | null;
+  joinMessages?: boolean;
 }
 
 export interface Member {

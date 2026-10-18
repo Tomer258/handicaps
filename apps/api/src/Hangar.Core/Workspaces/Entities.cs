@@ -11,6 +11,11 @@ public sealed class Server
     public long PolicyVersion { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public uint Version { get; set; }
+    /// <summary>Server icon (FilePurpose.ServerIcon, 256 px WebP).</summary>
+    public Guid? IconAssetId { get; set; }
+    /// <summary>Where "X joined" goes; null = the first text channel the newcomer can see.</summary>
+    public Guid? JoinMessageChannelId { get; set; }
+    public bool JoinMessagesOff { get; set; }
 }
 
 public sealed class ServerMember

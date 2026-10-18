@@ -204,6 +204,11 @@ export class RealtimeService {
     conn.on('membersChanged', (p: { serverId: string }) => {
       if (p.serverId === this.workspace.serverId()) void this.workspace.reloadMembers().catch(() => undefined);
     });
+    conn.on('serverUpdated', (p: { serverId: string }) => {
+      // Name, icon or settings changed: the rail reads /auth/me, the rest the server detail.
+      void this.session.refreshMe().catch(() => undefined);
+      if (p.serverId === this.workspace.serverId()) void this.workspace.reload().catch(() => undefined);
+    });
     conn.on('policyChanged', (p: { serverId: string }) => void this.onPolicyChanged(p.serverId));
     conn.on('sessionRevoked', () => this.session.handleUnauthorized());
 

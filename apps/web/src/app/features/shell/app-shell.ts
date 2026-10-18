@@ -17,6 +17,7 @@ import { VoicePresenceStore } from '../voice/voice-presence.store';
  * Top-level authenticated layout: server rail + routed content + toasts + session recovery.
  * Root media/voice services live outside routed components so text navigation never ends a call.
  */
+import { serverIconUrl, short } from '../../shared/ui/server-icon';
 @Component({
   selector: 'hx-app-shell',
   imports: [RouterOutlet, RouterLink, Icon, ToastHost, CameraProblemDialog, ProfilePopover],
@@ -38,7 +39,11 @@ import { VoicePresenceStore } from '../voice/voice-presence.store';
             <a role="listitem" class="srv" [class.on]="store.serverId() === s.id && !atHome()" [routerLink]="['/s', s.id]"
                [attr.aria-label]="s.name" [title]="s.name" style="background: #23262C; color: #ECEEF1">
               <span class="pip"></span>
-              <span class="disp" style="font-size: 15px; font-weight: 700">{{ short(s.name) }}</span>
+              @if (iconUrl(s.iconAssetId); as u) {
+                <img [src]="u" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit" />
+              } @else {
+                <span class="disp" style="font-size: 15px; font-weight: 700">{{ short(s.name) }}</span>
+              }
             </a>
           }
         </div>
@@ -98,8 +103,6 @@ export class AppShell {
     }
   }
 
-  short(name: string): string {
-    const words = name.replace(/^the\s+/i, '').split(/\s+/).filter(Boolean);
-    return words.length > 1 ? (words[0][0] + words[1][0]).toUpperCase() : (words[0]?.[0] ?? '?').toUpperCase();
-  }
+  readonly short = short;
+  readonly iconUrl = serverIconUrl;
 }
