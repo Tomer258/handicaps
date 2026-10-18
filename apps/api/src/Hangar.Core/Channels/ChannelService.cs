@@ -94,10 +94,28 @@ public sealed partial class ChannelService(HangarDbContext db, PermissionService
 
         var channel = await db.Channels.FirstOrDefaultAsync(c => c.Id == channelId && c.ArchivedAt == null, ct)
                       ?? throw AppProblem.NotFound("channel.not_found", "Channel not found.");
-        await permissions.RequireServerAsync(actor, channel.ServerId, Permission.ManageRoles, ct);
+        var auth = await permissions.RequireAuthorityAsync(actor, channel.ServerId, Permission.ManageRoles, ct);
+
+        // Same hierarchy as server roles: the subject must be below the caller, and nothing new may be allowed that the
+        // caller does not hold (otherwise a channel override would be a way around role limits).
+        if (roleId is not null)
+        {
+            var role = await db.Roles.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roleId && r.ServerId == channel.ServerId, ct)
+                       ?? throw AppProblem.NotFound("role.not_found", "Role not found.");
+            auth.RequireRole(role.Position);
+        }
+        else
+        {
+            if (!await db.ServerMembers.AnyAsync(m => m.ServerId == channel.ServerId && m.UserId == memberUserId && m.RemovedAt == null, ct))
+                throw AppProblem.NotFound("member.not_found", "Member not found.");
+            var ownerId = await db.Servers.Where(s => s.Id == channel.ServerId).Select(s => s.OwnerUserId).FirstAsync(ct);
+            if (!auth.CanManageMember(ownerId == memberUserId, await permissions.TopPositionAsync(memberUserId!.Value, channel.ServerId, ct), memberUserId.Value))
+                throw AppProblem.Forbidden("member.hierarchy", "You can only manage members below your highest role.");
+        }
 
         var existing = await db.ChannelPermissions.FirstOrDefaultAsync(o => o.ChannelId == channelId &&
             (roleId != null ? o.RoleId == roleId : o.MemberUserId == memberUserId), ct);
+        auth.RequireGrant(existing?.AllowMask ?? Permission.None, a);
         if (a == 0 && d == 0)
         {
             if (existing is not null) db.ChannelPermissions.Remove(existing);

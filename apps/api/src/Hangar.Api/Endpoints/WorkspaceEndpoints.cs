@@ -13,7 +13,9 @@ public sealed record CreateChannelRequest(string Type, string Name, string? Topi
 public sealed record UpdateChannelRequest(string? Name, string? Topic, int? Position);
 public sealed record SetOverrideRequest(Guid? RoleId, Guid? MemberUserId, long Allow, long Deny);
 public sealed record SetRolesRequest(List<Guid> RoleIds);
-public sealed record UpdateRoleRequest(string? Name, long? Permissions, string? Color);
+public sealed record UpdateRoleRequest(string? Name, long? Permissions, string? Color, bool? Hoist);
+public sealed record CreateRoleRequest(string Name, string? Color, long? Permissions, bool? Hoist);
+public sealed record ReorderRolesRequest(IReadOnlyList<Guid> RoleIds);
 public sealed record UpdateProfileRequest(string? DisplayName, int? AvatarHue);
 
 public static class WorkspaceEndpoints
@@ -47,7 +49,22 @@ public static class WorkspaceEndpoints
         servers.MapPatch("/{serverId:guid}/roles/{roleId:guid}", async (Guid serverId, Guid roleId, UpdateRoleRequest req,
             HttpContext http, WorkspaceService ws, CancellationToken ct) =>
         {
-            await ws.UpdateRoleAsync(http.User.UserId(), serverId, roleId, req.Name, req.Permissions, req.Color, ct);
+            await ws.UpdateRoleAsync(http.User.UserId(), serverId, roleId, req.Name, req.Permissions, req.Color, req.Hoist, ct);
+            return Results.NoContent();
+        });
+
+        servers.MapPost("/{serverId:guid}/roles", async (Guid serverId, CreateRoleRequest req, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
+            Results.Ok(await ws.CreateRoleAsync(http.User.UserId(), serverId, req.Name, req.Color, req.Permissions ?? 0, req.Hoist ?? false, ct)));
+
+        servers.MapDelete("/{serverId:guid}/roles/{roleId:guid}", async (Guid serverId, Guid roleId, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
+        {
+            await ws.DeleteRoleAsync(http.User.UserId(), serverId, roleId, ct);
+            return Results.NoContent();
+        });
+
+        servers.MapPut("/{serverId:guid}/roles/order", async (Guid serverId, ReorderRolesRequest req, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
+        {
+            await ws.ReorderRolesAsync(http.User.UserId(), serverId, req.RoleIds ?? [], ct);
             return Results.NoContent();
         });
 

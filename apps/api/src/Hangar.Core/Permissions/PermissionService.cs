@@ -67,6 +67,19 @@ public sealed class PermissionService(HangarDbContext db)
         return (channel, mask);
     }
 
+    /// <summary>Requires <paramref name="required"/> and returns the actor's place in the role hierarchy.</summary>
+    public async Task<RoleAuthority> RequireAuthorityAsync(Guid userId, Guid serverId, Permission required, CancellationToken ct)
+    {
+        await RequireServerAsync(userId, serverId, required, ct);
+        var owner = await db.Servers.AsNoTracking().Where(s => s.Id == serverId).Select(s => s.OwnerUserId).FirstOrDefaultAsync(ct);
+        return new RoleAuthority(userId, owner == userId, await ServerPermissionsAsync(userId, serverId, ct), await TopPositionAsync(userId, serverId, ct));
+    }
+
+    /// <summary>Highest assigned role position (0 = only the default role).</summary>
+    public async Task<int> TopPositionAsync(Guid userId, Guid serverId, CancellationToken ct) =>
+        await db.MemberRoles.AsNoTracking().Where(mr => mr.ServerId == serverId && mr.UserId == userId)
+            .Join(db.Roles, mr => mr.RoleId, r => r.Id, (mr, r) => (int?)r.Position).MaxAsync(ct) ?? 0;
+
     public async Task RequireServerAsync(Guid userId, Guid serverId, Permission required, CancellationToken ct)
     {
         var mask = await ServerPermissionsAsync(userId, serverId, ct);
