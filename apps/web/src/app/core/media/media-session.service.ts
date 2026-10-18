@@ -18,6 +18,7 @@ import {
   createLocalVideoTrack,
 } from 'livekit-client';
 import { ApiService } from '../api/api.service';
+import { MediaPrefsService } from './media-prefs.service';
 import { ApiError } from '../api/api-error';
 import { SessionService } from '../auth/session.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -91,6 +92,7 @@ export class MediaSessionService {
   private readonly session = inject(SessionService);
   private readonly realtime = inject(RealtimeService);
   private readonly toast = inject(ToastService);
+  private readonly mediaPrefs = inject(MediaPrefsService);
 
   private readonly _connection = signal<VoiceConnection>('idle');
   private readonly _channelId = signal<string | null>(null);
@@ -192,6 +194,11 @@ export class MediaSessionService {
       this._deafened();
       untracked(() => this.reportState());
     });
+    // Device / processing changes apply live to the running call.
+    effect(() => {
+      const p = this.mediaPrefs.prefs();
+      untracked(() => void this.applyDevicePrefs(p.inputDeviceId, p.outputDeviceId, p.cameraDeviceId));
+    });
   }
 
   /** The current voice lease (authorizes soundboard plays); null when not in voice. */
@@ -242,13 +249,15 @@ export class MediaSessionService {
     this._canCamera.set(grant.canCamera);
     this._canScreen.set(grant.canScreen);
 
+    const prefs = this.mediaPrefs.prefs();
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
       // Web Audio mixing lets per-user volume go above 100%.
       webAudioMix: true,
       disconnectOnPageLeave: true,
-      audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      audioCaptureDefaults: this.captureOptions(),
+      audioOutput: prefs.outputDeviceId ? { deviceId: prefs.outputDeviceId } : undefined,
       publishDefaults: { dtx: true, red: true },
     });
     this.room = room;
@@ -389,7 +398,8 @@ export class MediaSessionService {
     this._camera.set('starting');
     let track: LocalVideoTrack | undefined;
     try {
-      track = await createLocalVideoTrack({ resolution: { width: 1280, height: 720, frameRate: 30 } });
+      const cam = this.mediaPrefs.prefs().cameraDeviceId;
+      track = await createLocalVideoTrack({ deviceId: cam || undefined, resolution: { width: 1280, height: 720, frameRate: 30 } });
       await this.api.post(`/voice/${lease}/publications/camera`, {});
       if (gen !== this.generation) throw new Error('stale');
       await this.waitForSource(room, Track.Source.Camera);
@@ -631,6 +641,39 @@ export class MediaSessionService {
     this.videoWatchers.clear();
     this.audioWatchers.clear();
     this.bump();
+  }
+
+  /** Microphone capture constraints from the user's device and processing choices. */
+  private captureOptions() {
+    const p = this.mediaPrefs.prefs();
+    return {
+      deviceId: p.inputDeviceId || undefined,
+      echoCancellation: p.echoCancellation,
+      noiseSuppression: p.noiseSuppression,
+      autoGainControl: p.autoGainControl,
+      channelCount: 1,
+    };
+  }
+
+  private appliedDevices = { input: '', output: '', camera: '', capture: '' };
+
+  private async applyDevicePrefs(input: string, output: string, camera: string): Promise<void> {
+    const room = this.room;
+    const capture = JSON.stringify(this.captureOptions());
+    const prev = this.appliedDevices;
+    this.appliedDevices = { input, output, camera, capture };
+    if (!room || !this.connected()) return;
+    try {
+      if (output !== prev.output) await room.switchActiveDevice('audiooutput', output || 'default');
+      const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack;
+      if (mic && capture !== prev.capture) {
+        const o = this.captureOptions();
+        await mic.restartTrack({ ...o, deviceId: o.deviceId ? { exact: o.deviceId } : undefined });
+      }
+      if (this.cameraTrack && camera !== prev.camera) await this.cameraTrack.restartTrack({ deviceId: camera || undefined, resolution: { width: 1280, height: 720, frameRate: 30 } });
+    } catch {
+      this.toast.show('Could not switch to that device. It may be in use or unplugged.', 'warn');
+    }
   }
 
   private async enableMic(gen: number): Promise<void> {

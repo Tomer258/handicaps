@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { MediaPrefsService } from '../../core/media/media-prefs.service';
 import { MediaSessionService, ScreenQuality } from '../../core/media/media-session.service';
 import { Icon } from '../../shared/ui/icon';
 
@@ -76,7 +77,7 @@ export class ShareDialog {
   readonly closed = output<void>();
 
   private readonly media = inject(MediaSessionService);
-  readonly quality = signal<ScreenQuality>('1080p60');
+  readonly quality = signal<ScreenQuality>(inject(MediaPrefsService).prefs().streamQuality);
   readonly audio = signal(true);
   readonly denied = signal(false);
   readonly busy = signal(false);
