@@ -16,6 +16,10 @@ Context may be auto-compacted. To survive that:
 1. At session start, read `./.claude/memory/HEARTBEAT.md` (current status, next step) and `./.claude/memory/DECISIONS.md`.
 2. After finishing each slice (or every ~30–40 minutes of work), update `HEARTBEAT.md`: what is done, what is in progress, exact next step, verified commands.
 3. If you are running low on tokens, stop, update `HEARTBEAT.md` with a full handoff summary, and end the session.
+4. **Usage limit handoff (MANDATORY):** when usage reaches ~90–95% of the plan/session limit, stop starting new work.
+   Finish or safely park the current edit, commit if verified, write a full session summary to `HEARTBEAT.md`
+   (done, in progress, exact next step, verified commands, open questions), then give the user a ready-to-paste
+   prompt to continue the session once tokens reload.
 
 ## Source of truth
 

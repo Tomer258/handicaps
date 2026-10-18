@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S0–S8, message search and authorization watchdog committed)
+**Last update:** 2026-10-18 — session 2 (S0–S8, search, watchdog, POC bootstrap committed; plan reordered POC-first)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -29,8 +29,21 @@
 - Tests: SoundboardTests (6) with FakeSoundPublisher; ApiFactory sets Storage:Root to temp dir, WorkerKey, removes SoundboardLoop (tests call CollectAsync/ReconcileAsync). Validator simulated by copying input→output + writing spool/results json.
 - Frontend: features/soundboard/{soundboard.store,soundboard-popover,sound-upload.dialog}.ts; media-session subscribes sb_* participants' sfx_<userId> tracks (soundVolume/soundMuted/mutedActors in localStorage 'hangar.soundboard'); detach on TrackSubscriptionStatusChanged(Unsubscribed) because tracks only end after SFU renegotiation; re-attach on Subscribed. Dock z-index 26 above popover backdrop. Card menu: "Mute their soundboard".
 
+## Remaining plan — reordered POC-first (2026-10-18, user request: working template ASAP; nothing removed)
+Items are the existing remaining work (pre-release-gates.md manual list + roadmap Phase 7), only re-sequenced.
+- [ ] P1 POC deploy (needs user: VPS + domain + DNS + git remote): deploy.md §1 steps 1–3 by hand, then
+      `sudo ./infra/scripts/poc-bootstrap.sh --domain <d> --email <e> --ufw` (steps 4–6 + §2), then deploy.md §3 verify.
+      Bootstrap script verified locally: config-only run in Linux, secrets consistent, LiveKit starts with generated keys, compose resolves.
+- [ ] P2 Gates that prove the POC is safe to share (pre-release-gates.md manual): bypass attempts (:7880, IPv6, turn. HTTP, :5349),
+      session revocation token replay, TURN/TLS via 443 with UDP+7881 blocked, authorization watchdog drill.
+- [ ] P3 Real-use gates: two real Windows clients 30 min (mic, deafen, screen share with audio, soundboard); backups configured + restore drill on a fresh VM.
+- [ ] P4 Phase 7 hardening: A/B/C load results, four-hour soak, security review, dashboards/alerts, pinned images/source versions,
+      dependency/license review, host quote; tests: external port scan, forced TURN, abuse/rate, DB outage, API/worker/SFU restarts,
+      interrupted upload, disk-full, expired-cert alert, rollback with compatible schema.
+
 ## Next exact step
-Everything buildable locally is done. Remaining: the manual production gates in docs/runbooks/pre-release-gates.md (real VPS + domain; now includes the watchdog drill) and Phase 7 hardening (load/soak, real Windows clients). Ask the user which to pursue next.
+P1: waiting on the user for a git remote URL (no remote configured, no gh CLI) to push, and for VPS/domain details to deploy.
+Until then: any local work that shortens P1–P2 (e.g. scripting the deploy.md §3 verification).
 
 ## Watchdog notes (done)
 - API: Core/Media/ReconcileHealth.cs (singleton; VoiceService.ReconcileAsync now returns bool complete and records it); GET /internal/watchdog/reconcile (200/503); AdmitAsync refuses when not Fresh (no complete pass for 3×ReconcileInterval). Tests: ReconcileHealthTests (2) + VoiceTests watchdog endpoint → 60 pass.
