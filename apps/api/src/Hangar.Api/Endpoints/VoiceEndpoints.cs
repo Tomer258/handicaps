@@ -61,6 +61,9 @@ public static class VoiceEndpoints
 
         group.MapPost("/webhook", async (HttpContext http, VoiceService svc, CancellationToken ct) =>
         {
+            // Bounded before buffering (Kestrel's default would accept ~30 MB into memory); oversize → 413.
+            if (http.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+                limit.MaxRequestBodySize = 64 * 1024;
             using var ms = new MemoryStream();
             await http.Request.Body.CopyToAsync(ms, ct);
             var ok = await svc.HandleWebhookAsync(http.Request.Headers.Authorization.ToString(), ms.ToArray(), ct);

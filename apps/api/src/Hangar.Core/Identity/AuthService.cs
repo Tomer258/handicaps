@@ -28,6 +28,15 @@ public sealed partial class AuthService(
 
     public static string NormalizeLogin(string login) => login.Trim().ToLowerInvariant();
 
+    /// <summary>A hash of a random password with the current parameters, verified when the login does not exist.</summary>
+    private static class TimingDummy
+    {
+        public static readonly User User = new() { Login = "-", NormalizedLogin = "-", DisplayName = "-" };
+        private static string? _hash;
+        public static string Hash(IPasswordHasher<User> hasher) =>
+            _hash ??= hasher.HashPassword(User, Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
+    }
+
     public async Task<AuthResult> RegisterAsync(string inviteSecret, string login, string password, string displayName,
         bool remember, string? deviceLabel, CancellationToken ct)
     {
@@ -97,9 +106,10 @@ public sealed partial class AuthService(
         throttle.EnsureAllowed(normalized, clientIp);
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedLogin == normalized, ct);
-        var verified = user is not null && user.DisabledAt is null &&
-                       hasher.VerifyHashedPassword(user, user.PasswordHash, password ?? "") != PasswordVerificationResult.Failed;
-        if (!verified)
+        // Always pay for one hash verification, so an unknown login is not measurably faster than a wrong password.
+        var result = hasher.VerifyHashedPassword(user ?? TimingDummy.User, user?.PasswordHash ?? TimingDummy.Hash(hasher), password ?? "");
+        var verified = user is not null && user.DisabledAt is null && result != PasswordVerificationResult.Failed;
+        if (user is null || !verified)
         {
             throttle.RecordFailure(normalized, clientIp);
             // Same message for unknown login, wrong password and disabled account: no login enumeration.
@@ -108,7 +118,7 @@ public sealed partial class AuthService(
 
         throttle.RecordSuccess(normalized, clientIp);
         var now = clock.GetUtcNow();
-        if (hasher.VerifyHashedPassword(user!, user!.PasswordHash, password!) == PasswordVerificationResult.SuccessRehashNeeded)
+        if (result == PasswordVerificationResult.SuccessRehashNeeded)
             user.PasswordHash = hasher.HashPassword(user, password!);
 
         var session = NewSession(user, remember, deviceLabel, now);
