@@ -39,6 +39,18 @@ for (const p of [owner, friend]) {
   await p.getByRole('toolbar', { name: 'Voice controls' }).waitFor({ timeout: 20000 });
 }
 
+// Dock is a toolbar: arrows and Home/End move focus between its buttons.
+const ownerDock = owner.getByRole('toolbar', { name: 'Voice controls' });
+const dockButtons = ownerDock.locator('button:not([disabled])');
+await dockButtons.first().focus();
+await owner.keyboard.press('ArrowRight');
+check(await dockButtons.nth(1).evaluate((el) => el === document.activeElement), 'ArrowRight moves to the next dock button');
+await owner.keyboard.press('End');
+check(await dockButtons.last().evaluate((el) => el === document.activeElement), 'End jumps to the last dock button');
+await owner.keyboard.press('ArrowRight');
+check(await dockButtons.first().evaluate((el) => el === document.activeElement), 'arrows wrap around');
+check(/^Voice connected/.test(await owner.getByRole('img', { name: /^Voice connected/ }).getAttribute('title')), 'signal bars name the connection quality');
+
 // The owner leaves the voice view for a text channel (in-app navigation; a reload would end the call).
 await owner.locator('a.ch', { hasText: 'general' }).click();
 await owner.waitForFunction((id) => location.pathname.endsWith(`/c/${id}`), general.id);

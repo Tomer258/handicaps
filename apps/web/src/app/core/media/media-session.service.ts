@@ -146,6 +146,8 @@ export class MediaSessionService {
   readonly shareQuality = this._shareQuality.asReadonly();
   /** My own link is poor or lost. */
   readonly weakLink = computed(() => isWeak(this._quality()[this.room?.localParticipant.identity ?? '']));
+  /** My link as LiveKit grades it: 'excellent' | 'good' | 'poor' | 'lost' | 'unknown'. */
+  readonly myQuality = computed(() => this._quality()[this.room?.localParticipant.identity ?? ''] ?? ConnectionQuality.Unknown);
   readonly camera = this._camera.asReadonly();
   readonly canCamera = this._canCamera.asReadonly();
   readonly canScreen = this._canScreen.asReadonly();

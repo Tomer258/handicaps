@@ -28,6 +28,7 @@ interface Card {
   deafened: boolean;
   serverMuted: boolean;
   aria: string;
+  weak: boolean;
   cam: StreamInfo | null;
   screen: StreamInfo | null;
   /** Dropped unexpectedly and still on the server roster: kept dimmed while their client rejoins (States 15). */
@@ -167,6 +168,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                         }
                         @if (c.screen) { <span class="tag live">LIVE</span> }
                         @if (c.reconnecting) { <span class="tag" style="background: var(--warn); color: #1D1300">Reconnecting…</span> }
+                        @else if (c.weak) { <span class="tag" style="background: var(--warn); color: #1D1300">Weak signal</span> }
                       </div>
                     </button>
                     @if (c.screen; as scr) {
@@ -180,7 +182,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
           }
 
           <div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; pointer-events: none; z-index: 26">
-            <div class="dock" style="pointer-events: auto" role="toolbar" aria-label="Voice controls">
+            <div class="dock" style="pointer-events: auto" role="toolbar" aria-label="Voice controls" (keydown)="dockKeys($event)">
               <button class="dbtn" [class.bad]="media.muted() || media.deafened()" [attr.aria-label]="micLabel()" [attr.aria-pressed]="media.muted()"
                       [title]="micLabel()" (click)="media.toggleMute()" [disabled]="!media.canSpeak() || media.serverMuted()">
                 <hx-icon [name]="media.muted() || media.deafened() ? 'mic-off' : 'mic'" size="lg" />
@@ -340,7 +342,8 @@ export class VoiceRoomPage {
         muted,
         deafened,
         serverMuted,
-        aria: `${name}${serverMuted ? ', server muted' : muted ? ', muted' : ''}${deafened ? ', deafened' : ''}${speaking.has(peer.userId) ? ', speaking' : ''}`,
+        aria: `${name}${serverMuted ? ', server muted' : muted ? ', muted' : ''}${deafened ? ', deafened' : ''}${speaking.has(peer.userId) ? ', speaking' : ''}${this.media.weakLinkOf(peer.identity) ? ', weak signal' : ''}`,
+        weak: this.media.weakLinkOf(peer.identity),
         cam: streams.find((s) => s.identity === peer.identity && s.kind === 'camera') ?? null,
         screen: streams.find((s) => s.identity === peer.identity && s.kind === 'screen') ?? null,
         reconnecting: false,
@@ -357,7 +360,7 @@ export class VoiceRoomPage {
       const name = m?.displayName ?? peer.name;
       return {
         peer, name, color: avatarColor(m?.avatarHue ?? 210), ini: initials(name), avatar: avatarUrl(m?.avatarAssetId),
-        speaking: false, muted: false, deafened: false, serverMuted: false, aria: `${name}, reconnecting`, cam: null, screen: null, reconnecting: true,
+        speaking: false, muted: false, deafened: false, serverMuted: false, aria: `${name}, reconnecting`, weak: false, cam: null, screen: null, reconnecting: true,
       };
     });
     return [...this.liveCards(), ...ghosts];
@@ -423,6 +426,18 @@ export class VoiceRoomPage {
 
   iniOf(userId: string, fallback: string): string {
     return initials(this.store.memberById().get(userId)?.displayName ?? fallback);
+  }
+
+  /** Toolbar pattern: arrows / Home / End move between the dock's enabled buttons. */
+  dockKeys(e: KeyboardEvent): void {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const bar = e.currentTarget as HTMLElement;
+    const items = [...bar.querySelectorAll<HTMLButtonElement>('button:not([disabled])')];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (!items.length) return;
+    e.preventDefault();
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+    items[next].focus();
   }
 
   openProfile(e: Event, userId: string): void {

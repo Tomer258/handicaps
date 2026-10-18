@@ -20,10 +20,10 @@ import { LayoutService } from './layout.service';
       <section aria-label="Voice connection" class="fade"
                style="margin: 0 8px; padding: 10px; border-radius: 12px 12px 0 0; background: var(--bg2); border: 1px solid var(--line); border-bottom: 0">
         <div style="display: flex; align-items: center; gap: 10px">
-          <div style="display: flex; align-items: flex-end; gap: 2px; height: 14px" role="img" [attr.aria-label]="label()" [title]="label()">
+          <div style="display: flex; align-items: flex-end; gap: 2px; height: 14px" role="img" [attr.aria-label]="qualityText()" [title]="qualityText()">
             <i style="width: 3px; height: 5px; border-radius: 1px" [style.background]="color()"></i>
-            <i style="width: 3px; height: 9px; border-radius: 1px" [style.background]="color()"></i>
-            <i style="width: 3px; height: 14px; border-radius: 1px" [style.background]="reconnecting() ? 'var(--line2)' : color()"></i>
+            <i style="width: 3px; height: 9px; border-radius: 1px" [style.background]="bars() >= 2 ? color() : 'var(--line2)'"></i>
+            <i style="width: 3px; height: 14px; border-radius: 1px" [style.background]="bars() >= 3 ? color() : 'var(--line2)'"></i>
           </div>
           <button (click)="openView()" style="flex: 1; min-width: 0; text-align: left">
             <div style="font-size: 12.5px; font-weight: 600" [style.color]="color()">{{ label() }}</div>
@@ -67,7 +67,16 @@ export class VoicePanel {
 
   readonly reconnecting = computed(() => this.media.connection() === 'reconnecting');
   readonly label = computed(() => (this.reconnecting() ? 'Reconnecting…' : 'Voice connected'));
-  readonly color = computed(() => (this.reconnecting() ? 'var(--warn)' : 'var(--online)'));
+  private readonly quality = computed(() => this.media.myQuality());
+  readonly poor = computed(() => this.quality() === 'poor' || this.quality() === 'lost');
+  readonly color = computed(() => (this.reconnecting() || this.poor() ? 'var(--warn)' : 'var(--online)'));
+  /** Signal bars lit: excellent 3, good 2, poor/lost 1 (unknown shows full until LiveKit grades the link). */
+  readonly bars = computed(() => (this.reconnecting() ? 2 : ({ excellent: 3, good: 2, poor: 1, lost: 1 } as Record<string, number>)[this.quality()] ?? 3));
+  readonly qualityText = computed(() => {
+    if (this.reconnecting()) return 'Reconnecting to voice';
+    const q = this.quality();
+    return q === 'unknown' ? 'Voice connected' : `Voice connected · ${q === 'lost' ? 'Connection lost' : q[0].toUpperCase() + q.slice(1) + ' connection'}`;
+  });
   readonly channelName = computed(() => this.store.channel(this.media.channelId())?.name ?? 'Voice');
 
   openView(): void {
