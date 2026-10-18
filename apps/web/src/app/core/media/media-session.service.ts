@@ -102,6 +102,7 @@ export class MediaSessionService {
   private readonly _peers = signal<RoomPeer[]>([]);
   private readonly _canSpeak = signal(false);
   private readonly _micBlocked = signal(false);
+  private readonly _serverMuted = signal(false);
   private readonly _audioBlocked = signal(false);
   private readonly _error = signal<string | null>(null);
   private readonly _volumes = signal<Record<string, number>>(loadVolumes());
@@ -126,6 +127,8 @@ export class MediaSessionService {
   readonly canSpeak = this._canSpeak.asReadonly();
   /** Microphone permission denied or device missing: listen-only until the user retries. */
   readonly micBlocked = this._micBlocked.asReadonly();
+  /** A moderator withdrew the microphone (server mute); only they can lift it. */
+  readonly serverMuted = this._serverMuted.asReadonly();
   /** Browser autoplay policy blocked playback; a click on "Enable audio" resumes it. */
   readonly audioBlocked = this._audioBlocked.asReadonly();
   readonly error = this._error.asReadonly();
@@ -247,6 +250,7 @@ export class MediaSessionService {
     }
     this.leaseId = grant.leaseId;
     this._canSpeak.set(grant.canSpeak);
+    this._serverMuted.set(false);
     this._canCamera.set(grant.canCamera);
     this._canScreen.set(grant.canScreen);
 
@@ -282,7 +286,8 @@ export class MediaSessionService {
     this._audioBlocked.set(!room.canPlaybackAudio);
     void this.api.post(`/voice/${grant.leaseId}/confirm`).catch(() => undefined);
 
-    if (grant.canSpeak) await this.enableMic(gen);
+    this.syncServerMute(room, false);
+    if (grant.canSpeak && !this._serverMuted()) await this.enableMic(gen);
     else this._muted.set(true);
     this.reportState();
   }
@@ -577,6 +582,9 @@ export class MediaSessionService {
         if (state === ConnectionState.Reconnecting || state === ConnectionState.SignalReconnecting) this._connection.set('reconnecting');
         else if (state === ConnectionState.Connected && this._connection() !== 'joining') this._connection.set('connected');
       })
+      .on(RoomEvent.ParticipantPermissionsChanged, (_prev: unknown, p: Participant) => {
+        if (live() && p === room.localParticipant) this.syncServerMute(room, true);
+      })
       .on(RoomEvent.MediaDevicesError, () => {
         if (!live()) return;
         // A lost device stops transmission; we never silently switch to another sensitive input.
@@ -693,7 +701,25 @@ export class MediaSessionService {
     this.refreshPeers();
   }
 
+  /** The grant is the source of truth: no microphone source while allowed to speak = server muted. */
+  private syncServerMute(room: Room, notify: boolean): void {
+    const perm = room.localParticipant.permissions;
+    // TrackSource.MICROPHONE = 2 in the LiveKit protocol; an empty source list means "any source".
+    const micAllowed = !perm || (perm.canPublish && (perm.canPublishSources.length === 0 || perm.canPublishSources.includes(2)));
+    const muted = this._canSpeak() && !micAllowed;
+    if (muted === this._serverMuted()) return;
+    this._serverMuted.set(muted);
+    if (muted) {
+      void this.setMuted(true);
+      if (notify) this.toast.show('A moderator muted you in this server.', 'warn');
+    } else if (notify) {
+      this.toast.show('A moderator lifted your server mute. Unmute when you are ready.', 'info');
+    }
+    this.reportState();
+  }
+
   private async setMuted(muted: boolean): Promise<void> {
+    if (!muted && this._serverMuted()) return;
     // Outside a call the toggle only sets the state the next join starts with.
     if (!muted && this.room && (!this._canSpeak() || this._micBlocked())) {
       if (this._micBlocked()) await this.retryMic();

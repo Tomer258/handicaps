@@ -20,6 +20,8 @@ public sealed class ServerMember
     public DateTimeOffset JoinedAt { get; set; }
     public DateTimeOffset? RemovedAt { get; set; }
     public long MemberVersion { get; set; }
+    /// <summary>Server mute by a moderator; sticks across voice sessions until lifted.</summary>
+    public bool VoiceMuted { get; set; }
 }
 
 public sealed class Role

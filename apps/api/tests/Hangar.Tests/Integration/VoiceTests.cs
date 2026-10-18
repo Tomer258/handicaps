@@ -86,6 +86,46 @@ public class VoiceTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Server_mute_sticks_across_joins_and_disconnect_needs_permission()
+    {
+        await ResetLeasesAsync();
+        var (owner, serverId) = await OwnerAsync(factory);
+        var lounge = await ChannelAsync(factory, "Lounge");
+        var (m, mId) = await MemberAsync(factory, owner, serverId);
+        var (other, _) = await MemberAsync(factory, owner, serverId);
+        var lease = await JoinOkAsync(m, lounge);
+        factory.LiveKit.Connect(lease.Room, lease.LeaseId.ToString());
+        factory.LiveKit.Publish(lease.LeaseId.ToString(), "MICROPHONE");
+        Assert.Equal(HttpStatusCode.NoContent, (await m.Http.PostAsync($"/api/v1/voice/{lease.LeaseId}/confirm", null)).StatusCode);
+
+        var mute = $"/api/v1/servers/{serverId}/members/{mId}/voice/mute";
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.Http.PutAsJsonAsync(mute, new { muted = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.Http.PutAsJsonAsync(mute, new { muted = true })).StatusCode);
+        Assert.DoesNotContain("microphone", factory.LiveKit.Sources[lease.LeaseId.ToString()]);
+        Assert.Contains((lease.LeaseId.ToString(), "TR_MICROPHONE", true), factory.LiveKit.MutedTracks);
+        var roster = await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/voice"));
+        Assert.Contains(roster.EnumerateArray(), v => v.GetProperty("userId").GetGuid() == mId && v.GetProperty("serverMuted").GetBoolean());
+
+        // Leaving and rejoining does not lift it.
+        factory.LiveKit.Unpublish(lease.LeaseId.ToString(), "MICROPHONE");
+        Assert.Equal(HttpStatusCode.NoContent, (await m.Http.DeleteAsync($"/api/v1/voice/{lease.LeaseId}")).StatusCode);
+        var again = await JoinOkAsync(m, lounge);
+        var claims = LiveKitTokens.Verify(again.Token, Options.ApiKey, Options.ApiSecret, DateTimeOffset.UtcNow)!;
+        Assert.Empty(claims.Video!["canPublishSources"]!.AsArray());
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.Http.PutAsJsonAsync(mute, new { muted = false })).StatusCode);
+        Assert.Equal(["microphone"], factory.LiveKit.Sources[again.LeaseId.ToString()]);
+
+        // Disconnect: members cannot, the owner can; the lease is revoked so its token stops working.
+        factory.LiveKit.Connect(again.Room, again.LeaseId.ToString());
+        var kick = $"/api/v1/servers/{serverId}/members/{mId}/voice";
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.Http.DeleteAsync(kick)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.Http.DeleteAsync(kick)).StatusCode);
+        Assert.False(factory.LiveKit.IsConnected(again.Room, again.LeaseId.ToString()));
+        Assert.False(await AdmitAsync(again.Token));
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.Http.DeleteAsync(kick)).StatusCode);
+    }
+
+    [Fact]
     public async Task Join_retry_returns_same_lease_and_tampered_or_foreign_tokens_are_rejected()
     {
         await ResetLeasesAsync();

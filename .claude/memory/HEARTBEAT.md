@@ -16,6 +16,13 @@
 ## In progress
 - S7 split into sub-slices: [x] S7a settings dialog + invites/roles (46a2d9f) · [x] S7b attachments + avatars · [x] S7c notifications · [x] S7d responsive + keyboard shortcuts/a11y.
 
+## S9 admin & permissions (user request 2026-10-18: "add the admin panel and permissions and such, then continue normally")
+- [x] S9a role hierarchy + role CRUD (21fcf28): Core/Permissions/RoleAuthority.cs, PermissionService.RequireAuthorityAsync/TopPositionAsync; WorkspaceService Create/Update/Delete/ReorderRoles, SetMemberRoles + RemoveMember hierarchy; ChannelService.SetOverrideAsync same rules. Routes POST/DELETE /servers/{id}/roles[/{roleId}], PUT /servers/{id}/roles/order. Tests RoleTests (2).
+- [x] S9b voice moderation: ServerMember.VoiceMuted (migration MemberVoiceMute) → lease.ServerMuted on join; VoiceService.SetServerMuteAsync (MuteMembers in the lease channel, else server-level; withdraws mic source + MutePublishedTrack) / DisconnectAsync (RemoveFromVoice; lease Revoked 'removed'). PUT /servers/{id}/members/{uid}/voice/mute {muted}, DELETE /servers/{id}/members/{uid}/voice. Web: media.serverMuted from local ParticipantPermissions (mic source 2 missing), card menu "Server mute"/"Disconnect from voice". Test VoiceTests.Server_mute… (63 pass); smoke-moderation.mjs passes.
+- [ ] S9c channel settings UI (rename/topic/delete) + overrides editor (tri-state per role/member) on GET/PUT /channels/{id}/overrides
+- [ ] S9d audit log: GET /servers/{id}/audit (ViewAudit) + UI
+- [ ] S9e admin UI: roles create/rename/color/hoist/delete/reorder, members view, hierarchy explained
+
 ## S7a/S7b notes (done)
 - S7a: core/settings/user-settings.service.ts (PATCH /users/me/settings debounced w/ expectedVersion, 412 → reload+retry; preferredStatus normalized; notification prefs {messages all|mentions|none, mentionsInVoice, chimes}); core/media/media-prefs.service.ts (localStorage 'hangar.mediaPrefs'); features/settings/* sections.
 - S7b backend: Core/Files/FileService.cs (attachments: images → validator 'image.normalize' → WebP; text .txt/.log/.md/.csv/.json UTF-8 checked, always download; avatars 256×256 crop; reads authorized via parent message channel ViewChannel / avatars via shared server; GC orphans 24h + deleted-message attachments), Core/Files/ValidationCollector.cs (single spool reader, dispatch by JobType), Api/Endpoints/FileEndpoints.cs (nosniff + sandbox CSP + CORP). Validator mounts ../.data/files/images. Tests: FileTests (4) + FakeValidator → 55 pass.

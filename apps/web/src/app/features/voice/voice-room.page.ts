@@ -1,5 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ApiService } from '../../core/api/api.service';
+import { ApiError } from '../../core/api/api-error';
+import { Perm } from '../../core/api/models';
 import { MediaSessionService, RoomPeer, StreamInfo } from '../../core/media/media-session.service';
+import { ToastService } from '../../core/ui/toast.service';
 import { avatarColor, avatarUrl, initials } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from '../shell/layout.service';
@@ -18,6 +22,7 @@ interface Card {
   speaking: boolean;
   muted: boolean;
   deafened: boolean;
+  serverMuted: boolean;
   aria: string;
   cam: StreamInfo | null;
   screen: StreamInfo | null;
@@ -145,7 +150,7 @@ interface Card {
           <div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; pointer-events: none; z-index: 26">
             <div class="dock" style="pointer-events: auto" role="toolbar" aria-label="Voice controls">
               <button class="dbtn" [class.bad]="media.muted() || media.deafened()" [attr.aria-label]="micLabel()" [attr.aria-pressed]="media.muted()"
-                      [title]="micLabel()" (click)="media.toggleMute()" [disabled]="!media.canSpeak()">
+                      [title]="micLabel()" (click)="media.toggleMute()" [disabled]="!media.canSpeak() || media.serverMuted()">
                 <hx-icon [name]="media.muted() || media.deafened() ? 'mic-off' : 'mic'" size="lg" />
               </button>
               <button class="dbtn" [class.bad]="media.deafened()" [attr.aria-label]="media.deafened() ? 'Undeafen' : 'Deafen'"
@@ -199,6 +204,22 @@ interface Card {
                 <hx-icon name="soundboard" size="sm" style="color: var(--sb)" /><span style="flex: 1">Mute their soundboard</span>
                 <span class="sw sbsw" [attr.aria-pressed]="media.soundMutedActors().has(m.card.peer.userId)" style="transform: scale(.8)"></span>
               </button>
+              @if (canMute() || canDisconnect()) {
+                <div style="height: 1px; background: var(--line); margin: 6px 4px"></div>
+                @if (canMute()) {
+                  <button class="menu-i" role="menuitemcheckbox" [attr.aria-checked]="m.card.serverMuted" (click)="serverMute(m.card)">
+                    <hx-icon name="shield" size="sm" style="color: var(--danger)" /><span style="flex: 1">Server mute</span>
+                    <span class="sw" [attr.aria-pressed]="m.card.serverMuted" style="transform: scale(.8)"></span>
+                  </button>
+                }
+                @if (canDisconnect()) {
+                  <button class="menu-i" role="menuitem" style="color: var(--danger)" (click)="disconnect(m.card)">
+                    <hx-icon name="hangup" size="sm" /><span style="flex: 1">Disconnect from voice</span>
+                  </button>
+                }
+              }
+            } @else if (m.card.serverMuted) {
+              <div style="padding: 4px 10px 8px; font-size: 12.5px; color: var(--tx3)">A moderator server-muted you. Only someone with Mute Members can lift it.</div>
             } @else {
               <div style="padding: 4px 10px 8px; font-size: 12.5px; color: var(--tx3)">This is you. Use the dock to mute, deafen, share or turn on your camera.</div>
             }
@@ -217,6 +238,8 @@ export class VoiceRoomPage {
   private readonly store = inject(WorkspaceStore);
   private readonly roster = inject(VoicePresenceStore);
   private readonly presence = inject(PresenceStore);
+  private readonly api = inject(ApiService);
+  private readonly toast = inject(ToastService);
 
   readonly menu = signal<{ card: Card; x: number; y: number } | null>(null);
   // Shared with the sidebar voice panel; ServerView renders the soundboard popover and Go-live dialog.
@@ -233,7 +256,9 @@ export class VoiceRoomPage {
   readonly here = computed(() => this.media.connected() && this.media.channelId() === this.channelId());
   readonly rosterCount = computed(() => (this.here() ? this.media.peers().length : this.roster.inChannel(this.channelId()).length));
   readonly viewers = computed(() => Math.max(0, this.rosterCount() - 1));
-  readonly micLabel = computed(() => (!this.media.canSpeak() ? 'You cannot speak in this channel' : this.media.muted() || this.media.deafened() ? 'Unmute' : 'Mute'));
+  readonly canMute = computed(() => ((this.channel()?.permissions ?? 0) & Perm.MuteMembers) !== 0);
+  readonly canDisconnect = computed(() => ((this.channel()?.permissions ?? 0) & Perm.RemoveFromVoice) !== 0);
+  readonly micLabel = computed(() => (!this.media.canSpeak() ? 'You cannot speak in this channel' : this.media.serverMuted() ? 'Server muted by a moderator' : this.media.muted() || this.media.deafened() ? 'Unmute' : 'Mute'));
   readonly onlineFriends = computed(() => {
     const me = this.store.memberById();
     return [...me.keys()].filter((id) => this.presence.status(id) !== 'offline').length - 1;
@@ -257,7 +282,8 @@ export class VoiceRoomPage {
       const m = members.get(peer.userId);
       const name = m?.displayName ?? peer.name;
       const deafened = peer.isLocal ? this.media.deafened() : !!flags.get(peer.userId)?.deafened;
-      const muted = peer.isLocal ? this.media.muted() || this.media.deafened() : peer.micMuted || deafened;
+      const serverMuted = peer.isLocal ? this.media.serverMuted() : !!flags.get(peer.userId)?.serverMuted;
+      const muted = (peer.isLocal ? this.media.muted() || this.media.deafened() : peer.micMuted || deafened) || serverMuted;
       return {
         peer,
         name,
@@ -267,7 +293,8 @@ export class VoiceRoomPage {
         speaking: speaking.has(peer.userId) && !muted,
         muted,
         deafened,
-        aria: `${name}${muted ? ', muted' : ''}${deafened ? ', deafened' : ''}${speaking.has(peer.userId) ? ', speaking' : ''}`,
+        serverMuted,
+        aria: `${name}${serverMuted ? ', server muted' : muted ? ', muted' : ''}${deafened ? ', deafened' : ''}${speaking.has(peer.userId) ? ', speaking' : ''}`,
         cam: streams.find((s) => s.identity === peer.identity && s.kind === 'camera') ?? null,
         screen: streams.find((s) => s.identity === peer.identity && s.kind === 'screen') ?? null,
       };
@@ -319,6 +346,30 @@ export class VoiceRoomPage {
     const x = Math.min(e.clientX - rect.left, rect.width - 250);
     const y = Math.min(e.clientY - rect.top, rect.height - 200);
     this.menu.set({ card, x: Math.max(8, x), y: Math.max(8, y) });
+  }
+
+  async serverMute(card: Card): Promise<void> {
+    const serverId = this.store.serverId();
+    if (!serverId) return;
+    try {
+      await this.api.put(`/servers/${serverId}/members/${card.peer.userId}/voice/mute`, { muted: !card.serverMuted });
+      this.toast.show(card.serverMuted ? `Lifted server mute for ${card.name}` : `Server-muted ${card.name}`);
+    } catch (e) {
+      this.toast.show(ApiError.from(e).message, 'warn');
+    }
+    this.menu.set(null);
+  }
+
+  async disconnect(card: Card): Promise<void> {
+    const serverId = this.store.serverId();
+    if (!serverId) return;
+    this.menu.set(null);
+    try {
+      await this.api.delete(`/servers/${serverId}/members/${card.peer.userId}/voice`);
+      this.toast.show(`Disconnected ${card.name} from voice`);
+    } catch (e) {
+      this.toast.show(ApiError.from(e).message, 'warn');
+    }
   }
 
   toggleLocalMute(userId: string): void {

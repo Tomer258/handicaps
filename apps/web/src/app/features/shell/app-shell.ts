@@ -79,7 +79,7 @@ export class AppShell {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === 'KeyM' || e.code === 'KeyD')) {
       e.preventDefault();
       if (e.repeat) return;
-      if (e.code === 'KeyM') void this.media.toggleMute().then(() => this.toast.show(this.media.muted() ? 'Microphone muted' : 'Microphone unmuted'));
+      if (e.code === 'KeyM') void this.media.toggleMute().then(() => this.toast.show(this.media.serverMuted() ? 'You are server muted' : this.media.muted() ? 'Microphone muted' : 'Microphone unmuted'));
       else void this.media.toggleDeafen().then(() => this.toast.show(this.media.deafened() ? 'Deafened' : 'Undeafened'));
       return;
     }

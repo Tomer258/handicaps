@@ -60,7 +60,13 @@ public sealed class FakeLiveKitRooms : ILiveKitRooms
         return Task.CompletedTask;
     }
 
-    public Task MuteTrackAsync(string room, string identity, string trackSid, bool muted, CancellationToken ct) => Task.CompletedTask;
+    public ConcurrentQueue<(string Identity, string TrackSid, bool Muted)> MutedTracks { get; } = new();
+
+    public Task MuteTrackAsync(string room, string identity, string trackSid, bool muted, CancellationToken ct)
+    {
+        MutedTracks.Enqueue((identity, trackSid, muted));
+        return Task.CompletedTask;
+    }
 
     private void Fail()
     {

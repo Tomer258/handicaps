@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Hangar.Core.Audit;
 using Hangar.Core.Channels;
 using Hangar.Core.Common;
 using Hangar.Core.Identity;
@@ -68,6 +69,7 @@ public sealed class VoiceService(
     IVoiceEventSink events,
     VoiceStateCache states,
     ReconcileHealth health,
+    AuditService audit,
     IOptions<LiveKitOptions> options,
     TimeProvider clock,
     ILogger<VoiceService> log)
@@ -140,6 +142,8 @@ public sealed class VoiceService(
                 CanSpeak = mask.HasFlag(Permission.Speak),
                 CanCamera = mask.HasFlag(Permission.PublishCamera),
                 CanScreen = mask.HasFlag(Permission.ShareScreen),
+                ServerMuted = await db.ServerMembers.Where(m => m.ServerId == channel.ServerId && m.UserId == userId)
+                    .Select(m => m.VoiceMuted).FirstOrDefaultAsync(ct),
                 CreatedAt = now,
                 LastConfirmedAt = now,
             };
@@ -199,6 +203,70 @@ public sealed class VoiceService(
         if (lease is null || lease.Status is not (VoiceLeaseStatus.Joining or VoiceLeaseStatus.Active)) return;
         if (states.Update(leaseId, f => f with { Muted = update.Muted, Deafened = update.Deafened }) && Visible(lease))
             await events.VoiceStateChangedAsync(lease.ServerId, lease.ChannelId, userId, ToDto(lease), ct);
+    }
+
+    // ---- moderation -------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Server mute: sticks to the member (applies to later joins too). While in voice it needs MuteMembers in that
+    /// channel; the microphone source is withdrawn and a live mic track is muted at the SFU.
+    /// </summary>
+    public async Task SetServerMuteAsync(Guid actor, Guid serverId, Guid targetUserId, bool muted, CancellationToken ct)
+    {
+        var lease = await ActiveLeaseAsync(serverId, targetUserId, ct);
+        if (lease is not null) await permissions.RequireChannelAsync(actor, lease.ChannelId, Permission.MuteMembers, ct);
+        else await permissions.RequireServerAsync(actor, serverId, Permission.MuteMembers, ct);
+        await RequireAboveAsync(actor, serverId, targetUserId, ct);
+
+        var member = await db.ServerMembers.FirstOrDefaultAsync(m => m.ServerId == serverId && m.UserId == targetUserId && m.RemovedAt == null, ct)
+                     ?? throw AppProblem.NotFound("member.not_found", "Member not found.");
+        member.VoiceMuted = muted;
+        if (lease is not null) lease.ServerMuted = muted;
+        audit.Record(actor, "member", targetUserId.ToString(), muted ? "voice.server_mute" : "voice.server_unmute");
+        await db.SaveChangesAsync(ct);
+        if (lease is null) return;
+
+        await SafeUpdateSourcesAsync(lease, ct);
+        if (muted)
+        {
+            try
+            {
+                var participants = await rooms.ListParticipantsAsync(lease.RoomName, ct) ?? [];
+                foreach (var t in participants.Where(p => p.Identity == lease.Id.ToString()).SelectMany(p => p.Tracks).Where(t => t.Source == "MICROPHONE"))
+                    await rooms.MuteTrackAsync(lease.RoomName, lease.Id.ToString(), t.Sid, true, ct);
+            }
+            catch (LiveKitUnavailableException e)
+            {
+                log.LogWarning(e, "Could not mute the microphone of {Lease}", lease.Id);
+            }
+        }
+        if (Visible(lease)) await events.VoiceStateChangedAsync(lease.ServerId, lease.ChannelId, lease.UserId, ToDto(lease), ct);
+    }
+
+    /// <summary>Disconnects a member from voice (needs RemoveFromVoice in their channel). They may rejoin if still allowed.</summary>
+    public async Task DisconnectAsync(Guid actor, Guid serverId, Guid targetUserId, CancellationToken ct)
+    {
+        var lease = await ActiveLeaseAsync(serverId, targetUserId, ct)
+                    ?? throw AppProblem.NotFound("voice.not_connected", "This member is not in voice.");
+        await permissions.RequireChannelAsync(actor, lease.ChannelId, Permission.RemoveFromVoice, ct);
+        await RequireAboveAsync(actor, serverId, targetUserId, ct);
+        End(lease, VoiceLeaseStatus.Revoked, "removed", clock.GetUtcNow());
+        audit.Record(actor, "member", targetUserId.ToString(), "voice.disconnect", detail: lease.ChannelId.ToString());
+        await db.SaveChangesAsync(ct);
+        await AfterEndAsync(lease, ct);
+    }
+
+    private Task<VoiceLease?> ActiveLeaseAsync(Guid serverId, Guid userId, CancellationToken ct) =>
+        db.VoiceLeases.FirstOrDefaultAsync(l => l.ServerId == serverId && l.UserId == userId &&
+            (l.Status == VoiceLeaseStatus.Joining || l.Status == VoiceLeaseStatus.Active), ct);
+
+    private async Task RequireAboveAsync(Guid actor, Guid serverId, Guid targetUserId, CancellationToken ct)
+    {
+        if (actor == targetUserId) return;
+        var auth = await permissions.RequireAuthorityAsync(actor, serverId, Permission.None, ct);
+        var ownerId = await db.Servers.Where(s => s.Id == serverId).Select(s => s.OwnerUserId).FirstAsync(ct);
+        if (!auth.CanManageMember(ownerId == targetUserId, await permissions.TopPositionAsync(targetUserId, serverId, ct), targetUserId))
+            throw AppProblem.Forbidden("member.hierarchy", "You can only moderate members below your highest role.");
     }
 
     // ---- camera / screen publications ------------------------------------------------------------

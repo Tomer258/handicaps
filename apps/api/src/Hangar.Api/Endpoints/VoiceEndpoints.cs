@@ -35,7 +35,21 @@ public static class VoiceEndpoints
 
         api.MapGet("/servers/{serverId:guid}/voice", async (Guid serverId, HttpContext http, VoiceService svc, CancellationToken ct) =>
             Results.Ok(await svc.ListAsync(http.User.UserId(), serverId, ct))).WithTags("Voice");
+
+        api.MapPut("/servers/{serverId:guid}/members/{userId:guid}/voice/mute", async (Guid serverId, Guid userId, ServerMuteRequest req,
+            HttpContext http, VoiceService svc, CancellationToken ct) =>
+        {
+            await svc.SetServerMuteAsync(http.User.UserId(), serverId, userId, req.Muted, ct);
+            return Results.NoContent();
+        }).WithTags("Voice");
+        api.MapDelete("/servers/{serverId:guid}/members/{userId:guid}/voice", async (Guid serverId, Guid userId, HttpContext http, VoiceService svc, CancellationToken ct) =>
+        {
+            await svc.DisconnectAsync(http.User.UserId(), serverId, userId, ct);
+            return Results.NoContent();
+        }).WithTags("Voice");
     }
+
+    public sealed record ServerMuteRequest(bool Muted);
 
     /// <summary>
     /// Service-to-service routes, outside /api/v1 (no cookie/CSRF). The edge must not expose /internal publicly:

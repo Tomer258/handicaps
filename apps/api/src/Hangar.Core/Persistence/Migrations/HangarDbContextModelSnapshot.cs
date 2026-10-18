@@ -1448,6 +1448,10 @@ namespace Hangar.Core.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("removed_at");
 
+                    b.Property<bool>("VoiceMuted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("voice_muted");
+
                     b.HasKey("ServerId", "UserId")
                         .HasName("pk_server_members");
 
