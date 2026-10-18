@@ -8,10 +8,11 @@ import { Member } from '../../core/api/models';
 
 interface Group {
   label: string;
+  color?: string;
   members: (Member & { status: ReturnType<PresenceStore['status']>; live: boolean })[];
 }
 
-/** MemberList (hx-member-list): 248px aside grouped Admins / Online / Offline. */
+/** MemberList (hx-member-list): 248px aside grouped by hoisted role (highest first), then Online / Offline. */
 @Component({
   selector: 'hx-member-list',
   imports: [Avatar],
@@ -23,10 +24,10 @@ interface Group {
   },
   template: `
     <div class="scroll" style="flex: 1; padding: 8px">
-      @for (g of groups(); track g.label) {
+      @for (g of groups(); track $index; let gi = $index) {
         @if (g.members.length) {
-          <h3 class="grp" style="margin: 0" [id]="'mg-' + g.label">{{ g.label }} — {{ g.members.length }}</h3>
-          <div role="list" [attr.aria-labelledby]="'mg-' + g.label">
+          <h3 class="grp" style="margin: 0" [id]="'mg-' + gi" [style.color]="g.color">{{ g.label }} — {{ g.members.length }}</h3>
+          <div role="list" [attr.aria-labelledby]="'mg-' + gi">
             @for (m of g.members; track m.userId) {
               <div role="listitem" class="vp" style="padding-left: 8px; height: 42px" [style.opacity]="m.status === 'offline' ? 0.5 : 1">
                 <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [assetId]="m.avatarAssetId" [size]="32" [status]="m.status" [speaking]="media.speaking().has(m.userId)" />
@@ -51,17 +52,26 @@ export class MemberList {
 
   readonly groups = computed<Group[]>(() => {
     const server = this.store.server();
-    const hoisted = new Set((server?.roles ?? []).filter((r) => r.hoist).map((r) => r.id));
+    const hoisted = (server?.roles ?? []).filter((r) => r.hoist && !r.isDefault).sort((a, b) => b.position - a.position);
     const byUser = this.voice.byUser();
     const decorated = this.store.members().map((m) => ({
       ...m,
       status: this.presence.status(m.userId),
       live: !!byUser.get(m.userId)?.screen,
     }));
-    const admins = decorated.filter((m) => m.isOwner || m.roleIds.some((r) => hoisted.has(r)));
-    const rest = decorated.filter((m) => !admins.includes(m));
+    // Each member shows once, under their highest hoisted role; an owner without one still gets a group.
+    const placed = new Set<string>();
+    const roleGroups: Group[] = hoisted.map((r) => {
+      const members = decorated.filter((m) => !placed.has(m.userId) && m.roleIds.includes(r.id));
+      members.forEach((m) => placed.add(m.userId));
+      return { label: r.name, color: r.color ?? undefined, members };
+    });
+    const owners = decorated.filter((m) => m.isOwner && !placed.has(m.userId));
+    owners.forEach((m) => placed.add(m.userId));
+    const rest = decorated.filter((m) => !placed.has(m.userId));
     return [
-      { label: 'Admins', members: admins },
+      { label: 'Owner', members: owners },
+      ...roleGroups,
       { label: 'Online', members: rest.filter((m) => m.status !== 'offline') },
       { label: 'Offline', members: rest.filter((m) => m.status === 'offline') },
     ];
