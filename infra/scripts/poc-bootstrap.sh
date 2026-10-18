@@ -47,10 +47,11 @@ secret() { openssl rand -hex 32; }
 CFG="$ROOT/config"
 
 step "Directories and ownership ($ROOT)"
-mkdir -p "$CFG" "$ROOT"/{data/keys,postgres,caddy/data,caddy/config,backups,watchdog}
+mkdir -p "$CFG" "$ROOT"/{data/keys,postgres,caddy/data,caddy/config,backups,watchdog,monitor}
 mkdir -p "$ROOT"/data/files/{quarantine,spool/jobs,spool/results,sounds,images,attachments}
 chown -R 10001:10001 "$ROOT/data"
 chown 10003:10003 "$ROOT/watchdog"
+chown 10004:10004 "$ROOT/monitor"
 chmod 700 "$CFG" "$ROOT/data/keys"
 chmod 755 "$ROOT/watchdog"
 
@@ -96,6 +97,12 @@ else
   # Only a complete config is moved into place (a failed run leaves nothing half-written behind).
   for f in "${FILES[@]}"; do rm -rf "${CFG:?}/$f"; mv "$OUT/$f" "$CFG/$f"; done
   rmdir "$OUT"
+fi
+
+# Added after the first release: older configs get it without touching anything else.
+if [ ! -f "$CFG/monitor.env" ]; then
+  install -m 600 "$REPO/infra/config.example/monitor.env" "$CFG/monitor.env"
+  echo "created $CFG/monitor.env — set ALERT_WEBHOOK_URL (and TRAFFIC_MONTHLY_GB) to get alerts"
 fi
 
 [ "$CONFIG_ONLY" -eq 1 ] && { step "Config only: done"; exit 0; }

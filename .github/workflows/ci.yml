@@ -49,7 +49,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m py_compile workers/asset-validator/validator.py workers/sound-publisher/publisher.py workers/auth-watchdog/watchdog.py
+      - run: python -m py_compile workers/asset-validator/validator.py workers/sound-publisher/publisher.py workers/auth-watchdog/watchdog.py workers/ops-monitor/monitor.py
+      - run: python -I -m unittest discover -s workers/ops-monitor
 
   infra:
     name: Images + Caddyfile + compose validation
@@ -63,6 +64,7 @@ jobs:
           docker build -t hangar-asset-validator:ci workers/asset-validator
           docker build -t hangar-sound-publisher:ci workers/sound-publisher
           docker build -t hangar-auth-watchdog:ci workers/auth-watchdog
+          docker build -t hangar-ops-monitor:ci workers/ops-monitor
           docker build -t hangar-backup:ci infra/backup
       - name: Validate Caddyfile (layer4 + forward_auth)
         run: |

@@ -1,0 +1,11 @@
+# Ops monitor: standard library only, no inbound ports, no secrets except the alert webhook URL.
+FROM python:3.13-slim
+
+RUN useradd --uid 10004 --no-create-home --shell /usr/sbin/nologin monitor
+WORKDIR /app
+COPY monitor.py .
+USER 10004
+ENV PYTHONUNBUFFERED=1
+HEALTHCHECK --interval=60s --timeout=3s --retries=3 \
+    CMD ["python", "-I", "-c", "import os,sys,time; sys.exit(time.time() - os.path.getmtime('/tmp/heartbeat') > 180)"]
+CMD ["python", "-I", "/app/monitor.py"]

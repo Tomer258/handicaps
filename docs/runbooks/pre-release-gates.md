@@ -45,6 +45,10 @@ The unmodified `compose.prod.yml` runs inside a Docker-in-Docker "VPS" at `*.han
 - Abuse limits: per-user 429 `rate_limited` with `Retry-After` on message/upload/voice/write floods and a
   per-connection hub budget (integration tests `RateLimitTests`). All 12 dev smokes pass with limits on.
 
+- Ops monitor (local POC, 2026-10-18): alerts reached a webhook for the missing backup and for Caddy's short-lived
+  local certificates; stopping the API raised `api` after 3 min and `reconcile` after 5 min, and both RESOLVED within
+  a minute of `dc start api`.
+
 This does not replace the host checks below, which need public networking.
 
 ## Manual, on the production host (not done yet, required)

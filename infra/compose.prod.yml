@@ -55,6 +55,29 @@ services:
     depends_on: [livekit]
     mem_limit: 64m
 
+  # Minimal alert path: disk, CPU, RAM, traffic, certificate expiry, backup age, API and reconcile health → webhook.
+  # The host directory must be owned by uid 10004 (poc-bootstrap.sh does this).
+  ops-monitor:
+    image: hangar-ops-monitor:${HANGAR_VERSION:?}
+    build: { context: ../workers/ops-monitor }
+    network_mode: host
+    <<: *hardening
+    env_file:
+      - path: ${HANGAR_ROOT:-/srv/hangar}/config/monitor.env
+        required: false
+    environment:
+      API_URL: http://127.0.0.1:8080
+      APP_HOST: ${APP_HOST:?}
+      RTC_HOST: ${RTC_HOST:?}
+      TURN_HOST: ${TURN_HOST:?}
+      STATE_DIR: /state
+      BACKUP_MARKER: /backups/last-success
+    volumes:
+      - ${HANGAR_ROOT:-/srv/hangar}/monitor:/state
+      - ${HANGAR_ROOT:-/srv/hangar}/backups:/backups:ro
+    tmpfs: [/tmp]
+    mem_limit: 64m
+
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped

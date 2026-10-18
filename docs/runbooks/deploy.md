@@ -3,7 +3,8 @@
 > **Fast path (POC):** after §1 steps 1–3 (VPS with Docker, DNS, provider firewall), clone the repo to
 > `/opt/hangar` and run `sudo ./infra/scripts/poc-bootstrap.sh --domain <domain> --email <email> --ufw`.
 > It does steps 4–6 and §2 in one go, generating every secret consistently. Then do §3. Backups are not configured
-> by the script; set them up before inviting real users.
+> by the script; set them up before inviting real users. For alerts, put a Discord (or ntfy) webhook URL in
+> `/srv/hangar/config/monitor.env` and run `dc up -d ops-monitor` (§4).
 > From another machine, `./infra/scripts/poc-verify.sh --domain <domain> --host <vps-ip>` runs the automated part of §3.
 >
 > **No VPS yet:** `./infra/scripts/poc-local.sh up` runs the same production stack locally inside a Docker-in-Docker
@@ -38,7 +39,8 @@
    ```
 
 5. Directories and ownership. uid 10001 is shared by the API and the asset validator; uid 10002 (publisher) only
-   reads sounds; uid 10003 (authorization watchdog) owns the flag directory that the edge reads.
+   reads sounds; uid 10003 (authorization watchdog) owns the flag directory that the edge reads; uid 10004 (ops
+   monitor) owns its state directory.
 
    ```sh
    sudo mkdir -p /srv/hangar/{config,data/keys,postgres,caddy/data,caddy/config,backups}
@@ -46,6 +48,7 @@
    sudo chown -R 10001:10001 /srv/hangar/data
    sudo chmod 700 /srv/hangar/config /srv/hangar/data/keys
    sudo mkdir -p /srv/hangar/watchdog && sudo chown 10003:10003 /srv/hangar/watchdog && sudo chmod 755 /srv/hangar/watchdog
+   sudo mkdir -p /srv/hangar/monitor && sudo chown 10004:10004 /srv/hangar/monitor
    ```
 
 6. Config: copy `infra/config.example/*` and `infra/livekit.prod.yaml` (as `livekit.yaml`) into
@@ -80,3 +83,20 @@ call, so schedule it.
   fall back to TURN/TLS on 443).
 - `dc logs edge | grep access_token` returns nothing (tokens are stripped from the access logs).
 - First install: open the owner invite from the migrate output, then clear it from your terminal history.
+
+## 4. Alerts (ops monitor)
+
+`ops-monitor` checks every minute and posts to `ALERT_WEBHOOK_URL` in `config/monitor.env` when something turns bad,
+every 6 h while it stays bad, and once when it recovers:
+
+| Check | Alerts when |
+|---|---|
+| disk | storage volume ≥ 80 % used (uploads already pause below 1 GiB free) |
+| cpu / memory | CPU ≥ 75 % averaged over 15 min / RAM ≥ 90 % |
+| traffic | this month's uplink bytes ≥ 70 % of `TRAFFIC_MONTHLY_GB` (set it to your plan) |
+| cert … | a certificate for `app.`, `rtc.` or `turn.` expires within 14 days (Caddy renews at ~30 days left) |
+| backup | no successful backup for 36 h (`backups/last-success`, written by the backup job) |
+| api / reconcile | `/healthz` failing for 3 min / authorization reconciliation failing for 5 min |
+
+Current results: `cat /srv/hangar/monitor/status.json`. Without a webhook, alerts only appear in `dc logs ops-monitor`.
+Test the webhook: stop the API for 3 minutes (`dc stop api`, then `dc start api`) and expect an ALERT and a RESOLVED.
