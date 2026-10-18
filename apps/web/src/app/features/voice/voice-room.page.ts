@@ -46,7 +46,7 @@ interface Card {
           </div>
           <button class="btn sec" style="height: 32px" (click)="watching.set(false)"><hx-icon name="arrow-left" size="sm" />Back to voice</button>
         }
-        <button class="ibtn hide-m" [class.on]="layout.membersOpen()" aria-label="Toggle member list" [attr.aria-pressed]="layout.membersOpen()"
+        <button class="ibtn" [class.on]="layout.membersOpen()" aria-label="Toggle member list" [attr.aria-pressed]="layout.membersOpen()"
                 title="Member list" (click)="layout.membersOpen.set(!layout.membersOpen())"><hx-icon name="users" /></button>
       </header>
 

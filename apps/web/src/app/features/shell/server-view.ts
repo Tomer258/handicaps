@@ -23,7 +23,10 @@ import { LayoutService } from './layout.service';
         <router-outlet />
       </main>
       @if (layout.membersOpen() && !layout.theater()) {
-        <hx-member-list class="members" />
+        @if (layout.membersOverlay()) {
+          <div style="position: absolute; inset: 0; z-index: 27" (click)="layout.membersOpen.set(false)" aria-hidden="true"></div>
+        }
+        <hx-member-list class="members" [class.overlay]="layout.membersOverlay()" />
       }
     } @else {
       <div style="flex: 1; display: grid; place-items: center; color: var(--tx3)">

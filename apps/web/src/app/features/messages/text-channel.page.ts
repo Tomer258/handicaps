@@ -4,6 +4,7 @@ import { Channel } from '../../core/api/models';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from '../shell/layout.service';
+import { VoicePill } from '../shell/voice-pill';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { AttachmentUploads } from './attachment-uploads';
 import { ChannelUi } from './channel-ui';
@@ -15,7 +16,7 @@ import { PinsPanel } from './pins-panel';
 /** Text channel view: header · history · typing line · composer, plus pins and delete confirmation. */
 @Component({
   selector: 'hx-text-channel-page',
-  imports: [Icon, MessageList, Composer, PinsPanel],
+  imports: [Icon, MessageList, Composer, PinsPanel, VoicePill],
   providers: [ChannelUi, AttachmentUploads],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -35,7 +36,7 @@ import { PinsPanel } from './pins-panel';
         }
         <button class="ibtn" [class.on]="ui.pinsOpen()" aria-label="Pinned messages" [attr.aria-pressed]="ui.pinsOpen()" title="Pinned messages"
                 (click)="ui.pinsOpen.set(!ui.pinsOpen())"><hx-icon name="pin" /></button>
-        <button class="ibtn hide-m" [class.on]="layout.membersOpen()" aria-label="Toggle member list" [attr.aria-pressed]="layout.membersOpen()"
+        <button class="ibtn" [class.on]="layout.membersOpen()" aria-label="Toggle member list" [attr.aria-pressed]="layout.membersOpen()"
                 title="Member list" (click)="layout.membersOpen.set(!layout.membersOpen())"><hx-icon name="users" /></button>
       </header>
 
@@ -76,6 +77,9 @@ import { PinsPanel } from './pins-panel';
           }
         </div>
 
+        @if (layout.mobile()) {
+          <hx-voice-pill />
+        }
         <hx-composer [channel]="ch" />
 
         @if (ui.pinsOpen()) {

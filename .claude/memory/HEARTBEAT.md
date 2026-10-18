@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S6, S7a, S7b, S7c committed; next S7d responsive/keyboard)
+**Last update:** 2026-10-18 — session 2 (S6, S7 committed; next S8 prod infra)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -10,15 +10,16 @@
 - [x] S4 Voice: LiveKit compose, voice leases, JWT, admission endpoint, webhooks, reconciler; UI: MediaSessionService, voice control bar, participant grid, mute/deafen, per-user volume, audio buses, speaking
 - [x] S5 Screen share + camera: publication reservations (caps 4 screens/6 cameras), source grants via UpdateParticipant, track webhooks → roster flags; UI share dialog, stream view (focus/grid, per-stream audio), camera in pcards, live banner
 - [x] S6 Soundboard: file storage, upload + asset-validator worker, catalog/favorites/preview, sound-plays (reservations/rate limits), sound-publisher worker, track registry; UI popover
-- [ ] S7 Settings, admin (invites/roles), attachments/avatars, notifications, responsive
+- [x] S7 Settings, admin (invites/roles), attachments/avatars, notifications, responsive
 - [ ] S8 Prod infra: Caddy (+forward_auth gate), prod compose, livekit.yaml, backups, runbooks, CI, AGENTS.md
 
 ## In progress
-- S7 split into sub-slices: [x] S7a settings dialog + invites/roles (46a2d9f) · [x] S7b attachments + avatars · [x] S7c notifications · [ ] S7d responsive + keyboard shortcuts/a11y.
+- S7 split into sub-slices: [x] S7a settings dialog + invites/roles (46a2d9f) · [x] S7b attachments + avatars · [x] S7c notifications · [x] S7d responsive + keyboard shortcuts/a11y.
 
 ## S7a/S7b notes (done)
 - S7a: core/settings/user-settings.service.ts (PATCH /users/me/settings debounced w/ expectedVersion, 412 → reload+retry; preferredStatus normalized; notification prefs {messages all|mentions|none, mentionsInVoice, chimes}); core/media/media-prefs.service.ts (localStorage 'hangar.mediaPrefs'); features/settings/* sections.
 - S7b backend: Core/Files/FileService.cs (attachments: images → validator 'image.normalize' → WebP; text .txt/.log/.md/.csv/.json UTF-8 checked, always download; avatars 256×256 crop; reads authorized via parent message channel ViewChannel / avatars via shared server; GC orphans 24h + deleted-message attachments), Core/Files/ValidationCollector.cs (single spool reader, dispatch by JobType), Api/Endpoints/FileEndpoints.cs (nosniff + sandbox CSP + CORP). Validator mounts ../.data/files/images. Tests: FileTests (4) + FakeValidator → 55 pass.
+- S7d: LayoutService.breakpoint (matchMedia: xl≥1600, lg≥1280, md≥1080, sm≥820, xs) — members aside docked ≥1280, overlay toggle below (Esc/click-out closes); <820 drawer shows rail + sidebar (.app.nav-open); AppShell (document:keydown) Ctrl+Shift+M/D (works while typing; toast feedback); features/shell/voice-pill.ts above composer on xs; soundboard popover = bottom sheet on xs (.sb-pop) and takes/returns focus; (pointer:coarse) 44px targets. Fixed: unmute outside voice was blocked by canSpeak check.
 - S7c: features/notifications/notifier.service.ts (root, injected by AppShell): mentions (server 'notificationCreated', deduped per message) → toast if focused & other channel, browser Notification if background; 'all' mode from message.created events; DND silences all; mentionsInVoice; chimes via MediaSessionService.onPeersChanged (sync callback — effects are deferred in background tabs) keyed by room generation; dispatches 'hangar:chime' DOM event (smoke hook). UserSettingsService flushes pending PATCH with fetch keepalive on pagehide.
 - S7b frontend: features/messages/attachment-uploads.ts (per-channel tray provided by TextChannelPage; upload → poll /files/{id}/status), composer paperclip/paste chips, page drag&drop zone + image viewer (ChannelUi.viewer), message-item .att-img / .att-file; hx-avatar [assetId] + avatarUrl(); account section avatar upload/remove (memberUpdated pushes to others).
 
@@ -29,7 +30,7 @@
 - Frontend: features/soundboard/{soundboard.store,soundboard-popover,sound-upload.dialog}.ts; media-session subscribes sb_* participants' sfx_<userId> tracks (soundVolume/soundMuted/mutedActors in localStorage 'hangar.soundboard'); detach on TrackSubscriptionStatusChanged(Unsubscribed) because tracks only end after SFU renegotiation; re-attach on Subscribed. Dock z-index 26 above popover backdrop. Card menu: "Mute their soundboard".
 
 ## Next exact step
-1. S7d: Ctrl+Shift+M (mute) / Ctrl+Shift+D (deafen) shortcuts are advertised but not implemented; check docs/design/Responsive.dc.html breakpoints vs app (LayoutService, .only-m/.hide-m), narrow layouts (nav drawer, member list), a11y pass; smoke at 390px width. Then S8.
+1. S8 prod infra: read docs/architecture (deployment/security/roadmap) for Caddy + forward_auth admission on /rtc, /rtc/v1, /rtc/validate; block /internal publicly; infra/compose.prod.yml, infra/livekit.yaml (prod), Caddyfile, backups (pg_dump + files), runbooks (docs/runbooks), CI (.github/workflows: dotnet test, ng build, smoke optional), AGENTS.md. Validate with `docker compose -f infra/compose.prod.yml config` and `caddy validate` (in docker) — do not deploy.
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
@@ -42,6 +43,7 @@
 - Settings smoke: `cd tests/e2e && node scripts/smoke-settings.mjs ../../.tmp/shots`
 - Attachments smoke (real validator: image→webp, text card, drop, viewer, avatar 256² to friend, removal): `node scripts/smoke-attachments.mjs ../../.tmp/shots`
 - Notifications smoke (stubbed Notification + simulated background; chimes in Lounge): `node scripts/smoke-notifications.mjs`
+- Responsive smoke (1440/1200/390, shortcuts, drawer, pill, bottom sheet): `node scripts/smoke-responsive.mjs ../../.tmp/shots`
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
 - `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations`

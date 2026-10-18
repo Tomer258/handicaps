@@ -694,7 +694,8 @@ export class MediaSessionService {
   }
 
   private async setMuted(muted: boolean): Promise<void> {
-    if (!muted && (!this._canSpeak() || this._micBlocked())) {
+    // Outside a call the toggle only sets the state the next join starts with.
+    if (!muted && this.room && (!this._canSpeak() || this._micBlocked())) {
       if (this._micBlocked()) await this.retryMic();
       if (!this._canSpeak() || this._micBlocked()) return;
     }

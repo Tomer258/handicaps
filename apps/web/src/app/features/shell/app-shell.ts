@@ -1,8 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 import { SessionService } from '../../core/auth/session.service';
+import { MediaSessionService } from '../../core/media/media-session.service';
+import { ToastService } from '../../core/ui/toast.service';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { Icon } from '../../shared/ui/icon';
+import { LayoutService } from './layout.service';
 import { ToastHost } from './toast-host';
 import { Notifier } from '../notifications/notifier.service';
 import { ChatStore } from '../messages/chat.store';
@@ -16,9 +19,10 @@ import { VoicePresenceStore } from '../voice/voice-presence.store';
   selector: 'hx-app-shell',
   imports: [RouterOutlet, RouterLink, Icon, ToastHost],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:keydown)': 'onKey($event)' },
   template: `
     <a class="skip-link" href="#composer">Skip to message composer</a>
-    <div class="app">
+    <div class="app" [class.nav-open]="layout.navOpen()">
       <nav class="rail" aria-label="Servers"
            style="width: 68px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; background: var(--bg0)">
         <a class="srv" [class.on]="atHome()" routerLink="/" aria-label="Home" title="Home"
@@ -64,8 +68,26 @@ export class AppShell {
   private readonly chat = inject(ChatStore);
   private readonly notifier = inject(Notifier);
   private readonly voiceRoster = inject(VoicePresenceStore);
+  readonly layout = inject(LayoutService);
+  private readonly media = inject(MediaSessionService);
+  private readonly toast = inject(ToastService);
 
   readonly atHome = computed(() => this.store.serverId() === null);
+
+  /** Global shortcuts (also while typing): Ctrl+Shift+M mute, Ctrl+Shift+D deafen; Esc closes the drawer / member overlay. */
+  onKey(e: KeyboardEvent): void {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === 'KeyM' || e.code === 'KeyD')) {
+      e.preventDefault();
+      if (e.repeat) return;
+      if (e.code === 'KeyM') void this.media.toggleMute().then(() => this.toast.show(this.media.muted() ? 'Microphone muted' : 'Microphone unmuted'));
+      else void this.media.toggleDeafen().then(() => this.toast.show(this.media.deafened() ? 'Deafened' : 'Undeafened'));
+      return;
+    }
+    if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('.scrim, .cdk-overlay-pane')) {
+      if (this.layout.navOpen()) this.layout.navOpen.set(false);
+      else if (this.layout.membersOverlay() && this.layout.membersOpen()) this.layout.membersOpen.set(false);
+    }
+  }
 
   short(name: string): string {
     const words = name.replace(/^the\s+/i, '').split(/\s+/).filter(Boolean);

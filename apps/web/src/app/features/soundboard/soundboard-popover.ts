@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, afterNextRender, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { SessionService } from '../../core/auth/session.service';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { Icon } from '../../shared/ui/icon';
@@ -15,7 +15,7 @@ type Category = 'all' | 'favorites' | 'mine';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div style="position: absolute; inset: 0; z-index: 24" (click)="closed.emit()" aria-hidden="true"></div>
-    <div class="pop fade" role="dialog" aria-label="Soundboard" (keydown.escape)="closed.emit()"
+    <div #dialog tabindex="-1" class="pop fade sb-pop" role="dialog" aria-label="Soundboard" (keydown.escape)="closed.emit()"
          style="position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); width: 384px; max-width: calc(100% - 24px);
                 max-height: calc(100% - 120px); display: flex; flex-direction: column; z-index: 25; border-color: color-mix(in oklab,var(--sb) 35%,var(--line2))">
       <div style="display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px">
@@ -141,7 +141,7 @@ type Category = 'all' | 'favorites' | 'mine';
     }
   `,
 })
-export class SoundboardPopover {
+export class SoundboardPopover implements OnDestroy {
   readonly channelName = input('voice');
   readonly closed = output<void>();
 
@@ -154,6 +154,17 @@ export class SoundboardPopover {
   readonly cat = signal<Category>('all');
   readonly uploadOpen = signal(false);
   readonly menu = signal<{ sound: Sound; x: number; y: number } | null>(null);
+  private readonly dialog = viewChild.required<ElementRef<HTMLElement>>('dialog');
+  /** Focus moves into the popover (so Esc and Tab work) and returns to the opener on close. */
+  private readonly opener = document.activeElement as HTMLElement | null;
+
+  constructor() {
+    afterNextRender(() => this.dialog().nativeElement.focus({ preventScroll: true }));
+  }
+
+  ngOnDestroy(): void {
+    if (this.opener?.isConnected) this.opener.focus({ preventScroll: true });
+  }
 
   readonly volPct = computed(() => Math.round(this.media.soundVolume() * 100));
   readonly cooldownS = computed(() => Math.ceil(this.store.cooldownLeftMs() / 1000));
