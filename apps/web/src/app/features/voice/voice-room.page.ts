@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, injec
 import { ApiService } from '../../core/api/api.service';
 import { ApiError } from '../../core/api/api-error';
 import { SessionService } from '../../core/auth/session.service';
+import { ProfileService } from '../profile/profile.service';
 import { Perm } from '../../core/api/models';
 import { MediaSessionService, RoomPeer, StreamInfo } from '../../core/media/media-session.service';
 import { ToastService } from '../../core/ui/toast.service';
@@ -146,7 +147,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
               <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px">
                 @for (c of cards(); track c.peer.identity) {
                   <div style="position: relative" [style.opacity]="c.reconnecting ? 0.6 : null">
-                    <button class="pcard" [class.talk]="c.speaking" [attr.aria-label]="c.aria" (click)="openMenu($event, c)" (contextmenu)="openMenu($event, c)">
+                    <button class="pcard" [attr.data-user]="c.peer.userId" [class.talk]="c.speaking" [attr.aria-label]="c.aria" (click)="openMenu($event, c)" (contextmenu)="openMenu($event, c)">
                       @if (c.cam; as cam) {
                         <hx-stream-tile [stream]="cam" fit="cover" [showLoading]="false" />
                       } @else {
@@ -215,6 +216,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
             <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 10px">
               <span class="av s28" [style.background]="m.card.color">{{ m.card.ini }}</span><b>{{ m.card.name }}</b>
             </div>
+            <button class="menu-i" role="menuitem" (click)="openProfile($event, m.card.peer.userId)"><hx-icon name="user" size="sm" /><span style="flex: 1">Profile</span></button>
             @if (m.card.screen; as scr) {
               <button class="menu-i" role="menuitem" (click)="menu.set(null); watch(scr)"><hx-icon name="screen" size="sm" /><span style="flex: 1">Watch stream</span></button>
             }
@@ -278,6 +280,7 @@ export class VoiceRoomPage {
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   private readonly session = inject(SessionService);
+  private readonly profiles = inject(ProfileService);
 
   readonly menu = signal<{ card: Card; x: number; y: number } | null>(null);
   // Shared with the sidebar voice panel; ServerView renders the soundboard popover and Go-live dialog.
@@ -420,6 +423,13 @@ export class VoiceRoomPage {
 
   iniOf(userId: string, fallback: string): string {
     return initials(this.store.memberById().get(userId)?.displayName ?? fallback);
+  }
+
+  openProfile(e: Event, userId: string): void {
+    // Anchor on the card, not the menu that is about to close.
+    const card = (e.currentTarget as HTMLElement).closest('.fade')?.querySelector<HTMLElement>(`button.pcard[data-user="${userId}"]`);
+    this.menu.set(null);
+    this.profiles.show(userId, card ? { currentTarget: card, stopPropagation: () => e.stopPropagation() } as unknown as Event : e);
   }
 
   openMenu(e: MouseEvent, card: Card): void {

@@ -11,6 +11,7 @@ import { SettingsSection, openUserSettings } from '../settings/settings.dialog';
 /**
  * Mic and deafen live on the user row so they are always in the same place — connected or not.
  */
+import { ProfileService } from '../profile/profile.service';
 @Component({
   selector: 'hx-user-panel',
   imports: [Avatar, Icon],
@@ -18,8 +19,8 @@ import { SettingsSection, openUserSettings } from '../settings/settings.dialog';
   template: `
     <div style="display: flex; align-items: center; gap: 8px; padding: 8px; margin: 0 8px 8px; background: var(--bg2); border: 1px solid var(--line)"
          [style.border-radius]="voice.connected() ? '0 0 12px 12px' : '12px'">
-      <button (click)="openSettings('account')" style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 2px 4px; border-radius: 8px; text-align: left"
-              aria-label="Your profile and settings">
+      <button (click)="openProfile($event)" style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 2px 4px; border-radius: 8px; text-align: left"
+              aria-label="Your profile and status" aria-haspopup="dialog">
         <hx-avatar [name]="name()" [hue]="session.user()?.avatarHue ?? 200" [assetId]="session.user()?.avatarAssetId" [size]="32" [status]="presence.myStatus()" surface="var(--bg2)" [speaking]="meSpeaking()" />
         <span style="min-width: 0">
           <span style="display: block; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto">{{ name() }}</span>
@@ -44,6 +45,7 @@ export class UserPanel {
   readonly presence = inject(PresenceStore);
   private readonly store = inject(WorkspaceStore);
   private readonly dialog = inject(Dialog);
+  private readonly profiles = inject(ProfileService);
 
   readonly name = computed(() => this.session.user()?.displayName ?? '');
   readonly meSpeaking = computed(() => {
@@ -56,6 +58,11 @@ export class UserPanel {
     const labels = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' } as const;
     return labels[this.presence.myStatus()];
   });
+
+  openProfile(e: Event): void {
+    const id = this.session.userId();
+    if (id) this.profiles.show(id, e);
+  }
 
   openSettings(section: SettingsSection): void {
     openUserSettings(this.dialog, section);

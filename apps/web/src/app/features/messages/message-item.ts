@@ -4,6 +4,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { avatarColor, avatarUrl, initials } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { ProfileService } from '../profile/profile.service';
 import { Attachment } from '../../core/api/models';
 import { formatSize } from './attachment-uploads';
 import { ChannelUi } from './channel-ui';
@@ -21,7 +22,7 @@ import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime
              [style.opacity]="m.pending === 'sending' ? 0.6 : null" [attr.aria-label]="aria()">
       <div class="gut">
         @if (!grouped()) {
-          <span class="av s40" [style.background]="color()" aria-hidden="true">@if (avatarSrc(); as u) {<img [src]="u" alt="" />} @else {{{ ini() }}}</span>
+          <button class="av s40" [style.background]="color()" style="border: 0; padding: 0; cursor: pointer" [attr.aria-label]="'Open ' + name() + ' profile'" tabindex="-1" (click)="openProfile($event)">@if (avatarSrc(); as u) {<img [src]="u" alt="" />} @else {{{ ini() }}}</button>
         } @else {
           <div class="ts mono" [title]="full()">{{ time() }}</div>
         }
@@ -41,7 +42,7 @@ import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime
         }
         @if (!grouped()) {
           <div style="display: flex; align-items: baseline; gap: 8px">
-            <span class="uname" [style.color]="color()">{{ name() }}</span>
+            <button class="uname" [style.color]="color()" style="border: 0; padding: 0; background: none; font: inherit; font-weight: 600; cursor: pointer" (click)="openProfile($event)">{{ name() }}</button>
             @if (isAdmin()) {
               <span style="font-size: 10px; font-weight: 600; letter-spacing: .06em; padding: 1px 5px; border-radius: 4px; background: var(--bg4); color: var(--tx2)">ADMIN</span>
             }
@@ -142,6 +143,7 @@ export class MessageItem {
   readonly chat = inject(ChatStore);
   private readonly workspace = inject(WorkspaceStore);
   private readonly session = inject(SessionService);
+  private readonly profiles = inject(ProfileService);
 
   readonly quick = QUICK_REACTIONS;
   readonly editText = signal('');
@@ -157,6 +159,10 @@ export class MessageItem {
   readonly full = computed(() => formatFull(this.message().createdAt));
   readonly fullEdited = computed(() => (this.message().editedAt ? formatFull(this.message().editedAt!) : ''));
   readonly parts = computed(() => parseBody(this.message().body, this.workspace.memberById()));
+  openProfile(e: Event): void {
+    if (this.author()) this.profiles.show(this.message().authorUserId, e);
+  }
+
   readonly mine = computed(() => this.message().authorUserId === this.me());
   readonly mentionsMe = computed(() => {
     const m = this.message();

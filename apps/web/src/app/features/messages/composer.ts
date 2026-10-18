@@ -160,6 +160,23 @@ export class Composer {
         queueMicrotask(() => this.autosize());
       });
     });
+    effect(() => {
+      const req = this.chat.pendingInsert();
+      if (!req || req.channelId !== this.channel().id) return;
+      untracked(() => {
+        this.chat.pendingInsert.set(null);
+        const cur = this.draft();
+        const next = (cur && !cur.endsWith(' ') ? cur + ' ' : cur) + req.text;
+        this.draft.set(next);
+        this.chat.drafts.set(this.channelId, next);
+        queueMicrotask(() => {
+          const el = this.box().nativeElement;
+          el.focus();
+          el.setSelectionRange(next.length, next.length);
+          this.autosize();
+        });
+      });
+    });
   }
 
   onInput(): void {

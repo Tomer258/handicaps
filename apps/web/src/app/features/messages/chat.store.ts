@@ -61,6 +61,8 @@ export class ChatStore {
 
   /** Channel currently on screen and whether its list is scrolled to the newest message. */
   readonly activeChannelId = signal<string | null>(null);
+  /** Text for that channel's composer to insert at the end of its draft ("Mention" from a profile). */
+  readonly pendingInsert = signal<{ channelId: string; text: string } | null>(null);
   readonly atBottom = signal(true);
   /** Unsent composer text per channel (kept across channel switches, dropped on sign-out). */
   readonly drafts = new Map<string, string>();

@@ -7,6 +7,8 @@ import { MediaSessionService } from '../../core/media/media-session.service';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { Avatar } from '../../shared/ui/avatar';
 import { Member, Perm } from '../../core/api/models';
+import { ago } from '../../shared/ui/time-ago';
+import { ProfileService } from '../profile/profile.service';
 
 interface Group {
   label: string;
@@ -51,13 +53,16 @@ interface Group {
           <h3 class="grp" style="margin: 0" [id]="'mg-' + gi" [style.color]="g.color">{{ g.label }} — {{ g.members.length }}</h3>
           <div role="list" [attr.aria-labelledby]="'mg-' + gi">
             @for (m of g.members; track m.userId) {
-              <div role="listitem" class="vp" style="padding-left: 8px; height: 42px" [style.opacity]="m.status === 'offline' ? 0.5 : 1">
+              <div role="listitem">
+              <button class="vp" style="padding-left: 8px; height: 42px; width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left"
+                      [style.opacity]="m.status === 'offline' ? 0.5 : 1" [attr.aria-label]="m.displayName + ', ' + m.status" (click)="profiles.show(m.userId, $event)">
                 <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [assetId]="m.avatarAssetId" [size]="32" [status]="m.status" [speaking]="media.speaking().has(m.userId)" />
                 <span style="flex: 1; min-width: 0">
                   <span style="display: block; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto">{{ m.displayName }}</span>
                   <span style="display: block; font-size: 11.5px; color: var(--tx3)">&#64;{{ m.login }}</span>
                 </span>
                 @if (m.live) { <span class="tag live" style="height: 18px; font-size: 10px">LIVE</span> }
+              </button>
               </div>
             }
           </div>
@@ -73,6 +78,7 @@ export class MemberList {
   readonly media = inject(MediaSessionService);
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
+  readonly profiles = inject(ProfileService);
 
   /** States 04: nobody else is online — say who was here last and offer to wait in voice. */
   readonly quiet = computed(() => {
@@ -126,12 +132,3 @@ export class MemberList {
   });
 }
 
-function ago(ms: number): string {
-  const min = Math.round(ms / 60_000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `${h} ${h === 1 ? 'hour' : 'hours'} ago`;
-  const d = Math.round(h / 24);
-  return d === 1 ? 'yesterday' : `${d} days ago`;
-}
