@@ -4,7 +4,7 @@ public sealed record ReactionDto(string Emoji, int Count, IReadOnlyList<Guid> Us
 
 public sealed record AttachmentDto(Guid Id, string Name, string Mime, long Size, int? Width, int? Height);
 
-public sealed record ReplyPreviewDto(Guid Id, Guid AuthorUserId, string? BodyPreview, bool Deleted);
+public sealed record ReplyPreviewDto(Guid Id, Guid AuthorUserId, string? BodyPreview, bool Deleted, string Kind = "default");
 
 /// <summary>Viewer-independent message view: safe to broadcast to every authorized subscriber.</summary>
 public sealed record MessageDto(
@@ -23,7 +23,8 @@ public sealed record MessageDto(
     bool MentionsEveryone,
     IReadOnlyList<Guid> Mentions,
     IReadOnlyList<ReactionDto> Reactions,
-    IReadOnlyList<AttachmentDto> Attachments);
+    IReadOnlyList<AttachmentDto> Attachments,
+    string Kind = "default");
 
 /// <summary>Search hits, newest first. <c>Next</c> is an opaque cursor for the following (older) page.</summary>
 public sealed record SearchPageDto(IReadOnlyList<MessageDto> Messages, string? Next);

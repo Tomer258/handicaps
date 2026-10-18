@@ -129,6 +129,7 @@ export class Notifier {
   }
 
   private preview(m: Message): string {
+    if (m.kind === 'memberJoined') return 'Joined the hangar — say hi! 👋';
     const text = previewText(m.body, this.workspace.memberById());
     const files = m.attachments.length ? `📎 ${m.attachments.length === 1 ? m.attachments[0].name : `${m.attachments.length} files`}` : '';
     const body = [text, files].filter(Boolean).join(' · ');

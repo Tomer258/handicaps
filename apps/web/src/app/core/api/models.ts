@@ -165,10 +165,13 @@ export interface ReplyPreview {
   authorUserId: string;
   bodyPreview: string | null;
   deleted: boolean;
+  kind?: 'default' | 'memberJoined';
 }
 
 export interface Message {
   id: string;
+  /** 'memberJoined': "X joined" row, authored by the new member, empty body. */
+  kind?: 'default' | 'memberJoined';
   channelId: string;
   authorUserId: string;
   messageSequence: string;

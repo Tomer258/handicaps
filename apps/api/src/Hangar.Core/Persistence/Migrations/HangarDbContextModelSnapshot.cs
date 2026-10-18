@@ -791,6 +791,10 @@ namespace Hangar.Core.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("edited_at");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
                     b.Property<bool>("MentionsEveryone")
                         .HasColumnType("boolean")
                         .HasColumnName("mentions_everyone");

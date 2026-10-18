@@ -10,7 +10,8 @@ using Microsoft.Extensions.Options;
 
 namespace Hangar.Core.Identity;
 
-public sealed record AuthResult(User User, UserSession Session);
+/// <summary>JoinedServerId: set when registration joined a server as a member (not the owner bootstrap).</summary>
+public sealed record AuthResult(User User, UserSession Session, Guid? JoinedServerId = null);
 
 /// <summary>Password step result: signed in, or (two-step login on) a pending user that still owes a code.</summary>
 public sealed record LoginOutcome(AuthResult? SignedIn, Guid PendingUserId = default, int PendingSecurityVersion = 0);
@@ -104,7 +105,7 @@ public sealed partial class AuthService(
             throw AppProblem.Conflict("auth.login_taken", "That login is already taken.");
         }
         await tx.CommitAsync(ct);
-        return new AuthResult(user, session);
+        return new AuthResult(user, session, invite.Purpose == InvitationPurpose.Member ? invite.ServerId : null);
     }
 
     public async Task<LoginOutcome> LoginAsync(string login, string password, bool remember, string? deviceLabel, string clientIp, CancellationToken ct)

@@ -146,7 +146,8 @@ export class Composer {
   });
   readonly replyName = computed(() => this.replyAuthor()?.displayName ?? 'Former member');
   readonly replyColor = computed(() => `hsl(${this.replyAuthor()?.avatarHue ?? 210} 75% 72%)`);
-  readonly replyText = computed(() => previewText(this.ui.replyTo()?.body ?? '', this.workspace.memberById()));
+  readonly replyText = computed(() =>
+    this.ui.replyTo()?.kind === 'memberJoined' ? 'joined the hangar' : previewText(this.ui.replyTo()?.body ?? '', this.workspace.memberById()));
 
   constructor() {
     // Swap drafts on channel change (the page component is reused across channels).

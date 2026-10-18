@@ -83,6 +83,16 @@ try {
   await friend.waitForURL(`${BASE}/`);
   check(true, 'the friend registers with the link');
 
+  // Owner (in #general) sees the join row arrive live and waves.
+  await owner.getByRole('complementary', { name: 'Members' }).getByRole('button', { name: /^Invite Smoke, online/ }).last().waitFor({ timeout: 10000 });
+  check(true, 'the new member shows up in the member list without a reload');
+  const joinRow = owner.getByTestId('join-message').filter({ hasText: 'Invite Smoke' }).last();
+  await joinRow.waitFor({ timeout: 10000 });
+  check(true, `a join message appears live in #general ("${(await joinRow.textContent()).replace(/\s+/g, ' ').trim().slice(0, 60)}")`);
+  await joinRow.getByRole('button', { name: 'Wave to Invite Smoke' }).click();
+  await joinRow.getByRole('button', { name: '👋 1 reactions' }).waitFor();
+  check(await joinRow.getByRole('button', { name: 'Wave to Invite Smoke' }).count() === 0, 'Wave adds a 👋 and the button goes away');
+
   // The used link is dead for the next person.
   const late = await (await browser.newContext()).newPage();
   await late.goto(link);

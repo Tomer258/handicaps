@@ -103,6 +103,17 @@ export class WorkspaceStore {
     if (id) this._members.set(await this.api.get<Member[]>(`/servers/${id}/members`));
   }
 
+  private membersRefresh?: ReturnType<typeof setTimeout>;
+
+  /** Coalesced roster reload for an unknown author (at most one in flight per second). */
+  refreshMembersSoon(): void {
+    if (this.membersRefresh) return;
+    this.membersRefresh = setTimeout(() => {
+      this.membersRefresh = undefined;
+      void this.reloadMembers().catch(() => undefined);
+    }, 300);
+  }
+
   /** Local patch used by realtime events (e.g. channel last sequence advanced). */
   patchChannel(id: string, patch: Partial<Channel>): void {
     this._server.update((s) => (s ? { ...s, channels: s.channels.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : s));

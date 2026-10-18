@@ -11,6 +11,14 @@ import { ChannelUi } from './channel-ui';
 import { ChatMessage, ChatStore } from './chat.store';
 import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime, parseBody, previewText } from './message-text';
 
+const JOIN_LINES = [
+  'just landed in the hangar.',
+  'joined the party.',
+  'rolled in. Say hi!',
+  'touched down.',
+  'is here. Everyone look busy.',
+];
+
 /** One message row (prototype `article.msg`): header, reply ref, body/edit, reactions, hover toolbar. */
 @Component({
   selector: 'hx-message',
@@ -18,6 +26,52 @@ import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let m = message();
+    @if (m.kind === 'memberJoined') {
+      <article [id]="'msg-' + m.id" class="msg sys" [class.hl]="ui.highlightId() === m.id" [attr.aria-label]="aria()" data-testid="join-message">
+        <div class="gut" style="display: flex; justify-content: center; padding-top: 2px">
+          <span style="color: var(--online); display: inline-flex"><hx-icon name="user-plus" size="sm" /></span>
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px">
+            <span class="mtext" style="color: var(--tx2)"><button class="uname" [style.color]="color()" style="border: 0; padding: 0; background: none; font: inherit; font-weight: 600; cursor: pointer" (click)="openProfile($event)">{{ name() }}</button> {{ joinLine() }}</span>
+            <time class="mtime mono" [attr.datetime]="m.createdAt" [title]="full()">{{ time() }}</time>
+          </div>
+          @if (canWave()) {
+            <button class="btn sec" style="margin-top: 6px; height: 30px; font-size: 12.5px" (click)="react('👋')" [attr.aria-label]="'Wave to ' + name()">Wave 👋</button>
+          }
+          @if (m.reactions.length) {
+            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px">
+              @for (r of m.reactions; track r.emoji) {
+                <button class="react" [class.mine]="r.userIds.includes(me() ?? '')" (click)="react(r.emoji)" [disabled]="!canReact() && !r.userIds.includes(me() ?? '')"
+                        [attr.aria-pressed]="r.userIds.includes(me() ?? '')" [attr.aria-label]="r.emoji + ' ' + r.count + ' reactions'" [title]="who(r.userIds)">
+                  <span style="font-size: 14px">{{ r.emoji }}</span><span class="mono">{{ r.count }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+        @if (!m.pending) {
+          <div class="acts" [class.open]="reactOpen()" role="toolbar" aria-label="Message actions">
+            @if (reactOpen()) {
+              <div style="display: flex; gap: 2px; padding-right: 4px; margin-right: 2px; border-right: 1px solid var(--line)">
+                @for (e of quick; track e) {
+                  <button class="ibtn" style="font-size: 16px" (click)="react(e); ui.reactFor.set(null)" [attr.aria-label]="'React ' + e">{{ e }}</button>
+                }
+              </div>
+            }
+            @if (canReact()) {
+              <button class="ibtn" aria-label="Add reaction" title="React" (click)="toggleReact()"><hx-icon name="smile" size="sm" /></button>
+            }
+            @if (canSend()) {
+              <button class="ibtn" aria-label="Reply" title="Reply" (click)="ui.startReply(m)"><hx-icon name="reply" size="sm" /></button>
+            }
+            @if (mine() || canManage()) {
+              <button class="ibtn" aria-label="Delete" title="Delete (Shift+click skips confirmation)" (click)="askDelete($event)" style="color: var(--danger)"><hx-icon name="trash" size="sm" /></button>
+            }
+          </div>
+        }
+      </article>
+    } @else {
     <article [id]="'msg-' + m.id" class="msg" [class.grouped]="grouped()" [class.me-mention]="mentionsMe()" [class.hl]="ui.highlightId() === m.id"
              [style.opacity]="m.pending === 'sending' ? 0.6 : null" [attr.aria-label]="aria()">
       <div class="gut">
@@ -131,6 +185,7 @@ import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime
         </div>
       }
     </article>
+    }
   `,
 })
 export class MessageItem {
@@ -174,7 +229,18 @@ export class MessageItem {
   readonly canSend = computed(() => has(this.perms(), Perm.SendMessages));
   readonly canReact = computed(() => has(this.perms(), Perm.AddReactions));
   readonly canManage = computed(() => has(this.perms(), Perm.ManageMessages));
-  readonly aria = computed(() => `${this.name()} at ${this.time()}: ${previewText(this.message().body, this.workspace.memberById())}`);
+  readonly aria = computed(() =>
+    this.message().kind === 'memberJoined' ? `${this.name()} ${this.joinLine()} ${this.time()}`
+      : `${this.name()} at ${this.time()}: ${previewText(this.message().body, this.workspace.memberById())}`);
+  /** A welcome line picked by message id, so everyone sees the same one. */
+  readonly joinLine = computed(() => {
+    const id = this.message().id;
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    return JOIN_LINES[Math.abs(h) % JOIN_LINES.length];
+  });
+  readonly canWave = computed(() =>
+    !this.mine() && this.canReact() && !this.message().reactions.some((r) => r.emoji === '👋' && r.userIds.includes(this.me() ?? '')));
 
   readonly replyAuthor = computed(() => {
     const r = this.message().replyTo;
@@ -183,7 +249,7 @@ export class MessageItem {
   readonly replyName = computed(() => this.replyAuthor()?.displayName ?? 'Former member');
   readonly replyColor = computed(() => avatarColor(this.replyAuthor()?.avatarHue ?? 210));
   readonly replyIni = computed(() => initials(this.replyName()));
-  readonly replyText = computed(() => previewText(this.message().replyTo?.bodyPreview ?? '', this.workspace.memberById()));
+  readonly replyText = computed(() => this.message().replyTo?.kind === 'memberJoined' ? 'joined the hangar' : previewText(this.message().replyTo?.bodyPreview ?? '', this.workspace.memberById()));
 
   readonly size = formatSize;
 

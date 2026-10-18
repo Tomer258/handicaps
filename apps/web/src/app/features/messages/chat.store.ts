@@ -182,7 +182,7 @@ export class ChatStore {
       messageSequence: '',
       clientMessageId: crypto.randomUUID(),
       body,
-      replyTo: replyTo ? { id: replyTo.id, authorUserId: replyTo.authorUserId, bodyPreview: replyTo.body.slice(0, 120), deleted: false } : null,
+      replyTo: replyTo ? { id: replyTo.id, authorUserId: replyTo.authorUserId, bodyPreview: replyTo.body.slice(0, 120), deleted: false, kind: replyTo.kind } : null,
       version: 0,
       createdAt: new Date().toISOString(),
       editedAt: null,

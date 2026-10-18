@@ -184,7 +184,11 @@ export class RealtimeService {
       .build();
     this.conn = conn;
 
-    conn.on('channelEvent', (e: ChannelEvent) => this.channelEventHandlers.forEach((h) => h(e)));
+    conn.on('channelEvent', (e: ChannelEvent) => {
+      // A message from someone the roster doesn't know yet (e.g. they just joined): fetch the roster again.
+      if (e.actorUserId && !this.workspace.memberById().has(e.actorUserId)) this.workspace.refreshMembersSoon();
+      this.channelEventHandlers.forEach((h) => h(e));
+    });
     conn.on('typingChanged', (t: TypingSignal) => this.typingHandlers.forEach((h) => h(t)));
     conn.on('notificationCreated', (n: NotificationSignal) => this.notificationHandlers.forEach((h) => h(n)));
     conn.on('voiceStateChanged', (v: VoiceStateSignal) => this.voiceHandlers.forEach((h) => h(v)));
@@ -196,6 +200,9 @@ export class RealtimeService {
       this.workspace.patchMember(m.userId, { displayName: m.displayName, avatarHue: m.avatarHue, avatarAssetId: m.avatarAssetId });
       const me = this.session.user();
       if (me && me.id === m.userId) this.session.updateProfile({ ...me, displayName: m.displayName, avatarHue: m.avatarHue, avatarAssetId: m.avatarAssetId });
+    });
+    conn.on('membersChanged', (p: { serverId: string }) => {
+      if (p.serverId === this.workspace.serverId()) void this.workspace.reloadMembers().catch(() => undefined);
     });
     conn.on('policyChanged', (p: { serverId: string }) => void this.onPolicyChanged(p.serverId));
     conn.on('sessionRevoked', () => this.session.handleUnauthorized());

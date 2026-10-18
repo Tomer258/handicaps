@@ -1,5 +1,12 @@
 namespace Hangar.Core.Messaging;
 
+public enum MessageKind
+{
+    Default = 0,
+    /// <summary>"X joined": authored by the new member, empty body, cannot be edited.</summary>
+    MemberJoined = 1,
+}
+
 public sealed class Message
 {
     public Guid Id { get; set; }
@@ -18,6 +25,7 @@ public sealed class Message
     public DateTimeOffset? DeletedAt { get; set; }
     public bool Pinned { get; set; }
     public bool MentionsEveryone { get; set; }
+    public MessageKind Kind { get; set; }
 
     public List<MessageReaction> Reactions { get; set; } = [];
     public List<MessageAttachment> Attachments { get; set; } = [];

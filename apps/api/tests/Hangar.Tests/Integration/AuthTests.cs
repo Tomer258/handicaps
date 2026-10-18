@@ -214,4 +214,26 @@ public class AuthTests(ApiFactory factory)
         var gal = members.EnumerateArray().Single(m => m.GetProperty("login").GetString() == login);
         Assert.Equal(me.GetProperty("user").GetProperty("id").GetString(), gal.GetProperty("invitedBy").GetString());
     }
+
+    [Fact]
+    public async Task Joining_by_invite_posts_a_join_message_friends_can_wave_at()
+    {
+        var (owner, serverId) = await EnsureOwnerAsync();
+        var newcomer = factory.NewClient();
+        (await newcomer.RegisterAsync(await CreateInviteAsync(owner, serverId), "wave" + Random.Shared.Next(1000, 9999), displayName: "Waver")).EnsureSuccessStatusCode();
+        var newcomerId = (await Json(await newcomer.Http.GetAsync("/api/v1/auth/me"))).GetProperty("user").GetProperty("id").GetString();
+
+        var detail = await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}"));
+        var firstText = detail.GetProperty("channels").EnumerateArray().First(c => c.GetProperty("type").GetString() == "text").GetProperty("id").GetString();
+        var page = await Json(await owner.Http.GetAsync($"/api/v1/channels/{firstText}/messages?limit=20"));
+        var join = page.GetProperty("messages").EnumerateArray()
+            .Single(m => m.GetProperty("authorUserId").GetString() == newcomerId && m.GetProperty("kind").GetString() == "memberJoined");
+        var id = join.GetProperty("id").GetString();
+
+        var edit = await newcomer.Http.PatchAsJsonAsync($"/api/v1/messages/{id}", new { expectedVersion = 1, body = "hacked" });
+        Assert.Equal(HttpStatusCode.BadRequest, edit.StatusCode);
+        Assert.Equal("message.system", (await Json(edit)).GetProperty("code").GetString());
+        var wave = await owner.Http.PutAsync($"/api/v1/messages/{id}/reactions/{Uri.EscapeDataString("👋")}", null);
+        Assert.True(wave.IsSuccessStatusCode);
+    }
 }

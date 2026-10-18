@@ -140,6 +140,7 @@ export class MessageList {
       if (unread) unreadShown = true;
       const grouped =
         !!prev && !newDay && !unread && !m.replyTo && prev.authorUserId === m.authorUserId &&
+        m.kind !== 'memberJoined' && prev.kind !== 'memberJoined' &&
         new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_WINDOW_MS;
       rows.push({ m, grouped, day: newDay ? dayLabel(m.createdAt) : null, unread });
     }

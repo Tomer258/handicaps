@@ -253,6 +253,43 @@ public sealed partial class MessageService(
         return (dto, true);
     }
 
+    /// <summary>
+    /// "X joined" in the first text channel (by position) the new member can see. Best effort: the caller ignores
+    /// failures, and a server without a visible text channel simply gets no welcome.
+    /// </summary>
+    public async Task<MessageDto?> PostMemberJoinedAsync(Guid userId, Guid serverId, CancellationToken ct)
+    {
+        var candidates = await db.Channels.AsNoTracking()
+            .Where(c => c.ServerId == serverId && c.Type == ChannelType.Text && c.ArchivedAt == null)
+            .OrderBy(c => c.Position).ThenBy(c => c.CreatedAt).ToListAsync(ct);
+        Guid? target = null;
+        foreach (var c in candidates)
+            if ((await permissions.ChannelPermissionsAsync(userId, c, ct)).HasFlag(Permission.ViewChannel)) { target = c.Id; break; }
+        if (target is null) return null;
+
+        var now = clock.GetUtcNow();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var channel = await LockChannelAsync(target.Value, ct);
+        var message = new Message
+        {
+            Id = Guid.CreateVersion7(),
+            ServerId = channel.ServerId,
+            ChannelId = channel.Id,
+            AuthorUserId = userId,
+            ClientMessageId = Guid.CreateVersion7(),
+            Kind = MessageKind.MemberJoined,
+            CreatedAt = now,
+            MessageSequence = channel.NextMessageSequence++,
+        };
+        db.Messages.Add(message);
+        var dto = await ToDtoAsync(message, ct);
+        AddEvent(channel, ChannelEventTypes.MessageCreated, message.Id, message.Version, userId, dto, now);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        outbox.Notify();
+        return dto;
+    }
+
     public async Task<MessageDto> EditAsync(Guid userId, Guid messageId, EditMessageRequest req, CancellationToken ct)
     {
         var body = NormalizeBody(req.Body);
@@ -261,6 +298,7 @@ public sealed partial class MessageService(
                      ?? throw AppProblem.NotFound("message.not_found", "Message not found.");
         await permissions.RequireChannelAsync(userId, target.ChannelId, Permission.SendMessages, ct);
         if (target.AuthorUserId != userId) throw AppProblem.Forbidden("message.not_author", "You can only edit your own messages.");
+        if (target.Kind != MessageKind.Default) throw AppProblem.BadRequest("message.system", "This message can't be edited.");
 
         var now = clock.GetUtcNow();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -478,7 +516,8 @@ public sealed partial class MessageService(
         var replyIds = messages.Where(m => m.ReplyToId != null).Select(m => m.ReplyToId!.Value).Distinct().ToList();
         var replies = replyIds.Count == 0 ? new Dictionary<Guid, ReplyPreviewDto>() : await db.Messages.AsNoTracking()
             .Where(m => replyIds.Contains(m.Id))
-            .Select(m => new ReplyPreviewDto(m.Id, m.AuthorUserId, m.DeletedAt == null ? (m.Body.Length > 140 ? m.Body.Substring(0, 140) : m.Body) : null, m.DeletedAt != null))
+            .Select(m => new ReplyPreviewDto(m.Id, m.AuthorUserId, m.DeletedAt == null ? (m.Body.Length > 140 ? m.Body.Substring(0, 140) : m.Body) : null, m.DeletedAt != null,
+                m.Kind == MessageKind.MemberJoined ? "memberJoined" : "default"))
             .ToDictionaryAsync(r => r.Id, ct);
 
         var assetIds = messages.SelectMany(m => m.Attachments).Select(a => a.FileAssetId).Distinct().ToList();
@@ -498,7 +537,8 @@ public sealed partial class MessageService(
             {
                 var f = assets[a.FileAssetId];
                 return new AttachmentDto(f.Id, f.OriginalName, f.Mime, f.SizeBytes, f.Width, f.Height);
-            }).ToList())).ToList();
+            }).ToList(),
+            m.Kind == MessageKind.MemberJoined ? "memberJoined" : "default")).ToList();
     }
 
     public static ChannelEventDto ToDto(ChannelEvent e) => new(

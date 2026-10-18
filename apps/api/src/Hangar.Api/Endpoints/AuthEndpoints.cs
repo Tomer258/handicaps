@@ -1,6 +1,7 @@
 using Hangar.Api.Infrastructure;
 using Hangar.Core.Common;
 using Hangar.Core.Identity;
+using Hangar.Core.Messaging;
 using Hangar.Core.Users;
 using Hangar.Core.Workspaces;
 using Microsoft.AspNetCore.Antiforgery;
@@ -39,9 +40,20 @@ public static class AuthEndpoints
             .AllowAnonymous().RequireRateLimiting("auth");
 
         auth.MapPost("/register", async (RegisterRequest req, HttpContext http, AuthService svc, IAntiforgery af,
-                IOptions<HangarOptions> opt, UserService users, WorkspaceService ws, CancellationToken ct) =>
+                IOptions<HangarOptions> opt, UserService users, WorkspaceService ws, MessageService messages, Hangar.Api.Realtime.PresenceBroadcaster presence, ILogger<RegisterRequest> log,
+                CancellationToken ct) =>
             {
                 var result = await svc.RegisterAsync(req.InviteSecret, req.Login, req.Password, req.DisplayName, req.Remember, DeviceLabel(http), ct);
+                if (result.JoinedServerId is { } joined)
+                {
+                    // The account exists either way; a missing roster push or welcome message must not fail registration.
+                    try
+                    {
+                        await presence.MembersChangedAsync(result.User.Id, joined);
+                        await messages.PostMemberJoinedAsync(result.User.Id, joined, ct);
+                    }
+                    catch (Exception ex) { log.LogWarning(ex, "welcome message for {UserId} failed", result.User.Id); }
+                }
                 await SignInAsync(http, result, af, opt.Value);
                 return Results.Ok(await Me(result.User.Id, result.Session.Id, users, ws, ct));
             })

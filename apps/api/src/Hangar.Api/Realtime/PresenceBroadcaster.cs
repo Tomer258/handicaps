@@ -32,6 +32,14 @@ public sealed class PresenceBroadcaster(IHubContext<HangarHub> hub, ConnectionRe
             await hub.Clients.Clients(targets.Distinct().ToList()).SendAsync("memberUpdated", payload);
     }
 
+    /// <summary>Someone joined: members reload their roster (the payload names only the server).</summary>
+    public async Task MembersChangedAsync(Guid userId, Guid serverId)
+    {
+        var targets = await PeersAsync(userId);
+        if (targets.Count > 0)
+            await hub.Clients.Clients(targets).SendAsync("membersChanged", new { serverId });
+    }
+
     public async Task TypingAsync(Channel channel, Guid userId, string fromConnection)
     {
         using var scope = scopes.CreateScope();
