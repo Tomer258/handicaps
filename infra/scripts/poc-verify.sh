@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 # deploy.md §3 automated checks, run from a machine OUTSIDE the host (your laptop, another VPS).
 #
-#   ./infra/scripts/poc-verify.sh --domain example.com [--host <vps-ip>]
+#   ./infra/scripts/poc-verify.sh --domain example.com [--host <vps-ip>] [--insecure]
+#   (--insecure: accept a non-public CA, e.g. the local POC: --domain hangar.localhost --insecure)
 #
 # Checks the SPA, that /internal and the LiveKit admin API are not exposed, that signaling without a token is refused,
 # and (when nmap is installed and --host is given) that private ports are closed from outside.
 # Manual follow-ups: sign in, attachment, voice from two networks (one with UDP blocked), token-free edge logs.
 set -uo pipefail
 
-DOMAIN="" HOST=""
+DOMAIN="" HOST="" K=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN="$2"; shift 2 ;;
     --host) HOST="$2"; shift 2 ;;
+    --insecure) K="-k"; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
 [ -n "$DOMAIN" ] || { echo "usage: $0 --domain example.com [--host <vps-ip>]" >&2; exit 2; }
 APP="https://app.$DOMAIN" RTC="https://rtc.$DOMAIN"
 fails=0
-code() { curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$@"; }
+code() { curl -s $K -o /dev/null -w '%{http_code}' --max-time 10 "$@"; }
 expect() { # expect <description> <wanted> <actual>
   if [ "$2" = "$3" ]; then echo "ok   $1 ($3)"; else echo "FAIL $1 (wanted $2, got $3)"; fails=$((fails + 1)); fi
 }
@@ -33,7 +35,7 @@ expect "garbage token refused"                403 "$(code "$RTC/rtc/validate?acc
 expect "LiveKit Twirp API not exposed"        404 "$(code -X POST "$RTC/twirp/livekit.RoomService/ListRooms")"
 expect "rtc host serves nothing else"         404 "$(code "$RTC/")"
 expect "API reachable through the edge"       401 "$(code "$APP/api/v1/auth/me")"
-hsts="$(curl -sI --max-time 10 "$APP/" | tr -d '\r' | grep -i '^strict-transport-security' || true)"
+hsts="$(curl -sI $K --max-time 10 "$APP/" | tr -d '\r' | grep -i '^strict-transport-security' || true)"
 expect "HSTS header present"                  yes "$([ -n "$hsts" ] && echo yes || echo no)"
 
 if [ -n "$HOST" ] && command -v nmap >/dev/null; then

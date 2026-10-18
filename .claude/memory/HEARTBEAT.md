@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S0–S8, search, watchdog, POC bootstrap committed; plan reordered POC-first)
+**Last update:** 2026-10-18 — session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -31,7 +31,8 @@
 
 ## Remaining plan — reordered POC-first (2026-10-18, user request: working template ASAP; nothing removed)
 Items are the existing remaining work (pre-release-gates.md manual list + roadmap Phase 7), only re-sequenced.
-- [ ] P1 POC deploy (needs user: VPS + domain + DNS + git remote): deploy.md §1 steps 1–3 by hand, then
+- [x] P1a Local POC (no VPS): `bash infra/scripts/poc-local.sh up` → unmodified prod stack in DinD (docker:28.5.1-dind, privileged; host ports 80/443/7881/7882udp; stops dev livekit+publisher) at https://app.hangar.localhost via `poc-bootstrap.sh --local` (LiveKit node_ip 127.0.0.1). Verified 2026-10-18: poc-verify.sh --insecure 10/10; poc-smoke.mjs (owner invite → register, invite friend, realtime chat, voice with real audio through gate). `poc-local.sh invite|fresh|down|reset|dc …|ca`. Pushed to origin https://github.com/Tomer258/handicaps_discord.git.
+- [ ] P1 POC deploy (needs user: VPS + domain + DNS): deploy.md §1 steps 1–3 by hand, then
       `sudo ./infra/scripts/poc-bootstrap.sh --domain <d> --email <e> --ufw` (steps 4–6 + §2), then deploy.md §3 verify.
       Bootstrap script verified locally: config-only run in Linux, secrets consistent, LiveKit starts with generated keys, compose resolves.
 - [ ] P2 Gates that prove the POC is safe to share (pre-release-gates.md manual): bypass attempts (:7880, IPv6, turn. HTTP, :5349),
@@ -42,8 +43,7 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
       interrupted upload, disk-full, expired-cert alert, rollback with compatible schema.
 
 ## Next exact step
-P1: waiting on the user for a git remote URL (no remote configured, no gh CLI) to push, and for VPS/domain details to deploy.
-Until then: any local work that shortens P1–P2 (e.g. scripting the deploy.md §3 verification).
+Local POC runs (P1a). User will get a VPS once happy with the local POC → then P1 with poc-bootstrap.sh. Next local work: let the user try the POC; fix what they report; POC smoke does not yet cover soundboard/attachments/screen share on the prod stack (worth adding).
 
 ## Watchdog notes (done)
 - API: Core/Media/ReconcileHealth.cs (singleton; VoiceService.ReconcileAsync now returns bool complete and records it); GET /internal/watchdog/reconcile (200/503); AdmitAsync refuses when not Fresh (no complete pass for 3×ReconcileInterval). Tests: ReconcileHealthTests (2) + VoiceTests watchdog endpoint → 60 pass.

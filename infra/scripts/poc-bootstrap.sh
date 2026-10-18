@@ -13,10 +13,11 @@
 #
 # Options: --root DIR (default /srv/hangar)   --app-host/--rtc-host/--turn-host H (default app./rtc./turn.<domain>)
 #          --config-only (directories + config, no sysctl/firewall/compose)   --force-config
+#          --local (no VPS: LiveKit advertises 127.0.0.1 instead of its STUN-detected public IP; used by poc-local.sh)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ROOT=/srv/hangar DOMAIN="" EMAIL="" APP_HOST="" RTC_HOST="" TURN_HOST="" UFW=0 CONFIG_ONLY=0 FORCE=0
+ROOT=/srv/hangar DOMAIN="" EMAIL="" APP_HOST="" RTC_HOST="" TURN_HOST="" UFW=0 CONFIG_ONLY=0 FORCE=0 LOCAL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN="$2"; shift 2 ;;
@@ -28,6 +29,7 @@ while [ $# -gt 0 ]; do
     --ufw) UFW=1; shift ;;
     --config-only) CONFIG_ONLY=1; shift ;;
     --force-config) FORCE=1; shift ;;
+    --local) LOCAL=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -68,6 +70,9 @@ else
   setkv LIVEKIT_API_SECRET "$WD" < "$EX/watchdog.env" > "$CFG/watchdog.env"
   sed -E -e "s|^hangar:.*|hangar: $LK|" -e "s|^watchdog:.*|watchdog: $WD|" < "$EX/livekit-keys.yaml" > "$CFG/livekit-keys.yaml"
   hosts < "$REPO/infra/livekit.prod.yaml" > "$CFG/livekit.yaml"
+  if [ "$LOCAL" -eq 1 ]; then
+    sed -i -E 's|^(  )use_external_ip: true|\1use_external_ip: false\n\1node_ip: 127.0.0.1|' "$CFG/livekit.yaml"
+  fi
   [ -f "$CFG/backup.env" ] || cp "$EX/backup.env" "$CFG/backup.env"
   printf %s "$PG" > "$CFG/postgres_password"
   unset PG LK WD WORKER
@@ -84,7 +89,7 @@ fi
 
 step "Kernel buffers for media"
 printf 'net.core.rmem_max=5000000\nnet.core.wmem_max=5000000\n' > /etc/sysctl.d/90-livekit.conf
-sysctl --system >/dev/null
+sysctl -p /etc/sysctl.d/90-livekit.conf >/dev/null
 
 if [ "$UFW" -eq 1 ]; then
   step "Host firewall (ufw)"

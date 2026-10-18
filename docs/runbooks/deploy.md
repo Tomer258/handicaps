@@ -5,6 +5,10 @@
 > It does steps 4–6 and §2 in one go, generating every secret consistently. Then do §3. Backups are not configured
 > by the script; set them up before inviting real users.
 > From another machine, `./infra/scripts/poc-verify.sh --domain <domain> --host <vps-ip>` runs the automated part of §3.
+>
+> **No VPS yet:** `./infra/scripts/poc-local.sh up` runs the same production stack locally inside a Docker-in-Docker
+> "VPS" at https://app.hangar.localhost (Caddy's local CA: accept the warning for `app.` and `rtc.`). Then
+> `poc-local.sh invite` prints the owner invite. `node tests/e2e/scripts/poc-smoke.mjs <invite>` checks it end to end.
 
 ## 1. Host preparation (once)
 
