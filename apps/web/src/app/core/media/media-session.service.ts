@@ -1,5 +1,6 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import {
+  ConnectionQuality,
   ConnectionState,
   DisconnectReason,
   LocalTrack,
@@ -108,6 +109,9 @@ export class MediaSessionService {
   private readonly _volumes = signal<Record<string, number>>(loadVolumes());
   private readonly _sharing = signal<'off' | 'starting' | 'live'>('off');
   private readonly _shareHasAudio = signal(false);
+  private readonly _shareQuality = signal<ScreenQuality>('1080p60');
+  /** LiveKit's per-participant link quality (identity → quality); drives "Weak connection" (States 09). */
+  private readonly _quality = signal<Readonly<Record<string, ConnectionQuality>>>({});
   private readonly _camera = signal<'off' | 'starting' | 'on'>('off');
   /** Why the camera didn't start, when the fix is outside Hangar (States 13). The shell shows it as a dialog. */
   readonly cameraProblem = signal<'missing' | 'busy' | null>(null);
@@ -138,6 +142,10 @@ export class MediaSessionService {
   readonly connected = computed(() => this._connection() === 'connected' || this._connection() === 'reconnecting');
   readonly sharing = this._sharing.asReadonly();
   readonly shareHasAudio = this._shareHasAudio.asReadonly();
+  /** Quality being negotiated or sent while sharing. */
+  readonly shareQuality = this._shareQuality.asReadonly();
+  /** My own link is poor or lost. */
+  readonly weakLink = computed(() => isWeak(this._quality()[this.room?.localParticipant.identity ?? '']));
   readonly camera = this._camera.asReadonly();
   readonly canCamera = this._canCamera.asReadonly();
   readonly canScreen = this._canScreen.asReadonly();
@@ -207,6 +215,11 @@ export class MediaSessionService {
       const p = this.mediaPrefs.prefs();
       untracked(() => void this.applyDevicePrefs(p.inputDeviceId, p.outputDeviceId, p.cameraDeviceId));
     });
+  }
+
+  /** A participant's link is poor or lost (theirs as LiveKit sees it). */
+  weakLinkOf(identity: string): boolean {
+    return isWeak(this._quality()[identity]);
   }
 
   /** The current voice lease (authorizes soundboard plays); null when not in voice. */
@@ -305,6 +318,7 @@ export class MediaSessionService {
     this._channelId.set(null);
     this._peers.set([]);
     this._speaking.set(new Set());
+    this._quality.set({});
     this._error.set(null);
     this._audioBlocked.set(false);
     this.resetPublishing();
@@ -343,6 +357,7 @@ export class MediaSessionService {
       tracks.forEach((t) => t.stop());
       return 'failed';
     }
+    this._shareQuality.set(quality);
     this._sharing.set('starting');
     try {
       await this.api.post(`/voice/${lease}/publications/screen`, { quality, withAudio: !!audio });
@@ -582,6 +597,9 @@ export class MediaSessionService {
         if (!live()) return;
         this._speaking.set(new Set(speakers.map((s) => userIdOf(s)).filter((u): u is string => !!u)));
       })
+      .on(RoomEvent.ConnectionQualityChanged, (q: ConnectionQuality, p: Participant) => {
+        if (live()) this._quality.update((m) => ({ ...m, [p.identity]: q }));
+      })
       .on(RoomEvent.AudioPlaybackStatusChanged, () => live() && this._audioBlocked.set(!room.canPlaybackAudio))
       .on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
         if (!live()) return;
@@ -606,6 +624,7 @@ export class MediaSessionService {
         this.resetPublishing();
         this._peers.set([]);
         this._speaking.set(new Set());
+        this._quality.set({});
         if (reason === DisconnectReason.PARTICIPANT_REMOVED || reason === DisconnectReason.DUPLICATE_IDENTITY) {
           this._connection.set('idle');
           this._channelId.set(null);
@@ -902,4 +921,8 @@ function loadVolumes(): Record<string, number> {
   } catch {
     return {};
   }
+}
+
+function isWeak(q: ConnectionQuality | undefined): boolean {
+  return q === ConnectionQuality.Poor || q === ConnectionQuality.Lost;
 }

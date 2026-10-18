@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { MediaPrefsService } from '../../core/media/media-prefs.service';
 import { MediaSessionService, ScreenQuality } from '../../core/media/media-session.service';
 import { Icon } from '../../shared/ui/icon';
@@ -82,12 +82,27 @@ export class ShareDialog {
   readonly denied = signal(false);
   readonly busy = signal(false);
 
+  private done = false;
+
+  constructor() {
+    // Capture picked: the room shows "Going live" while the stream negotiates (States 08), so get out of the way.
+    effect(() => {
+      if (this.busy() && this.media.sharing() === 'starting') untracked(() => this.close());
+    });
+  }
+
   /** Runs inside the click: startScreenShare calls getDisplayMedia before any await. */
   async start(): Promise<void> {
     this.busy.set(true);
     const result = await this.media.startScreenShare(this.quality(), this.audio());
     this.busy.set(false);
     if (result === 'denied') this.denied.set(true);
-    else this.closed.emit();
+    else this.close();
+  }
+
+  private close(): void {
+    if (this.done) return;
+    this.done = true;
+    this.closed.emit();
   }
 }

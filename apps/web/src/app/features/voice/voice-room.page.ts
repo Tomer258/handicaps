@@ -102,6 +102,14 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                   <button class="btn sec" (click)="media.retryMic()">Retry microphone</button>
                 </div>
               }
+              @if (here() && media.sharing() === 'starting') {
+                <div class="fade" role="status" style="aspect-ratio: 16 / 9; max-height: 320px; margin: 0 auto 18px; border-radius: 14px; background: #0b0c0e; border: 1px solid var(--line); display: grid; place-items: center">
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; color: #fff">
+                    <span class="tag live">GOING LIVE</span>
+                    <span style="font-size: 12.5px; opacity: .8">Negotiating {{ media.shareQuality() === '1080p60' ? '1080p · 60' : '720p · 30' }} with {{ viewers() }} {{ viewers() === 1 ? 'viewer' : 'viewers' }}…</span>
+                  </div>
+                </div>
+              }
               @if (liveStreams().length > 0) {
                 <div style="display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: var(--bg3); border: 1px solid var(--line); margin-bottom: 18px; flex-wrap: wrap">
                   <div style="display: flex">
