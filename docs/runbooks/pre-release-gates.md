@@ -60,6 +60,11 @@ The unmodified `compose.prod.yml` runs inside a Docker-in-Docker "VPS" at `*.han
   validate (200) and the initial one upgrades to a WebSocket (101); afterwards /rtc/validate, /rtc/v1/validate, fresh
   /rtc and /rtc/v1 upgrades and a reconnect=1 resume all answer 403 for both tokens, and the cookie gets 401.
 
+- Authorization watchdog drill rehearsal (2026-10-18, local POC, two real browser clients held in voice by
+  `tests/e2e/scripts/poc-hold-voice.mjs`): `gate-watchdog.sh` passed 10/10. Voice closed 62 s after `dc stop api`
+  (flag, every room deleted, `voice signaling CLOSED` logged), both clients dropped at the same moment, the edge
+  answered 503 to a token valid seconds earlier; access reopened 36 s after `dc start api` and a new join was admitted.
+
 This does not replace the host checks below, which need public networking.
 
 ## Manual, on the production host (not done yet, required)
@@ -77,3 +82,5 @@ This does not replace the host checks below, which need public networking.
       `dc logs auth-watchdog` shows `voice signaling CLOSED`, and `/srv/hangar/watchdog/closed` exists. Rejoins get
       `503`. `dc start api`. About 30 s after the API is healthy the flag is gone and clients can rejoin. Alert on
       `auth-watchdog` ERROR lines, on its container health, and on `Voice reconciliation` warnings in the API log.
+      Automated on the host (keep the two clients in voice; the drill account must be a third one, since its own
+      join would replace a client's lease): `HANGAR_LOGIN=<third member> HANGAR_PASSWORD=… ./infra/scripts/gate-watchdog.sh --domain <d>`.
