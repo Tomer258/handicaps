@@ -25,6 +25,12 @@ public sealed class AppProblemHandler(IProblemDetailsService problems, ILogger<A
             pd = new ProblemDetails { Status = bad.StatusCode, Title = "The request could not be read." };
             pd.Extensions["code"] = bad.StatusCode == 413 ? "request.too_large" : "request.invalid";
         }
+        else if (Hangar.Core.Files.DiskFull.Is(ex))
+        {
+            log.LogCritical(ex, "Disk full during {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+            pd = new ProblemDetails { Status = 507, Title = Hangar.Core.Files.DiskFull.Problem().Message };
+            pd.Extensions["code"] = "storage.full";
+        }
         else if (IsDatabaseUnavailable(ex))
         {
             log.LogWarning(ex, "Database unavailable for {Method} {Path}", ctx.Request.Method, ctx.Request.Path);

@@ -9,6 +9,18 @@ public sealed class StorageOptions
 {
     /// <summary>Private storage root shared (by bind mount) with the validator and publisher containers.</summary>
     public string Root { get; set; } = "data/files";
+
+    /// <summary>Uploads are refused (507 storage.full) when the storage volume has less free space than this.</summary>
+    public long MinFreeMegabytes { get; set; } = 1024;
+}
+
+public static class DiskFull
+{
+    /// <summary>ENOSPC on Linux; ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL on Windows.</summary>
+    public static bool Is(Exception e) => e is IOException io && (io.HResult == 28 || (io.HResult & 0xFFFF) is 0x70 or 0x27);
+
+    public static AppProblem Problem() =>
+        new(507, "storage.full", "The server is out of storage space, so uploads are paused. Tell the server owner.");
 }
 
 /// <summary>Storage areas. Each worker mounts only what it needs (validator: quarantine ro, spool/sounds/images rw; publisher: sounds ro).</summary>
@@ -29,9 +41,11 @@ public static class StorageArea
 public sealed class LocalFileStore
 {
     private readonly string root;
+    private readonly StorageOptions options;
 
     public LocalFileStore(IOptions<StorageOptions> options)
     {
+        this.options = options.Value;
         root = Path.GetFullPath(options.Value.Root);
         foreach (var area in new[] { StorageArea.Quarantine, StorageArea.Sounds, StorageArea.Attachments, StorageArea.Images, $"{StorageArea.Spool}/jobs", $"{StorageArea.Spool}/results" })
             Directory.CreateDirectory(Path.Combine(root, area));
@@ -53,6 +67,7 @@ public sealed class LocalFileStore
     /// <summary>Streams an upload into the area under a new random key with a hard byte cap; hashes on the way.</summary>
     public async Task<(string Key, long Size, string Sha256)> SaveAsync(string area, Stream source, long maxBytes, CancellationToken ct)
     {
+        EnsureSpace();
         var key = NewKey();
         var path = PathOf(area, key);
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -70,9 +85,10 @@ public sealed class LocalFileStore
                 await file.WriteAsync(buffer.AsMemory(0, read), ct);
             }
         }
-        catch
+        catch (Exception e)
         {
             TryDelete(area, key);
+            if (DiskFull.Is(e)) throw DiskFull.Problem();
             throw;
         }
         return (key, total, Convert.ToHexStringLower(sha.GetHashAndReset()));
@@ -82,6 +98,21 @@ public sealed class LocalFileStore
     {
         await using var file = File.OpenRead(PathOf(area, key));
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(file, ct));
+    }
+
+    /// <summary>Keeps headroom for PostgreSQL, logs and the validator: refuse new uploads before the disk is actually full.</summary>
+    public void EnsureSpace()
+    {
+        long free;
+        try
+        {
+            free = new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            return; // unknown → let the write itself decide
+        }
+        if (free < options.MinFreeMegabytes * 1024 * 1024) throw DiskFull.Problem();
     }
 
     public bool Exists(string area, string key) => File.Exists(PathOf(area, key));

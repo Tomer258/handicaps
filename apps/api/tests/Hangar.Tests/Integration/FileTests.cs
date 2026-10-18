@@ -150,4 +150,77 @@ public class FileTests(ApiFactory factory)
         }
         Assert.Equal(HttpStatusCode.NotFound, (await owner.Http.GetAsync($"/api/v1/attachments/{id}")).StatusCode);
     }
+
+    private int QuarantineCount()
+    {
+        factory.Services.GetRequiredService<LocalFileStore>(); // creates the areas
+        return Directory.GetFiles(Path.Combine(StorageRoot, StorageArea.Quarantine)).Length;
+    }
+
+    private async Task<int> FileRowsAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<HangarDbContext>().FileAssets.CountAsync();
+    }
+
+    [Fact]
+    public async Task Low_disk_space_pauses_uploads_with_507()
+    {
+        var (owner, serverId) = await OwnerAsync(factory);
+        var opts = factory.Services.GetRequiredService<IOptions<StorageOptions>>().Value;
+        var before = opts.MinFreeMegabytes;
+        var files = QuarantineCount();
+        opts.MinFreeMegabytes = long.MaxValue / (2L * 1024 * 1024); // more than any disk has
+        try
+        {
+            var r = await UploadAsync(owner, $"/api/v1/servers/{serverId}/attachments", Png, "a.png");
+            Assert.Equal((HttpStatusCode)507, r.StatusCode);
+            Assert.Equal("storage.full", (await Json(r)).GetProperty("code").GetString());
+        }
+        finally
+        {
+            opts.MinFreeMegabytes = before;
+        }
+        Assert.Equal(files, QuarantineCount());
+        Assert.Equal(HttpStatusCode.Created, (await UploadAsync(owner, $"/api/v1/servers/{serverId}/attachments", Png, "a.png")).StatusCode);
+    }
+
+    /// <summary>Sends part of the body, then fails like a dropped connection.</summary>
+    private sealed class BrokenContent(int sendBytes) : HttpContent
+    {
+        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        {
+            var chunk = new byte[16 * 1024];
+            for (var sent = 0; sent < sendBytes; sent += chunk.Length) await stream.WriteAsync(chunk);
+            throw new IOException("connection dropped");
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    [Fact]
+    public async Task Interrupted_upload_leaves_no_file_or_row_behind()
+    {
+        var (owner, serverId) = await OwnerAsync(factory);
+        var files = QuarantineCount();
+        var rows = await FileRowsAsync();
+
+        var form = new MultipartFormDataContent();
+        var part = new BrokenContent(512 * 1024);
+        part.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        form.Add(part, "file", "big.png");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAnyAsync<Exception>(() => owner.Http.PostAsync($"/api/v1/servers/{serverId}/attachments", form, cts.Token));
+
+        await Task.Delay(500);
+        Assert.Equal(files, QuarantineCount());
+        Assert.True(await FileRowsAsync() <= rows, "no file row was created"); // GC may remove older orphans meanwhile
+        Assert.Equal(rows, await FileRowsAsync());
+        // The server is fine afterwards.
+        Assert.Equal(HttpStatusCode.Created, (await UploadAsync(owner, $"/api/v1/servers/{serverId}/attachments", Png, "a.png")).StatusCode);
+    }
 }
