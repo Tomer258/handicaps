@@ -6,7 +6,7 @@ import { Icon } from '../../shared/ui/icon';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { PresenceStore } from '../presence/presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
-import { SettingsDialog } from '../settings/settings.dialog';
+import { SettingsSection, openUserSettings } from '../settings/settings.dialog';
 
 /**
  * Mic and deafen live on the user row so they are always in the same place — connected or not.
@@ -57,7 +57,7 @@ export class UserPanel {
     return labels[this.presence.myStatus()];
   });
 
-  openSettings(section: string): void {
-    this.dialog.open(SettingsDialog, { data: { section }, ariaLabel: 'Settings', panelClass: 'hx-fullscreen-dialog', width: '100vw', height: '100dvh' });
+  openSettings(section: SettingsSection): void {
+    openUserSettings(this.dialog, section);
   }
 }

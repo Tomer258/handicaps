@@ -29,7 +29,18 @@ const GROUP_WINDOW_MS = 7 * 60_000;
     <div #scroller class="scroll" style="flex: 1; min-height: 0; padding: 8px 0 12px" (scroll)="onScroll()" role="log" aria-live="polite"
          [attr.aria-label]="'Messages in ' + channel().name" tabindex="-1">
       @if (!chatState().loaded) {
-        <div style="height: 100%; display: grid; place-items: center"><span class="spin" aria-label="Loading messages"></span></div>
+        <div role="status" aria-label="Loading messages" style="padding-top: 12px">
+          @for (s of skeleton; track $index) {
+            <div class="skrow" aria-hidden="true">
+              <div class="sk av40"></div>
+              <div class="lines">
+                <div class="sk ln" [style.width.%]="s.name"></div>
+                <div class="sk ln" [style.width.%]="s.text"></div>
+                @if (s.media) { <div class="sk" style="width: 70%; max-width: 420px; height: 90px; border-radius: 10px"></div> }
+              </div>
+            </div>
+          }
+        </div>
       } @else {
         @if (chatState().hasMore) {
           <div style="display: grid; place-items: center; padding: 12px">
@@ -82,6 +93,13 @@ const GROUP_WINDOW_MS = 7 * 60_000;
 })
 export class MessageList {
   readonly channel = input.required<Channel>();
+  /** Placeholder rows while history loads (widths vary so it reads as messages, not a table). */
+  readonly skeleton = [
+    { name: 30, text: 85, media: false },
+    { name: 22, text: 60, media: true },
+    { name: 26, text: 72, media: false },
+    { name: 18, text: 45, media: false },
+  ];
 
   readonly ui = inject(ChannelUi);
   private readonly chat = inject(ChatStore);

@@ -109,6 +109,8 @@ export class MediaSessionService {
   private readonly _sharing = signal<'off' | 'starting' | 'live'>('off');
   private readonly _shareHasAudio = signal(false);
   private readonly _camera = signal<'off' | 'starting' | 'on'>('off');
+  /** Why the camera didn't start, when the fix is outside Hangar (States 13). The shell shows it as a dialog. */
+  readonly cameraProblem = signal<'missing' | 'busy' | null>(null);
   private readonly _canCamera = signal(false);
   private readonly _canScreen = signal(false);
   private readonly _streamVolumes = signal<Record<string, number>>({});
@@ -421,7 +423,9 @@ export class MediaSessionService {
       if (gen !== this.generation) return;
       void this.api.delete(`/voice/${lease}/publications/camera`).catch(() => undefined);
       const name = (e as Error)?.name;
-      this.toast.show(name === 'NotAllowedError' ? 'Camera permission was denied.' : ApiError.from(e).message, 'danger');
+      if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'DevicesNotFoundError') this.cameraProblem.set('missing');
+      else if (name === 'NotReadableError' || name === 'TrackStartError') this.cameraProblem.set('busy');
+      else this.toast.show(name === 'NotAllowedError' ? 'Camera permission was denied.' : ApiError.from(e).message, 'danger');
     }
   }
 

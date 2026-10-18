@@ -8,7 +8,9 @@ the date and version.
 - `cd apps/api && dotnet test`: includes the admission/revocation, permission, soundboard and file-access tests.
 - Playwright smokes in `tests/e2e/scripts/`: chat, voice, stream, soundboard, settings, attachments, notifications,
   responsive, search, admin, moderation, voice panel and two-step login (`smoke-2fa.mjs`: QR enrolment, code and
-  recovery-code sign-in, turning it off).
+  recovery-code sign-in, turning it off). UX states: `smoke-states.mjs` (loading skeleton, no camera, soundboard
+  without permission) and `smoke-reconnect.mjs`. In the reconnect smoke, a crashed friend's card stays marked
+  "Reconnecting…" until the server's grace ends, and a deliberate leave never shows that state.
 - Gate check through a real Caddy forward_auth (`infra/caddy/Caddyfile.gate-dev` plus `node scripts/gate-check.mjs`;
   steps are in the Caddyfile header). Expected: a live token is admitted. Refused on `/rtc`, `/rtc/validate`, `/rtc/v1`
   and `/rtc/v1/validate`: a foreign Origin, a garbage or missing token, Twirp paths, and a token replayed after

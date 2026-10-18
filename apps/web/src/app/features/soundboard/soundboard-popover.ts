@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, afterNextRender, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { Perm, has } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { Icon } from '../../shared/ui/icon';
@@ -56,6 +57,13 @@ type Category = 'all' | 'favorites' | 'mine';
             @if (p.mine) {
               <button class="ibtn" style="width: 24px; height: 24px" [attr.aria-label]="'Stop ' + p.name" title="Stop" (click)="store.stop(p.id)"><hx-icon name="stop" size="sm" /></button>
             }
+          </div>
+        }
+        @if (!allowed()) {
+          <div class="fade" role="status" style="display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: color-mix(in oklab,var(--sb) 10%,transparent); border: 1px solid color-mix(in oklab,var(--sb) 30%,transparent)">
+            <span style="width: 36px; height: 36px; flex: none; border-radius: 11px; background: color-mix(in oklab,var(--sb) 18%,transparent); color: var(--sb); display: grid; place-items: center"><hx-icon name="lock" size="sm" /></span>
+            <div style="font-size: 12.5px"><b>You can't play sounds in this channel</b>
+              <div style="color: var(--tx3)">You still hear them. Ask {{ granters() }} for a role with “Play soundboard”.</div></div>
           </div>
         }
         @if (store.cooldownLeftMs() > 0) {
@@ -168,7 +176,19 @@ export class SoundboardPopover implements OnDestroy {
 
   readonly volPct = computed(() => Math.round(this.media.soundVolume() * 100));
   readonly cooldownS = computed(() => Math.ceil(this.store.cooldownLeftMs() / 1000));
-  readonly canPlay = computed(() => this.store.inVoice() && this.store.cooldownLeftMs() === 0 && !this.store.busy());
+  /** PlaySoundboard in the voice channel I'm in (States 18 when missing). */
+  readonly allowed = computed(() => {
+    const ch = this.workspace.channels().find((c) => c.id === this.media.channelId());
+    return !ch || has(ch.permissions, Perm.PlaySoundboard);
+  });
+  readonly canPlay = computed(() => this.allowed() && this.store.inVoice() && this.store.cooldownLeftMs() === 0 && !this.store.busy());
+  /** Up to two people who can hand out roles, named in the "ask for access" hint. */
+  readonly granters = computed(() => {
+    const managers = new Set((this.workspace.server()?.roles ?? [])
+      .filter((r) => has(r.permissions, Perm.ManageRoles) || has(r.permissions, Perm.Administrator)).map((r) => r.id));
+    const names = this.workspace.members().filter((m) => m.isOwner || m.roleIds.some((id) => managers.has(id))).map((m) => m.displayName);
+    return names.length ? names.slice(0, 2).join(' or ') : 'an admin';
+  });
   readonly showRecent = computed(() => this.cat() === 'all' && !this.query() && this.store.recent().length > 0);
   readonly processing = computed(() => this.store.sounds().filter((s) => s.state !== 'ready' && s.ownerUserId === this.session.user()?.id));
 

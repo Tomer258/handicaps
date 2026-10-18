@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
+import { DIALOG_DATA, Dialog, DialogRef } from '@angular/cdk/dialog';
 import { Perm, has } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { WorkspaceStore } from '../workspaces/workspace.store';
@@ -104,4 +104,9 @@ export class SettingsDialog {
     this.ref.close();
     await this.session.logout();
   }
+}
+
+/** Opens user settings full-screen at a section. */
+export function openUserSettings(dialog: Dialog, section: SettingsSection): void {
+  dialog.open(SettingsDialog, { data: { section }, ariaLabel: 'Settings', panelClass: 'hx-fullscreen-dialog', width: '100vw', height: '100dvh' });
 }

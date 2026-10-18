@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
 import { ApiError } from '../../core/api/api-error';
 import { Perm } from '../../core/api/models';
@@ -28,7 +28,13 @@ interface Card {
   aria: string;
   cam: StreamInfo | null;
   screen: StreamInfo | null;
+  /** Dropped unexpectedly and still on the server roster: kept dimmed while their client rejoins (States 15). */
+  reconnecting: boolean;
 }
+
+/** How long a dropped friend's card waits for them, and how long before it shows (a deliberate leave is faster). */
+const GHOST_KEEP_MS = 60_000;
+const GHOST_SHOW_AFTER_MS = 1_500;
 
 /** Voice channel view (prototype VOICE VIEW + STREAM VIEW): join screen, participant grid, live banner, stream viewer, dock. */
 @Component({
@@ -118,9 +124,16 @@ interface Card {
                     <div style="font-size: 12.5px; color: var(--tx3)">{{ onlineFriends() }} {{ onlineFriends() === 1 ? 'friend is' : 'friends are' }} online right now.</div></div>
                 </div>
               }
+              @for (c of cards(); track c.peer.identity) {
+                @if (c.reconnecting) {
+                  <div class="fade" role="status" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 12px; border-radius: 12px; background: var(--bg4); border: 1px solid var(--line2); font-size: 13px">
+                    <i style="width: 8px; height: 8px; border-radius: 50%; background: var(--warn)"></i>{{ c.name }} disconnected unexpectedly — reconnecting…
+                  </div>
+                }
+              }
               <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px">
                 @for (c of cards(); track c.peer.identity) {
-                  <div style="position: relative">
+                  <div style="position: relative" [style.opacity]="c.reconnecting ? 0.6 : null">
                     <button class="pcard" [class.talk]="c.speaking" [attr.aria-label]="c.aria" (click)="openMenu($event, c)" (contextmenu)="openMenu($event, c)">
                       @if (c.cam; as cam) {
                         <hx-stream-tile [stream]="cam" fit="cover" [showLoading]="false" />
@@ -140,6 +153,7 @@ interface Card {
                           <span class="tag mono" [title]="'Your volume for ' + c.name">{{ pct(media.volumeOf(c.peer.userId)) }}%</span>
                         }
                         @if (c.screen) { <span class="tag live">LIVE</span> }
+                        @if (c.reconnecting) { <span class="tag" style="background: var(--warn); color: #1D1300">Reconnecting…</span> }
                       </div>
                     </button>
                     @if (c.screen; as scr) {
@@ -262,6 +276,10 @@ export class VoiceRoomPage {
   readonly primaryKey = signal<string | null>(null);
   readonly streamLayout = signal<'focus' | 'grid'>('focus');
   private readonly restoreVolume = new Map<string, number>();
+  /** userId → the peer as last seen and when it vanished from the room while still on the roster. */
+  private readonly ghosts = signal<ReadonlyMap<string, { peer: RoomPeer; since: number }>>(new Map());
+  private readonly clock = signal(Date.now());
+  private prevPeers: RoomPeer[] = [];
 
   readonly channel = computed(() => this.store.channel(this.channelId()));
   readonly here = computed(() => this.media.connected() && this.media.channelId() === this.channelId());
@@ -284,7 +302,7 @@ export class VoiceRoomPage {
     return picked.length ? picked : all.filter((s) => s.kind === 'screen');
   });
 
-  readonly cards = computed<Card[]>(() => {
+  private readonly liveCards = computed<Card[]>(() => {
     const members = this.store.memberById();
     const flags = this.roster.byUser();
     const speaking = this.media.speaking();
@@ -308,11 +326,51 @@ export class VoiceRoomPage {
         aria: `${name}${serverMuted ? ', server muted' : muted ? ', muted' : ''}${deafened ? ', deafened' : ''}${speaking.has(peer.userId) ? ', speaking' : ''}`,
         cam: streams.find((s) => s.identity === peer.identity && s.kind === 'camera') ?? null,
         screen: streams.find((s) => s.identity === peer.identity && s.kind === 'screen') ?? null,
+        reconnecting: false,
       };
     });
   });
 
+  readonly cards = computed<Card[]>(() => {
+    this.clock();
+    const now = Date.now();
+    const members = this.store.memberById();
+    const ghosts = [...this.ghosts().values()].filter((g) => now - g.since >= GHOST_SHOW_AFTER_MS).map(({ peer }): Card => {
+      const m = members.get(peer.userId);
+      const name = m?.displayName ?? peer.name;
+      return {
+        peer, name, color: avatarColor(m?.avatarHue ?? 210), ini: initials(name), avatar: avatarUrl(m?.avatarAssetId),
+        speaking: false, muted: false, deafened: false, serverMuted: false, aria: `${name}, reconnecting`, cam: null, screen: null, reconnecting: true,
+      };
+    });
+    return [...this.liveCards(), ...ghosts];
+  });
+
   constructor() {
+    // States 15: a remote peer that leaves the room but stays on the server roster dropped unexpectedly (a deliberate
+    // leave, a moderator disconnect or the grace timeout removes the roster entry). Keep its card until it is back.
+    effect(() => {
+      const peers = this.media.peers();
+      const here = this.here();
+      const onRoster = new Set(this.roster.inChannel(this.channelId()).map((m) => m.userId));
+      this.clock(); // re-run on the ghost timer to expire old cards
+      untracked(() => {
+        const now = Date.now(); // not clock(): it only ticks while ghosts exist, so it can be stale here
+        const present = new Set(peers.map((p) => p.userId));
+        const next = new Map(here ? this.ghosts() : []);
+        if (here) {
+          for (const p of this.prevPeers)
+            if (!p.isLocal && !present.has(p.userId) && onRoster.has(p.userId) && !next.has(p.userId)) next.set(p.userId, { peer: p, since: now });
+          for (const [uid, g] of next) if (present.has(uid) || !onRoster.has(uid) || now - g.since > GHOST_KEEP_MS) next.delete(uid);
+        }
+        this.prevPeers = here ? peers : [];
+        const cur = this.ghosts();
+        if (next.size !== cur.size || [...next.keys()].some((k) => !cur.has(k))) this.ghosts.set(next);
+      });
+    });
+    const timer = setInterval(() => { if (this.ghosts().size) this.clock.set(Date.now()); }, 500);
+    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+
     // Nothing left to watch (every stream ended, or we left the call) → back to the voice grid.
     effect(() => {
       if (this.watching() && (!this.here() || this.watchedStreams().length === 0)) untracked(() => this.watching.set(false));
@@ -351,6 +409,7 @@ export class VoiceRoomPage {
   }
 
   openMenu(e: MouseEvent, card: Card): void {
+    if (card.reconnecting) return;
     e.preventDefault();
     const host = (e.currentTarget as HTMLElement).closest('.fade') as HTMLElement | null;
     const rect = host?.getBoundingClientRect() ?? { left: 0, top: 0, width: innerWidth, height: innerHeight };

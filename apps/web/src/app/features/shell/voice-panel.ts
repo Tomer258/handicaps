@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { Icon } from '../../shared/ui/icon';
-import { SettingsDialog } from '../settings/settings.dialog';
+import { openUserSettings } from '../settings/settings.dialog';
 import { LayoutService } from './layout.service';
 
 /**
@@ -81,7 +81,7 @@ export class VoicePanel {
   }
 
   voiceSettings(): void {
-    this.dialog.open(SettingsDialog, { data: { section: 'voice' }, ariaLabel: 'Settings', panelClass: 'hx-fullscreen-dialog', width: '100vw', height: '100dvh' });
+    openUserSettings(this.dialog, 'voice');
   }
 
   leave(): void {
