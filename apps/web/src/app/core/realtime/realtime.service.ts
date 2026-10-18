@@ -20,6 +20,15 @@ export interface TypingSignal {
   userId: string;
 }
 
+/** Someone in voice invited me to join their channel (States 02). */
+export interface VoicePing {
+  serverId: string;
+  channelId: string;
+  channelName: string;
+  fromUserId: string;
+  fromDisplayName: string;
+}
+
 export interface NotificationSignal {
   type: 'mention';
   channelId: string;
@@ -91,6 +100,7 @@ export class RealtimeService {
   private readonly voiceHandlers = new Set<Handler<VoiceStateSignal>>();
   private readonly soundCatalogHandlers = new Set<Handler<{ serverId: string; soundId: string }>>();
   private readonly soundPlaybackHandlers = new Set<Handler<SoundPlayback>>();
+  private readonly voicePingHandlers = new Set<Handler<VoicePing>>();
 
   constructor() {
     effect(() => {
@@ -118,6 +128,10 @@ export class RealtimeService {
 
   onNotification(h: Handler<NotificationSignal>): void {
     this.notificationHandlers.add(h);
+  }
+
+  onVoicePing(h: Handler<VoicePing>): void {
+    this.voicePingHandlers.add(h);
   }
 
   /** Fires after every (re)connect and after a policy change cleared server-side subscriptions. */
@@ -176,6 +190,7 @@ export class RealtimeService {
     conn.on('voiceStateChanged', (v: VoiceStateSignal) => this.voiceHandlers.forEach((h) => h(v)));
     conn.on('soundCatalogChanged', (c: { serverId: string; soundId: string }) => this.soundCatalogHandlers.forEach((h) => h(c)));
     conn.on('soundPlaybackChanged', (p: SoundPlayback) => this.soundPlaybackHandlers.forEach((h) => h(p)));
+    conn.on('voicePing', (p: VoicePing) => this.voicePingHandlers.forEach((h) => h(p)));
     conn.on('presenceChanged', (p: { userId: string; status: PresenceStatus }) => this.presence.set(p.userId, p.status));
     conn.on('memberUpdated', (m: { userId: string; displayName: string; avatarHue: number; avatarAssetId: string | null }) => {
       this.workspace.patchMember(m.userId, { displayName: m.displayName, avatarHue: m.avatarHue, avatarAssetId: m.avatarAssetId });

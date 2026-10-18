@@ -6,11 +6,19 @@ export interface Toast {
   id: number;
   text: string;
   kind: ToastKind;
+  action?: ToastAction;
+}
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
 }
 
 const DURATION_MS = 3600;
+/** A toast with a button stays longer: there is something to do. */
+const ACTION_DURATION_MS = 10_000;
 
-/** Top-centre stack, max 3, auto-dismiss 3.6 s, paused while hovered. Never steals focus. */
+/** Top-centre stack, max 3, auto-dismiss 3.6 s (10 s with an action), paused while hovered. Never steals focus. */
 @Injectable({ providedIn: 'root' })
 export class ToastService {
   private seq = 0;
@@ -18,14 +26,19 @@ export class ToastService {
   private readonly _toasts = signal<Toast[]>([]);
   readonly toasts = this._toasts.asReadonly();
 
-  show(text: string, kind: ToastKind = 'info'): void {
+  show(text: string, kind: ToastKind = 'info', action?: ToastAction): void {
     const id = ++this.seq;
     this._toasts.update((list) => {
-      const next = [...list, { id, text, kind }];
+      const next = [...list, { id, text, kind, action }];
       for (const dropped of next.slice(0, Math.max(0, next.length - 3))) this.clearTimer(dropped.id);
       return next.slice(-3);
     });
-    this.schedule(id, DURATION_MS);
+    this.schedule(id, action ? ACTION_DURATION_MS : DURATION_MS);
+  }
+
+  act(t: Toast): void {
+    this.dismiss(t.id);
+    t.action?.run();
   }
 
   dismiss(id: number): void {

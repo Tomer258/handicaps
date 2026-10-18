@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Hangar.Core.Media;
 using Hangar.Core.Persistence;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -433,6 +435,60 @@ public class VoiceTests(ApiFactory factory)
             opts.LoadTestRoomPrefix = "";
             await ReconcileAsync(); // clean up the simulated participant
         }
+    }
+
+    [Fact]
+    public async Task Ping_notifies_online_members_outside_the_channel_once_per_cooldown()
+    {
+        await ResetLeasesAsync();
+        var (owner, serverId) = await OwnerAsync(factory);
+        var channel = await NewVoiceChannelAsync(owner, serverId);
+        var (online, onlineId) = await MemberAsync(factory, owner, serverId);
+        var (inRoom, _) = await MemberAsync(factory, owner, serverId);
+
+        // Without a lease there is nothing to invite anyone to.
+        var none = await owner.Http.PostAsync($"/api/v1/voice/{Guid.NewGuid()}/ping", null);
+        Assert.Equal(HttpStatusCode.NotFound, none.StatusCode);
+
+        var lease = await JoinOkAsync(owner, channel);
+        await JoinOkAsync(inRoom, channel);
+        var pings = new System.Collections.Concurrent.ConcurrentBag<JsonElement>();
+        var inRoomPings = 0;
+        await using var hub = Hub(online);
+        hub.On<JsonElement>("voicePing", pings.Add);
+        await using var inRoomHub = Hub(inRoom);
+        inRoomHub.On<JsonElement>("voicePing", _ => Interlocked.Increment(ref inRoomPings));
+        await hub.StartAsync();
+        await inRoomHub.StartAsync();
+
+        var r = await owner.Http.PostAsync($"/api/v1/voice/{lease.LeaseId}/ping", null);
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.True((await Json(r)).GetProperty("notified").GetInt32() >= 1);
+        var start = Environment.TickCount64;
+        while (pings.IsEmpty && Environment.TickCount64 - start < 10_000) await Task.Delay(50);
+        var ping = Assert.Single(pings);
+        Assert.Equal(channel, ping.GetProperty("channelId").GetGuid());
+        Assert.Equal(serverId, ping.GetProperty("serverId").GetGuid());
+        Assert.NotEqual(onlineId, ping.GetProperty("fromUserId").GetGuid());
+        Assert.False(string.IsNullOrEmpty(ping.GetProperty("fromDisplayName").GetString()));
+        Assert.Equal(0, inRoomPings); // already there
+
+        var again = await owner.Http.PostAsync($"/api/v1/voice/{lease.LeaseId}/ping", null);
+        Assert.Equal((HttpStatusCode)429, again.StatusCode);
+        Assert.Equal("voice.ping_cooldown", (await Json(again)).GetProperty("code").GetString());
+    }
+
+    private HubConnection Hub(TestClient client)
+    {
+        var cookie = client.Handler.Cookies.GetCookieHeader(new Uri("http://localhost"));
+        return new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/realtime", o =>
+            {
+                o.Transports = HttpTransportType.LongPolling;
+                o.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                o.Headers["Cookie"] = cookie;
+            })
+            .Build();
     }
 
     private async Task ReconcileAsync()

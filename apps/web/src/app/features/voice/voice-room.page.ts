@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
 import { ApiError } from '../../core/api/api-error';
+import { SessionService } from '../../core/auth/session.service';
 import { Perm } from '../../core/api/models';
 import { MediaSessionService, RoomPeer, StreamInfo } from '../../core/media/media-session.service';
 import { ToastService } from '../../core/ui/toast.service';
@@ -121,7 +122,10 @@ const GHOST_SHOW_AFTER_MS = 1_500;
               @if (cards().length === 1) {
                 <div style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px; border: 1px dashed var(--line2); margin-bottom: 18px">
                   <div style="flex: 1"><div style="font-weight: 600">It is just you in here</div>
-                    <div style="font-size: 12.5px; color: var(--tx3)">{{ onlineFriends() }} {{ onlineFriends() === 1 ? 'friend is' : 'friends are' }} online right now.</div></div>
+                    <div style="font-size: 12.5px; color: var(--tx3)">{{ onlineFriends() }} {{ onlineFriends() === 1 ? 'friend is' : 'friends are' }} online right now. A ping drops a one-tap join link in their notifications.</div></div>
+                  @if (onlineFriends() > 0) {
+                    <button class="btn pri" [disabled]="pinging()" (click)="pingFriends()">Ping online friends</button>
+                  }
                 </div>
               }
               @for (c of cards(); track c.peer.identity) {
@@ -265,6 +269,7 @@ export class VoiceRoomPage {
   private readonly presence = inject(PresenceStore);
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
+  private readonly session = inject(SessionService);
 
   readonly menu = signal<{ card: Card; x: number; y: number } | null>(null);
   // Shared with the sidebar voice panel; ServerView renders the soundboard popover and Go-live dialog.
@@ -279,6 +284,7 @@ export class VoiceRoomPage {
   /** userId → the peer as last seen and when it vanished from the room while still on the roster. */
   private readonly ghosts = signal<ReadonlyMap<string, { peer: RoomPeer; since: number }>>(new Map());
   private readonly clock = signal(Date.now());
+  readonly pinging = signal(false);
   private prevPeers: RoomPeer[] = [];
 
   readonly channel = computed(() => this.store.channel(this.channelId()));
@@ -289,8 +295,8 @@ export class VoiceRoomPage {
   readonly canDisconnect = computed(() => ((this.channel()?.permissions ?? 0) & Perm.RemoveFromVoice) !== 0);
   readonly micLabel = computed(() => (!this.media.canSpeak() ? 'You cannot speak in this channel' : this.media.serverMuted() ? 'Server muted by a moderator' : this.media.muted() || this.media.deafened() ? 'Unmute' : 'Mute'));
   readonly onlineFriends = computed(() => {
-    const me = this.store.memberById();
-    return [...me.keys()].filter((id) => this.presence.status(id) !== 'offline').length - 1;
+    const me = this.session.userId();
+    return [...this.store.memberById().keys()].filter((id) => id !== me && this.presence.status(id) !== 'offline').length;
   });
 
   readonly liveStreams = computed(() => this.media.streams().filter((s) => s.kind === 'screen'));
@@ -416,6 +422,20 @@ export class VoiceRoomPage {
     const x = Math.min(e.clientX - rect.left, rect.width - 250);
     const y = Math.min(e.clientY - rect.top, rect.height - 200);
     this.menu.set({ card, x: Math.max(8, x), y: Math.max(8, y) });
+  }
+
+  async pingFriends(): Promise<void> {
+    const lease = this.media.currentLeaseId();
+    if (!lease || this.pinging()) return;
+    this.pinging.set(true);
+    try {
+      const r = await this.api.post<{ notified: number }>(`/voice/${lease}/ping`, {});
+      this.toast.show(r.notified === 0 ? 'Nobody who can join is online right now' : `Pinged ${r.notified} online ${r.notified === 1 ? 'friend' : 'friends'} with a join link`);
+    } catch (e) {
+      this.toast.show(ApiError.from(e).message, 'warn');
+    } finally {
+      this.pinging.set(false);
+    }
   }
 
   async serverMute(card: Card): Promise<void> {

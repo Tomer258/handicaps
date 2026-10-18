@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { ChannelEvent, Message } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { MediaSessionService } from '../../core/media/media-session.service';
-import { NotificationSignal, RealtimeService } from '../../core/realtime/realtime.service';
+import { NotificationSignal, RealtimeService, VoicePing } from '../../core/realtime/realtime.service';
 import { UserSettingsService } from '../../core/settings/user-settings.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { ChatStore } from '../messages/chat.store';
@@ -46,6 +46,7 @@ export class Notifier {
   constructor() {
     this.realtime.onNotification((n) => this.onMention(n));
     this.realtime.onChannelEvent((e) => this.onEvent(e));
+    this.realtime.onVoicePing((p) => this.onVoicePing(p));
 
     this.media.onPeersChanged((peers, room) => this.diffRoster(room, new Set(peers.filter((p) => !p.isLocal).map((p) => p.userId))));
 
@@ -80,6 +81,30 @@ export class Notifier {
     if (this.settings.notifications().messages === 'none') return;
     const m = this.recent.get(n.messageId) ?? this.chat.chat(n.channelId).messages.find((x) => x.id === n.messageId);
     this.popup(title, m ? this.preview(m) : '', n.serverId, n.channelId);
+  }
+
+  /** A one-tap join link: a toast with "Join" while focused, a browser notification otherwise. DND drops it. */
+  private onVoicePing(p: VoicePing): void {
+    if (this.dnd || (this.media.connected() && this.media.channelId() === p.channelId)) return;
+    const title = `${p.fromDisplayName} is in ${p.channelName} — come hang out`;
+    const join = () => {
+      void this.router.navigate(['/s', p.serverId, 'v', p.channelId]);
+      void this.media.join(p.channelId);
+    };
+    if (this.focused || typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+      this.toast.show(title, 'info', { label: 'Join', run: join });
+      return;
+    }
+    try {
+      const n = new Notification(title, { body: 'Click to join voice', tag: `hangar-ping-${p.channelId}` });
+      n.onclick = () => {
+        window.focus();
+        n.close();
+        join();
+      };
+    } catch {
+      this.toast.show(title, 'info', { label: 'Join', run: join });
+    }
   }
 
   /** "All messages" mode: other people's messages in subscribed channels while Hangar is in the background. */

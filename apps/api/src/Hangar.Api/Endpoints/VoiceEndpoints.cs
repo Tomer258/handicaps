@@ -19,6 +19,8 @@ public static class VoiceEndpoints
             await svc.ConfirmAsync(http.User.UserId(), leaseId, ct);
             return Results.NoContent();
         });
+        voice.MapPost("/{leaseId:guid}/ping", async (Guid leaseId, HttpContext http, Hangar.Api.Realtime.VoicePingService svc, CancellationToken ct) =>
+            Results.Ok(await svc.PingAsync(http.User.UserId(), leaseId, ct)));
         voice.MapDelete("/{leaseId:guid}", async (Guid leaseId, HttpContext http, VoiceService svc, CancellationToken ct) =>
         {
             await svc.LeaveAsync(http.User.UserId(), leaseId, ct);

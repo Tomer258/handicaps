@@ -52,6 +52,8 @@ builder.Services.AddHostedService<MaintenanceService>();
 // Media: LiveKit RoomService adapter (private network), voice roster push, reconciliation.
 builder.Services.AddHttpClient<ILiveKitRooms, LiveKitRoomClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddScoped<IVoiceEventSink, SignalRVoiceSink>();
+builder.Services.AddScoped<VoicePingService>();
+builder.Services.AddSingleton<VoicePingCooldowns>();
 builder.Services.AddHostedService<VoiceReconciler>();
 // Soundboard: publisher worker client (private endpoint), catalog/playback push, validation + playback loop.
 builder.Services.AddHttpClient<Hangar.Core.Soundboard.ISoundPublisher, Hangar.Core.Soundboard.HttpSoundPublisher>(c => c.Timeout = TimeSpan.FromSeconds(5));
