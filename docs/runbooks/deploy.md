@@ -28,13 +28,14 @@
    ```
 
 5. Directories and ownership. uid 10001 is shared by the API and the asset validator; uid 10002 (publisher) only
-   reads sounds.
+   reads sounds; uid 10003 (authorization watchdog) owns the flag directory that the edge reads.
 
    ```sh
    sudo mkdir -p /srv/hangar/{config,data/keys,postgres,caddy/data,caddy/config,backups}
    sudo mkdir -p /srv/hangar/data/files/{quarantine,spool/jobs,spool/results,sounds,images,attachments}
    sudo chown -R 10001:10001 /srv/hangar/data
    sudo chmod 700 /srv/hangar/config /srv/hangar/data/keys
+   sudo mkdir -p /srv/hangar/watchdog && sudo chown 10003:10003 /srv/hangar/watchdog && sudo chmod 755 /srv/hangar/watchdog
    ```
 
 6. Config: copy `infra/config.example/*` and `infra/livekit.prod.yaml` (as `livekit.yaml`) into

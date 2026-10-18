@@ -23,5 +23,7 @@ the date and version.
 - [ ] TURN/TLS: a client with UDP and TCP 7881 blocked joins and hears audio via 443.
 - [ ] Two real Windows clients test microphone, deafen, screen share with audio and the soundboard for 30 minutes.
 - [ ] Restore drill on a fresh VM (backup-restore.md), with the duration recorded.
-- [ ] Known gap: the authorization watchdog from the architecture (close public signaling when reconciliation has
-      been unhealthy for 60 s) is not implemented. Until it is, alert on `VoiceReconciler` errors in the API log.
+- [ ] Authorization watchdog drill: with two clients in voice, `dc stop api`. Within about 65 s both clients drop,
+      `dc logs auth-watchdog` shows `voice signaling CLOSED`, and `/srv/hangar/watchdog/closed` exists. Rejoins get
+      `503`. `dc start api`. About 30 s after the API is healthy the flag is gone and clients can rejoin. Alert on
+      `auth-watchdog` ERROR lines, on its container health, and on `Voice reconciliation` warnings in the API log.

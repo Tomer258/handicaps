@@ -38,7 +38,8 @@ public sealed class VoiceReconciler(IServiceScopeFactory scopes, IOptions<LiveKi
             try
             {
                 using var scope = scopes.CreateScope();
-                await scope.ServiceProvider.GetRequiredService<VoiceService>().ReconcileAsync(stoppingToken);
+                if (!await scope.ServiceProvider.GetRequiredService<VoiceService>().ReconcileAsync(stoppingToken))
+                    log.LogWarning("Voice reconciliation incomplete: LiveKit RoomService unavailable");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

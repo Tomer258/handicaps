@@ -32,8 +32,28 @@ services:
     volumes:
       - ${HANGAR_ROOT:-/srv/hangar}/caddy/data:/data
       - ${HANGAR_ROOT:-/srv/hangar}/caddy/config:/config
+      - ${HANGAR_ROOT:-/srv/hangar}/watchdog:/run/hangar-watchdog:ro
     tmpfs: [/tmp]
     mem_limit: 256m
+
+  # Closes public voice (edge flag + LiveKit room deletion) when reconciliation is unhealthy for 60 s.
+  # The host directory must be owned by uid 10003 (see runbooks/deploy.md).
+  auth-watchdog:
+    image: hangar-auth-watchdog:${HANGAR_VERSION:?}
+    build: { context: ../workers/auth-watchdog }
+    network_mode: host
+    <<: *hardening
+    env_file:
+      - ${HANGAR_ROOT:-/srv/hangar}/config/watchdog.env
+    environment:
+      API_URL: http://127.0.0.1:8080
+      LIVEKIT_URL: http://127.0.0.1:7880
+      FLAG_PATH: /run/hangar-watchdog/closed
+    volumes:
+      - ${HANGAR_ROOT:-/srv/hangar}/watchdog:/run/hangar-watchdog
+    tmpfs: [/tmp]
+    depends_on: [livekit]
+    mem_limit: 64m
 
   postgres:
     image: postgres:18-alpine

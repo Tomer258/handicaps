@@ -67,6 +67,7 @@ public sealed class VoiceService(
     ILiveKitRooms rooms,
     IVoiceEventSink events,
     VoiceStateCache states,
+    ReconcileHealth health,
     IOptions<LiveKitOptions> options,
     TimeProvider clock,
     ILogger<VoiceService> log)
@@ -293,6 +294,12 @@ public sealed class VoiceService(
     public async Task<bool> AdmitAsync(string token, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
+        // Without recent reconciliation, revocations may not be enforced: fail closed for new connections.
+        if (!health.Status().Fresh)
+        {
+            log.LogWarning("Admission refused: voice reconciliation is stale");
+            return false;
+        }
         var verified = LiveKitTokens.Verify(token, O.ApiKey, O.ApiSecret, now);
         if (verified?.Video is not { } video) return false;
         if (verified.Identity.StartsWith(PublisherIdentityPrefix, StringComparison.Ordinal)) return false; // workers use the internal path
@@ -376,8 +383,23 @@ public sealed class VoiceService(
     /// <summary>
     /// Periodic source of truth: expires unconfirmed leases, revokes leases whose session/policy no longer allows voice,
     /// confirms present participants, and removes LiveKit participants without a live lease.
+    /// Returns whether the pass was complete (every room checked); the outcome feeds <see cref="ReconcileHealth"/>.
     /// </summary>
-    public async Task ReconcileAsync(CancellationToken ct)
+    public async Task<bool> ReconcileAsync(CancellationToken ct)
+    {
+        var complete = false;
+        try
+        {
+            complete = await ReconcileCoreAsync(ct);
+            return complete;
+        }
+        finally
+        {
+            health.Record(complete);
+        }
+    }
+
+    private async Task<bool> ReconcileCoreAsync(CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var live = await db.VoiceLeases
@@ -405,9 +427,10 @@ public sealed class VoiceService(
         }
         catch (LiveKitUnavailableException)
         {
-            return;
+            return false;
         }
 
+        var complete = true;
         foreach (var room in roomNames.Union(remaining.Select(l => l.RoomName)).Distinct())
         {
             IReadOnlyList<LiveKitParticipant>? participants;
@@ -417,6 +440,7 @@ public sealed class VoiceService(
             }
             catch (LiveKitUnavailableException)
             {
+                complete = false;
                 continue;
             }
             var byIdentity = (participants ?? []).ToDictionary(p => p.Identity);
@@ -442,6 +466,7 @@ public sealed class VoiceService(
                 if (!allowed.Contains(identity) && !identity.StartsWith(PublisherIdentityPrefix, StringComparison.Ordinal))
                     await SafeRemoveAsync(room, identity, ct);
         }
+        return complete;
     }
 
     /// <summary>Session revoked (logout, device revoke, password change): its voice leases end immediately.</summary>

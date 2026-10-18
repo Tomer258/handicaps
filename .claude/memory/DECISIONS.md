@@ -29,5 +29,5 @@
 - Production migrations: one-off `--migrate` job (API exits after migrate+bootstrap), never on startup.
 - Angular prod build: optimization.styles.inlineCritical=false so CSP script-src 'self' works (no inline onload).
 - Backups: pg_dump -Fc + file store + DP keys + manifest → age-encrypted single archive, rclone off-host daily/weekly; restore expires all sessions and voice leases.
-- Not implemented (documented gap): authorization watchdog closing public signaling after 60 s of unhealthy reconciliation.
+- Authorization watchdog: API ReconcileHealth (complete pass = ListRooms + every room's participants; unhealthy if the last pass was incomplete or no success for 3×ReconcileInterval) → GET /internal/watchdog/reconcile (200/503, loopback only). Admission refuses when stale (no success for 45 s). Host-local workers/auth-watchdog (stdlib Python, uid 10003, dedicated LiveKit key 'watchdog'): 60 s unhealthy/unreachable → flag file /srv/hangar/watchdog/closed (Caddy `file` matcher → 503 on /rtc before forward_auth) + DeleteRoom for all rooms each check; reopens after 30 s healthy. Flag persists across restarts.
 

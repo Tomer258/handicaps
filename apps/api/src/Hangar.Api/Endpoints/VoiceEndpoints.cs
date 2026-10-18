@@ -61,6 +61,14 @@ public static class VoiceEndpoints
             var token = TokenFrom(http);
             return token is not null && await svc.AdmitAsync(token, ct) ? Results.Ok() : Results.StatusCode(403);
         });
+
+        // Polled by the host-local authorization watchdog; it treats 503 and "unreachable" alike.
+        app.MapGet("/internal/watchdog/reconcile", (ReconcileHealth health) =>
+        {
+            var s = health.Status();
+            return Results.Json(new { healthy = s.Healthy, fresh = s.Fresh, lastSuccessAt = s.LastSuccessAt, lastAttemptAt = s.LastAttemptAt },
+                statusCode: s.Healthy ? 200 : 503);
+        }).AllowAnonymous().ExcludeFromDescription();
     }
 
     private static PublicationKind ParseKind(string kind) => kind switch

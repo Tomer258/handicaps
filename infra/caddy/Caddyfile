@@ -116,12 +116,21 @@ http://{$APP_HOST}, http://{$RTC_HOST}, http://{$TURN_HOST} {
 
 	# Every LiveKit signaling entry point (pinned livekit-client 2.23 tries /rtc/v1 first, falls back to /rtc;
 	# /rtc/validate and /rtc/v1/validate explain failures). The API checks token, session, lease, membership, origin.
+	# The authorization watchdog (workers/auth-watchdog) creates this file when reconciliation has been unhealthy
+	# for 60 s: signaling stays closed, whatever admission says, until it removes it.
 	@signal path /rtc /rtc/*
+	@watchdog_closed file {
+		root /run/hangar-watchdog
+		try_files /closed
+	}
 	handle @signal {
-		forward_auth 127.0.0.1:8080 {
-			uri /internal/livekit/admission
+		route {
+			respond @watchdog_closed "Voice is temporarily unavailable" 503
+			forward_auth 127.0.0.1:8080 {
+				uri /internal/livekit/admission
+			}
+			reverse_proxy 127.0.0.1:7880
 		}
-		reverse_proxy 127.0.0.1:7880
 	}
 
 	# Twirp/admin RoomService, metrics and anything else stay private.

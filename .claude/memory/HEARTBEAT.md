@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S0–S8 committed; message search committed; next: authorization watchdog)
+**Last update:** 2026-10-18 — session 2 (S0–S8, message search and authorization watchdog committed)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -30,7 +30,11 @@
 - Frontend: features/soundboard/{soundboard.store,soundboard-popover,sound-upload.dialog}.ts; media-session subscribes sb_* participants' sfx_<userId> tracks (soundVolume/soundMuted/mutedActors in localStorage 'hangar.soundboard'); detach on TrackSubscriptionStatusChanged(Unsubscribed) because tracks only end after SFU renegotiation; re-attach on Subscribed. Dock z-index 26 above popover backdrop. Card menu: "Mute their soundboard".
 
 ## Next exact step
-Implement the authorization watchdog (architecture §3): close public signaling (admission → deny) when voice reconciliation has been unhealthy for 60 s; remove the gap note from docs/runbooks/pre-release-gates.md + DECISIONS. After that, remaining: manual production gates (real VPS + domain) and Phase 7 hardening (load/soak, real Windows clients).
+Everything buildable locally is done. Remaining: the manual production gates in docs/runbooks/pre-release-gates.md (real VPS + domain; now includes the watchdog drill) and Phase 7 hardening (load/soak, real Windows clients). Ask the user which to pursue next.
+
+## Watchdog notes (done)
+- API: Core/Media/ReconcileHealth.cs (singleton; VoiceService.ReconcileAsync now returns bool complete and records it); GET /internal/watchdog/reconcile (200/503); AdmitAsync refuses when not Fresh (no complete pass for 3×ReconcileInterval). Tests: ReconcileHealthTests (2) + VoiceTests watchdog endpoint → 60 pass.
+- workers/auth-watchdog/watchdog.py (stdlib, uid 10003, dedicated LiveKit key 'watchdog'): unhealthy/unreachable 60 s → flag file + DeleteRoom all rooms every check; healthy 30 s → remove flag. Caddy rtc host: `@watchdog_closed file` → respond 503 inside a `route` before forward_auth. compose.prod auth-watchdog service; /srv/hangar/watchdog (10003, 755) mounted ro into edge.
 
 ## Search notes (done)
 - GET /servers/{id}/messages/search?q&from&channel&before&limit (MessageService.SearchAsync): ILIKE with escaped wildcards over pg_trgm GIN (migration MessageSearchIndex, partial WHERE deleted_at IS NULL), scoped to ViewChannel channels, newest first, cursor = CreatedAt.UtcTicks. Tests: SearchTests (2) → 57 pass.
@@ -42,7 +46,7 @@ Implement the authorization watchdog (architecture §3): close public signaling 
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
-- `cd apps/api && dotnet build` ; `dotnet test` (57 pass; stop the running API first — it locks bin/; integration uses Testcontainers postgres:18-alpine)
+- `cd apps/api && dotnet build` ; `dotnet test` (60 pass; stop the running API first — it locks bin/; integration uses Testcontainers postgres:18-alpine)
 - `cd apps/api && dotnet run --project src/Hangar.Api` → http://localhost:5080, migrates + seeds, logs one-time owner invite link
 - `cd apps/web && npx ng build --configuration development` ; `npx ng serve` (proxy → :5080). npm installs: `npx -y npm@11.6.2 install ...` (system npm 11.0.0 has arborist bug)
 - Voice smoke (real LiveKit, fake mic, 2 browsers): `cd tests/e2e && node scripts/smoke-voice.mjs ../../.tmp/shots` (needs compose livekit up)
@@ -55,6 +59,7 @@ Implement the authorization watchdog (architecture §3): close public signaling 
 - Gate check (Caddy forward_auth in front of dev LiveKit): see infra/caddy/Caddyfile.gate-dev header, then `node scripts/gate-check.mjs`
 - Edge image: `docker build -f infra/caddy/Dockerfile -t hangar-edge:dev .` ; API image: `docker build -t hangar-api:dev apps/api`
 - Search smoke (Ctrl K, filters, Hebrew, cross-channel jump, deep jump through 120 newer messages): `node scripts/smoke-search.mjs ../../.tmp/shots`
+- Watchdog drill (gate container with .tmp/watchdog mounted + watchdog on host with TRIP_AFTER=15 RECOVER_AFTER=8 INTERVAL=2; script kills/restarts the API): see header of `node scripts/watchdog-drill.mjs`. Afterwards restart the API normally (the drill leaves it on PublicUrl ws://localhost:7890).
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
 - `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations -- --environment Development`

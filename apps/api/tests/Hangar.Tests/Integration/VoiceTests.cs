@@ -108,6 +108,30 @@ public class VoiceTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Watchdog_endpoint_reports_incomplete_reconciliation()
+    {
+        using var scope = factory.Services.CreateScope();
+        var svc = scope.ServiceProvider.GetRequiredService<VoiceService>();
+        var http = factory.CreateClient();
+        try
+        {
+            factory.LiveKit.Down = true;
+            Assert.False(await svc.ReconcileAsync(CancellationToken.None));
+            var down = await http.GetAsync("/internal/watchdog/reconcile");
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, down.StatusCode);
+            Assert.False((await Json(down)).GetProperty("healthy").GetBoolean());
+        }
+        finally
+        {
+            factory.LiveKit.Down = false;
+        }
+        Assert.True(await svc.ReconcileAsync(CancellationToken.None));
+        var up = await http.GetAsync("/internal/watchdog/reconcile");
+        Assert.Equal(HttpStatusCode.OK, up.StatusCode);
+        Assert.Equal(JsonValueKind.String, (await Json(up)).GetProperty("lastSuccessAt").ValueKind);
+    }
+
+    [Fact]
     public async Task Permission_loss_blocks_join_and_admission()
     {
         await ResetLeasesAsync();

@@ -1,3 +1,5 @@
 # LiveKit API keys (chmod 600, root-owned; LiveKit refuses group/world-readable key files).
 # Generate: openssl rand -hex 32. During rotation list old and new keys together (runbooks/key-rotation.md).
 hangar: CHANGE_ME_same_as_Hangar__LiveKit__ApiSecret
+# Authorization watchdog (watchdog.env). Separate key so it can be rotated independently.
+watchdog: CHANGE_ME_same_as_LIVEKIT_API_SECRET_in_watchdog.env

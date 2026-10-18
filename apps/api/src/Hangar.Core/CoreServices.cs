@@ -39,6 +39,7 @@ public static class CoreServices
         services.AddScoped<MessageService>();
         services.AddScoped<RetentionService>();
         services.AddSingleton<VoiceStateCache>();
+        services.AddSingleton<ReconcileHealth>();
         services.AddScoped<VoiceService>();
         services.AddScoped<ISessionRevocationListener, VoiceRevocationListener>();
         services.AddSingleton<LocalFileStore>();
