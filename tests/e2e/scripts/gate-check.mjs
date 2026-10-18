@@ -46,5 +46,35 @@ for (const path of ['/rtc', '/rtc/validate', '/rtc/v1', '/rtc/v1/validate']) {
   check(await gate(`${path}${q}`) === 403, `token replayed after leaving is refused on ${path}`);
 }
 
+// Session revocation (pre-release gate): the initial and a server-refreshed token both die with the session, on fresh
+// connections and on resume attempts (livekit-client resumes with reconnect=1&sid=…), on every signaling route.
+const join2 = await call('POST', `/channels/${lounge.id}/voice/join`, { requestId: crypto.randomUUID(), priorLeaseId: null });
+const refreshed = await call('POST', `/voice/${join2.body.leaseId}/token`);
+check(refreshed.status === 200 && refreshed.body.token !== join2.body.token, 'server refreshed the token');
+const tokens = { initial: join2.body.token, refreshed: refreshed.body.token };
+for (const [kind, t] of Object.entries(tokens)) check(await gate(`/rtc/validate?access_token=${encodeURIComponent(t)}`) === 200, `${kind} token admitted before revocation`);
+
+const other = await (await browser.newContext()).newPage();
+await other.goto(`${BASE}/login`);
+await other.getByLabel('Login').fill('tomer');
+await other.getByLabel('Password').fill('correct horse battery');
+await other.getByRole('button', { name: 'Sign in' }).click();
+await other.waitForURL(`${BASE}/`);
+const sessions = (await call('GET', '/auth/sessions')).body;
+const victim = sessions.find((s) => s.current).id; // the session holding the voice lease
+const revoke = await other.evaluate(async (id) => {
+  const xsrf = decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))?.split('=')[1] ?? '');
+  return (await fetch(`/api/v1/auth/sessions/${id}`, { method: 'DELETE', headers: { 'X-XSRF-TOKEN': xsrf } })).status;
+}, victim);
+check(revoke === 204, 'another device revoked the voice session');
+for (const [kind, t] of Object.entries(tokens)) {
+  const tq = `access_token=${encodeURIComponent(t)}`;
+  for (const path of ['/rtc', '/rtc/validate', '/rtc/v1', '/rtc/v1/validate']) {
+    const fresh = await gate(`${path}?${tq}`);
+    const resume = await gate(`${path}?${tq}&reconnect=1&sid=PA_replay&reconnect_reason=1`);
+    check(fresh === 403 && resume === 403, `${kind} token after revocation refused on ${path} (fresh ${fresh}, resume ${resume})`);
+  }
+}
+
 await browser.close();
 console.log('gate check passed');

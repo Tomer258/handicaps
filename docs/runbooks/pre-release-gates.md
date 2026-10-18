@@ -13,6 +13,9 @@ the date and version.
   and `/rtc/v1/validate`: a foreign Origin, a garbage or missing token, Twirp paths, and a token replayed after
   leaving. The voice smoke also passes through the gate.
   **Passed 2026-10-18** (Caddy 2.11.4 + caddy-l4 v0.1.2, LiveKit v1.9.1, livekit-client 2.23).
+  The same script also covers session revocation. An initial and a server-refreshed token, both admitted before,
+  are refused after another device revokes the session. This holds for fresh and resume (`reconnect=1&sid=`)
+  attempts on all four routes. **Passed 2026-10-18.** Repeat it on the host (below).
 
 ## Local rehearsal of the production stack (`infra/scripts/poc-local.sh`)
 

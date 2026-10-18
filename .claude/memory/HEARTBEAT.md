@@ -44,6 +44,7 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
 
 ## Next exact step
 Local POC runs (P1a). User will get a VPS once happy with the local POC → then P1 with poc-bootstrap.sh. POC smoke now covers attachments, soundboard and screen share on the prod stack, plus a watchdog drill on prod compose (64 s trip, 34 s reopen); all passed. Test runs use `POC_DATA=hangar-poc-test` so the user's POC accounts (default volume hangar-poc-srv) are untouched. The user's own POC data is kept: `bash infra/scripts/poc-local.sh up` restarts it. Bootstrap now stages config atomically and refuses partial configs. In Git Bash, export MSYS_NO_PATHCONV=1 before `docker exec ... /srv/...` checks.
+P2 session-revocation replay now automated in gate-check.mjs (initial + refreshed token, fresh + resume, 4 routes) and passing locally through the dev gate; still to repeat on the host. Remaining P2 items need a public host (bypass ports/IPv6, TURN/TLS with UDP+7881 blocked).
 
 ## Watchdog notes (done)
 - API: Core/Media/ReconcileHealth.cs (singleton; VoiceService.ReconcileAsync now returns bool complete and records it); GET /internal/watchdog/reconcile (200/503); AdmitAsync refuses when not Fresh (no complete pass for 3×ReconcileInterval). Tests: ReconcileHealthTests (2) + VoiceTests watchdog endpoint → 60 pass.
