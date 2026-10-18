@@ -40,7 +40,7 @@ import { Icon } from '../../shared/ui/icon';
           </div>
           <div class="note" style="margin-top: 8px">
             <hx-icon name="info" size="sm" style="color: var(--tx3); margin-top: 1px" />
-            <span>On Windows, Chrome and Edge can capture audio from an <b>entire screen</b> or a <b>browser tab</b>. A single app window shares video only — pick Entire screen if friends should hear the game.</span>
+            <span>On Windows, Chrome and Edge can capture audio from an <b>entire screen</b> or a <b>browser tab</b>. A single app window shares video only — pick Entire screen if friends should hear the game. Sound playing in this browser itself isn't included (so friends don't hear themselves) — share that tab for it.</span>
           </div>
           <div class="note" style="margin-top: 16px; background: transparent">
             <hx-icon name="lock" size="sm" style="color: var(--accent-tx); margin-top: 1px" />

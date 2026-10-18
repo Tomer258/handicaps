@@ -50,6 +50,11 @@ export interface RoomPeer {
 
 export type ScreenQuality = '1080p60' | '720p30';
 /** 'audio-failed': Windows refused system-audio loopback (NotReadableError); sharing without sound usually works. */
+/** Stereo, no voice processing, without this browser's own sound (restrictOwnAudio is not in the DOM typings yet). */
+const CLEAN_SCREEN_AUDIO = {
+  restrictOwnAudio: true, echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2,
+} as MediaTrackConstraints;
+
 export type ShareResult = 'ok' | 'denied' | 'failed' | 'audio-failed' | 'audio-failed-compat';
 
 /** A camera or screen stream in the room. Remote video is subscribed only while a tile watches it. */
@@ -340,9 +345,10 @@ export class MediaSessionService {
   readonly lastCaptureError = signal('');
 
   /**
-   * compat: ask for sound with the browser's default audio settings. Clean capture (processing off) makes Chrome open
-   * the Windows output device in its native format, which fails on some PCs with NotReadableError; the default path
-   * captures at 48 kHz through Chrome's audio pipeline instead.
+   * Clean capture asks for the PC's sound without the browser's own (restrictOwnAudio): Chrome then uses Windows'
+   * per-process loopback, which works on outputs where whole-device loopback fails with NotReadableError (7.1 headsets),
+   * and friends' voices playing in Hangar don't echo back into the stream. compat: the browser's default whole-device
+   * capture, kept as a fallback for browsers without per-process loopback.
    */
   async startScreenShare(quality: ScreenQuality, withAudio: boolean, compat = this.mediaPrefs.prefs().screenAudioCompat): Promise<ShareResult> {
     const room = this.room;
@@ -352,7 +358,7 @@ export class MediaSessionService {
     let tracks: LocalTrack[];
     try {
       tracks = await createLocalScreenTracks({
-        audio: withAudio ? (compat ? true : { echoCancellation: false, noiseSuppression: false, autoGainControl: false }) : false,
+        audio: withAudio ? (compat ? true : CLEAN_SCREEN_AUDIO) : false,
         systemAudio: withAudio ? 'include' : 'exclude',
         resolution: { width: enc.width, height: enc.height, frameRate: enc.fps },
         contentHint: 'motion',

@@ -22,6 +22,7 @@ try {
     navigator.mediaDevices.getDisplayMedia = (c) => {
       const clean = c && typeof c.audio === 'object';
       const compat = c && c.audio === true;
+      if (clean) window.__cleanAudio = c.audio;
       if (clean || (compat && window.__failCompat)) return Promise.reject(new DOMException('Could not start audio source', 'NotReadableError'));
       return orig(c);
     };
@@ -51,6 +52,9 @@ try {
   await page.screenshot({ path: `${outDir}/share-audio-failed.png` });
   await dialog.getByRole('button', { name: 'Try again with sound' }).click();
   await stop.waitFor({ timeout: 20000 });
+  const asked = await page.evaluate(() => window.__cleanAudio);
+  check(asked?.restrictOwnAudio === true && asked.echoCancellation === false && asked.channelCount === 2,
+    'clean capture asks for stereo sound without the browser’s own (per-process loopback)');
   check(true, 'after a clean-capture failure, "Try again with sound" goes live in compatibility mode');
   await stop.click();
   await dock.getByRole('button', { name: 'Share your screen' }).waitFor();
