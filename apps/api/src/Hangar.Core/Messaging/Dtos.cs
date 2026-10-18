@@ -25,6 +25,9 @@ public sealed record MessageDto(
     IReadOnlyList<ReactionDto> Reactions,
     IReadOnlyList<AttachmentDto> Attachments);
 
+/// <summary>Search hits, newest first. <c>Next</c> is an opaque cursor for the following (older) page.</summary>
+public sealed record SearchPageDto(IReadOnlyList<MessageDto> Messages, string? Next);
+
 public sealed record MessagePageDto(IReadOnlyList<MessageDto> Messages, bool HasMore, string HighWaterEventSequence, string? LastReadMessageSequence);
 
 /// <summary>SignalR/REST event envelope. Clients dedupe by (channelId, eventSequence) and resync on gaps.</summary>

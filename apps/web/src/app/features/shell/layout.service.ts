@@ -20,6 +20,10 @@ export class LayoutService {
   readonly membersOpen = signal(!this.membersOverlay());
   readonly theater = signal(false);
   readonly navOpen = signal(false);
+  /** Server message search panel (Ctrl K). */
+  readonly searchOpen = signal(false);
+  /** A search hit to scroll to once its channel is open. */
+  readonly jumpTarget = signal<{ channelId: string; messageId: string } | null>(null);
 
   constructor() {
     if (typeof window === 'undefined' || !window.matchMedia) return;

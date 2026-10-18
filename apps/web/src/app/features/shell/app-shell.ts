@@ -83,6 +83,11 @@ export class AppShell {
       else void this.media.toggleDeafen().then(() => this.toast.show(this.media.deafened() ? 'Deafened' : 'Undeafened'));
       return;
     }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === 'KeyK' && this.store.serverId()) {
+      e.preventDefault();
+      this.layout.searchOpen.update((open) => !open);
+      return;
+    }
     if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('.scrim, .cdk-overlay-pane')) {
       if (this.layout.navOpen()) this.layout.navOpen.set(false);
       else if (this.layout.membersOverlay() && this.layout.membersOpen()) this.layout.membersOpen.set(false);

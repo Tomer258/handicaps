@@ -63,6 +63,10 @@ public static class MessageEndpoints
             return Results.NoContent();
         });
 
+        api.MapGet("/servers/{serverId:guid}/messages/search", async (Guid serverId, string? q, Guid? from, Guid? channel, string? before, int? limit,
+                HttpContext http, MessageService svc, CancellationToken ct) =>
+            Results.Ok(await svc.SearchAsync(http.User.UserId(), serverId, q, from, channel, before, limit, ct))).WithTags("Messages");
+
         api.MapGet("/servers/{serverId:guid}/unread", async (Guid serverId, HttpContext http, MessageService svc, CancellationToken ct) =>
             Results.Ok(await svc.UnreadOverviewAsync(http.User.UserId(), serverId, ct))).WithTags("Messages");
     }

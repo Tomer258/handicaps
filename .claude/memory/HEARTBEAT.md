@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S0–S8 committed; all planned slices done)
+**Last update:** 2026-10-18 — session 2 (S0–S8 committed; message search committed; next: authorization watchdog)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -30,7 +30,11 @@
 - Frontend: features/soundboard/{soundboard.store,soundboard-popover,sound-upload.dialog}.ts; media-session subscribes sb_* participants' sfx_<userId> tracks (soundVolume/soundMuted/mutedActors in localStorage 'hangar.soundboard'); detach on TrackSubscriptionStatusChanged(Unsubscribed) because tracks only end after SFU renegotiation; re-attach on Subscribed. Dock z-index 26 above popover backdrop. Card menu: "Mute their soundboard".
 
 ## Next exact step
-All slices S0–S8 are done. Remaining work is the manual production gates in docs/runbooks/pre-release-gates.md (needs a real VPS + domain), the authorization watchdog (architecture §3, not implemented), message search (Ctrl K in the prototype, not implemented), and Phase 7 hardening (load/soak, real Windows clients). Ask the user which to pursue next.
+Implement the authorization watchdog (architecture §3): close public signaling (admission → deny) when voice reconciliation has been unhealthy for 60 s; remove the gap note from docs/runbooks/pre-release-gates.md + DECISIONS. After that, remaining: manual production gates (real VPS + domain) and Phase 7 hardening (load/soak, real Windows clients).
+
+## Search notes (done)
+- GET /servers/{id}/messages/search?q&from&channel&before&limit (MessageService.SearchAsync): ILIKE with escaped wildcards over pg_trgm GIN (migration MessageSearchIndex, partial WHERE deleted_at IS NULL), scoped to ViewChannel channels, newest first, cursor = CreatedAt.UtcTicks. Tests: SearchTests (2) → 57 pass.
+- Web: features/messages/search-panel.ts (Ctrl/Cmd K via AppShell, header button; from:/in: syntax + hint chips; 250 ms debounce + generation guard); LayoutService.searchOpen/jumpTarget; TextChannelPage effect jumps once the channel is loaded; ChannelUi.jumpTo waits frames and pages older history in.
 
 ## S8 notes (done)
 - apps/api/Dockerfile (uid 10001, 127.0.0.1:8080, `--migrate` one-off); infra/caddy/{Dockerfile,Caddyfile,Caddyfile.gate-dev}; infra/compose.prod.yml (profiles release/ops); infra/livekit.prod.yaml (key_file 0600); infra/config.example/*; infra/backup/{Dockerfile,backup.sh,restore.sh}; docs/runbooks/*; .github/workflows/ci.yml; AGENTS.md.
@@ -38,7 +42,7 @@ All slices S0–S8 are done. Remaining work is the manual production gates in do
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
-- `cd apps/api && dotnet build` ; `dotnet test` (55 pass; stop the running API first — it locks bin/; integration uses Testcontainers postgres:18-alpine)
+- `cd apps/api && dotnet build` ; `dotnet test` (57 pass; stop the running API first — it locks bin/; integration uses Testcontainers postgres:18-alpine)
 - `cd apps/api && dotnet run --project src/Hangar.Api` → http://localhost:5080, migrates + seeds, logs one-time owner invite link
 - `cd apps/web && npx ng build --configuration development` ; `npx ng serve` (proxy → :5080). npm installs: `npx -y npm@11.6.2 install ...` (system npm 11.0.0 has arborist bug)
 - Voice smoke (real LiveKit, fake mic, 2 browsers): `cd tests/e2e && node scripts/smoke-voice.mjs ../../.tmp/shots` (needs compose livekit up)
@@ -50,6 +54,7 @@ All slices S0–S8 are done. Remaining work is the manual production gates in do
 - Responsive smoke (1440/1200/390, shortcuts, drawer, pill, bottom sheet): `node scripts/smoke-responsive.mjs ../../.tmp/shots`
 - Gate check (Caddy forward_auth in front of dev LiveKit): see infra/caddy/Caddyfile.gate-dev header, then `node scripts/gate-check.mjs`
 - Edge image: `docker build -f infra/caddy/Dockerfile -t hangar-edge:dev .` ; API image: `docker build -t hangar-api:dev apps/api`
+- Search smoke (Ctrl K, filters, Hebrew, cross-channel jump, deep jump through 120 newer messages): `node scripts/smoke-search.mjs ../../.tmp/shots`
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
 - `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations -- --environment Development`

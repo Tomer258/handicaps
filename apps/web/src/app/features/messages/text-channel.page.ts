@@ -34,6 +34,11 @@ import { PinsPanel } from './pins-panel';
         @if (realtimeDown()) {
           <span role="status" title="Live updates paused while reconnecting" style="font-size: 12px; color: var(--warn)">Reconnecting…</span>
         }
+        <button class="hide-m search-btn" (click)="layout.searchOpen.set(!layout.searchOpen())" aria-label="Search messages" [attr.aria-expanded]="layout.searchOpen()"
+                style="display: flex; align-items: center; gap: 8px; width: 200px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--bg1); border: 1px solid var(--line); color: var(--tx3); font-size: 13px; text-align: left">
+          <hx-icon name="search" size="sm" /><span style="flex: 1">Search</span><span class="kbd" style="height: 20px; font-size: 10.5px">Ctrl K</span>
+        </button>
+        <button class="ibtn only-m" aria-label="Search messages" (click)="layout.searchOpen.set(!layout.searchOpen())"><hx-icon name="search" /></button>
         <button class="ibtn" [class.on]="ui.pinsOpen()" aria-label="Pinned messages" [attr.aria-pressed]="ui.pinsOpen()" title="Pinned messages"
                 (click)="ui.pinsOpen.set(!ui.pinsOpen())"><hx-icon name="pin" /></button>
         <button class="ibtn" [class.on]="layout.membersOpen()" aria-label="Toggle member list" [attr.aria-pressed]="layout.membersOpen()"
@@ -143,6 +148,17 @@ export class TextChannelPage implements OnDestroy {
   });
 
   constructor() {
+    // Search hit in this channel: scroll to it once history is loaded (pages older history in as needed).
+    effect(() => {
+      const target = this.layout.jumpTarget();
+      const id = this.channelId();
+      const loaded = this.chat.chat(id).loaded;
+      if (!target || target.channelId !== id || !loaded) return;
+      untracked(() => {
+        this.layout.jumpTarget.set(null);
+        void this.ui.jumpTo(target.messageId);
+      });
+    });
     effect(() => {
       const id = this.channelId();
       untracked(() => {

@@ -66,6 +66,50 @@ public sealed partial class MessageService(
         return new MessagePageDto(dtos, hasMore, highWater.ToString(), lastRead?.ToString());
     }
 
+    public const int MaxSearchQuery = 100;
+
+    /// <summary>
+    /// Server-wide message search over the channels the caller can currently see. Substring match (ILIKE, backed by a
+    /// pg_trgm index) so Hebrew and other scripts work without language-specific stemming. Tombstones are excluded.
+    /// </summary>
+    public async Task<SearchPageDto> SearchAsync(Guid userId, Guid serverId, string? q, Guid? fromUserId, Guid? channelId,
+        string? before, int? limit, CancellationToken ct)
+    {
+        var text = (q ?? "").Trim();
+        if (text.Length > MaxSearchQuery) throw AppProblem.BadRequest("search.too_long", $"Search is limited to {MaxSearchQuery} characters.");
+        if (text.Length == 0 && fromUserId is null) throw AppProblem.BadRequest("search.empty", "Type something to search for.");
+        var take = Guard.Limit(limit, 25, 50);
+
+        var visible = await permissions.VisibleChannelsAsync(userId, serverId, ct);
+        if (visible.Count == 0) throw AppProblem.NotFound("server.not_found", "Server not found.");
+        var channelIds = visible.Where(kv => kv.Value.HasFlag(Permission.ViewChannel)).Select(kv => kv.Key).ToList();
+        if (channelId is { } only) channelIds = channelIds.Contains(only) ? [only] : [];
+        if (channelIds.Count == 0) return new SearchPageDto([], null);
+
+        var query = db.Messages.AsNoTracking()
+            .Where(m => m.ServerId == serverId && channelIds.Contains(m.ChannelId) && m.DeletedAt == null);
+        if (text.Length > 0)
+        {
+            // User text is literal: escape LIKE wildcards with '\'.
+            var pattern = "%" + text.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_") + "%";
+            query = query.Where(m => EF.Functions.ILike(m.Body, pattern, @"\"));
+        }
+        if (fromUserId is { } author) query = query.Where(m => m.AuthorUserId == author);
+        if (before is not null)
+        {
+            if (!long.TryParse(before, out var ticks) || ticks <= 0) throw AppProblem.BadRequest("validation.cursor", "Invalid cursor.");
+            var cutoff = new DateTimeOffset(ticks, TimeSpan.Zero);
+            query = query.Where(m => m.CreatedAt < cutoff);
+        }
+
+        var rows = await query.OrderByDescending(m => m.CreatedAt).Take(take + 1)
+            .Include(m => m.Reactions).Include(m => m.Attachments).Include(m => m.Mentions)
+            .AsSplitQuery().ToListAsync(ct);
+        var page = rows.Take(take).ToList();
+        var next = rows.Count > take ? page[^1].CreatedAt.UtcTicks.ToString() : null;
+        return new SearchPageDto(await ToDtosAsync(page, ct), next);
+    }
+
     public async Task<List<MessageDto>> PinnedAsync(Guid userId, Guid channelId, CancellationToken ct)
     {
         await permissions.RequireChannelAsync(userId, channelId, Permission.ViewChannel, ct);

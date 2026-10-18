@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { SearchPanel } from '../messages/search-panel';
 import { ChannelSidebar } from './channel-sidebar';
 import { MemberList } from './member-list';
 import { LayoutService } from './layout.service';
@@ -11,7 +12,7 @@ import { LayoutService } from './layout.service';
  */
 @Component({
   selector: 'hx-server-view',
-  imports: [RouterOutlet, ChannelSidebar, MemberList],
+  imports: [RouterOutlet, ChannelSidebar, MemberList, SearchPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (store.server(); as server) {
@@ -21,6 +22,9 @@ import { LayoutService } from './layout.service';
       }
       <main id="main" style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg2); margin-top: 8px; border-top: 1px solid var(--line); position: relative">
         <router-outlet />
+        @if (layout.searchOpen()) {
+          <hx-search-panel />
+        }
       </main>
       @if (layout.membersOpen() && !layout.theater()) {
         @if (layout.membersOverlay()) {

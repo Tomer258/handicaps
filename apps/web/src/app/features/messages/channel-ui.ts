@@ -46,7 +46,10 @@ export class ChannelUi {
   /** Scrolls to a message, paging older history in if needed, and flashes it. */
   async jumpTo(messageId: string): Promise<void> {
     const id = this.channelId();
-    for (let i = 0; i < 6; i++) {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 24; i++) {
+      // Let the list render what the store already holds before deciding to page older history in.
+      await frame();
       const el = document.getElementById(`msg-${messageId}`);
       if (el) {
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -56,9 +59,9 @@ export class ChannelUi {
         return;
       }
       const c = this.chat.chat(id);
+      if (c.messages.some((m) => m.id === messageId)) continue; // loaded, not painted yet
       if (!c.hasMore) break;
       await this.chat.loadOlder(id);
-      await new Promise((r) => requestAnimationFrame(r));
     }
     this.toast.show('That message is no longer available.');
   }
