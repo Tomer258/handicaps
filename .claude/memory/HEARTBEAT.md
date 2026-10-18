@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
+**Last update:** 2026-10-18 — session 3 (S9 admin/permissions done) · session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -51,6 +51,7 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
       interrupted upload, disk-full, expired-cert alert, rollback with compatible schema.
 
 ## Next exact step
+S9 (admin panel + permissions + moderation) DONE and pushed (21fcf28, c5b87ee, bb09072, 2b72336). Next: P4 items that run locally on the POC (abuse/rate limits, DB outage, API/worker/SFU restarts, interrupted upload, disk-full, rollback with compatible schema), then P1 once the user has a VPS. Older notes below.
 Local POC runs (P1a). User will get a VPS once happy with the local POC → then P1 with poc-bootstrap.sh. POC smoke now covers attachments, soundboard and screen share on the prod stack, plus a watchdog drill on prod compose (64 s trip, 34 s reopen); all passed. Test runs use `POC_DATA=hangar-poc-test` so the user's POC accounts (default volume hangar-poc-srv) are untouched. The user's own POC data is kept: `bash infra/scripts/poc-local.sh up` restarts it. Bootstrap now stages config atomically and refuses partial configs. In Git Bash, export MSYS_NO_PATHCONV=1 before `docker exec ... /srv/...` checks.
 P2 session-revocation replay now automated in gate-check.mjs (initial + refreshed token, fresh + resume, 4 routes) and passing locally through the dev gate; still to repeat on the host. TURN/TLS gate rehearsed locally: POC_NODE_IP=container + POC_FORCE_RELAY=1 poc-smoke → all paths relay/tls via Caddy layer4 (3/3). Found + fixed prod-only bug: validator ffmpeg threads vs pids_limit 64 (intermittent image decode_failed). Remaining P2 items needing a public host: bypass ports/IPv6, real-network TURN. Screen share already exists (S5) and is in poc-smoke; user asked to prioritize it — it is done.
 Voice panel (sidebar, above the user row) now has the prototype's 4-button row: camera, share screen, soundboard, voice settings. LayoutService.soundboardOpen/shareOpen are shared with the dock; ServerView renders the soundboard popover + Go-live dialog so they work on any page (closed on disconnect).
