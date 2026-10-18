@@ -232,3 +232,7 @@ input[type=range].rng.sbr{accent-color:var(--sb)}
 .skrow .lines{flex:1;display:flex;flex-direction:column;gap:8px;padding-top:4px}
 .skrow .sk.ln{height:10px}
 @media (prefers-reduced-motion:reduce){.sk{animation:none}}
+
+/* Soundboard Concept B: docked beside the main view (Responsive lg/xl) */
+.sb-dock-host{display:flex;flex:none;margin-top:8px;border-top:1px solid var(--line)}
+.sb-pop.sb-docked{position:relative!important;left:auto!important;bottom:auto!important;transform:none!important;width:340px!important;max-width:none!important;max-height:none!important;height:100%;border-radius:0!important;border-width:0 0 0 1px!important;box-shadow:none!important;z-index:auto!important;background:var(--bg1)}

@@ -40,8 +40,8 @@ import { LayoutService } from './layout.service';
           </button>
           <button class="ibtn" [class.on]="media.sharing() === 'live'" style="width: 100%; height: 34px; background: var(--bg4)"
                   [attr.aria-label]="media.sharing() === 'live' ? 'Stop sharing your screen' : 'Share your screen'" [attr.aria-pressed]="media.sharing() === 'live'"
-                  [title]="media.canScreen() ? (media.sharing() === 'live' ? 'Stop sharing' : 'Share screen') : 'You cannot stream in this channel'"
-                  [disabled]="!media.canScreen() || media.sharing() === 'starting'" (click)="share()">
+                  [title]="shareBlocked() ? 'Streaming needs a wider (desktop) window' : media.canScreen() ? (media.sharing() === 'live' ? 'Stop sharing' : 'Share screen') : 'You cannot stream in this channel'"
+                  [disabled]="!media.canScreen() || media.sharing() === 'starting' || shareBlocked()" (click)="share()">
             <hx-icon [name]="media.sharing() === 'live' ? 'screen-off' : 'screen'" />
           </button>
           <button class="ibtn sb" [class.on]="layout.soundboardOpen()" style="width: 100%; height: 34px; background: var(--bg4)"
@@ -66,6 +66,7 @@ export class VoicePanel {
   private readonly dialog = inject(Dialog);
 
   readonly reconnecting = computed(() => this.media.connection() === 'reconnecting');
+  readonly shareBlocked = computed(() => this.layout.singleStream() && this.media.sharing() !== 'live');
   readonly label = computed(() => (this.reconnecting() ? 'Reconnecting…' : 'Voice connected'));
   private readonly quality = computed(() => this.media.myQuality());
   readonly poor = computed(() => this.quality() === 'poor' || this.quality() === 'lost');

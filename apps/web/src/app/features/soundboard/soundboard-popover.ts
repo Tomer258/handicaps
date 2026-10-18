@@ -4,6 +4,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { Icon } from '../../shared/ui/icon';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { LayoutService } from '../shell/layout.service';
 import { REJECT_REASONS, Sound, SoundboardStore } from './soundboard.store';
 import { SoundUploadDialog } from './sound-upload.dialog';
 
@@ -14,15 +15,22 @@ type Category = 'all' | 'favorites' | 'mine';
   selector: 'hx-soundboard-popover',
   imports: [Icon, SoundUploadDialog],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.sb-dock-host]': 'docked()' },
   template: `
-    <div style="position: absolute; inset: 0; z-index: 24" (click)="closed.emit()" aria-hidden="true"></div>
-    <div #dialog tabindex="-1" class="pop fade sb-pop" role="dialog" aria-label="Soundboard" (keydown.escape)="closed.emit()"
+    @if (!docked()) {
+      <div style="position: absolute; inset: 0; z-index: 24" (click)="closed.emit()" aria-hidden="true"></div>
+    }
+    <div #dialog tabindex="-1" class="pop fade sb-pop" [class.sb-docked]="docked()" [attr.role]="docked() ? 'complementary' : 'dialog'" aria-label="Soundboard" (keydown.escape)="closed.emit()"
          style="position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); width: 384px; max-width: calc(100% - 24px);
                 max-height: calc(100% - 120px); display: flex; flex-direction: column; z-index: 25; border-color: color-mix(in oklab,var(--sb) 35%,var(--line2))">
       <div style="display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px">
         <span style="width: 28px; height: 28px; border-radius: 8px; background: color-mix(in oklab,var(--sb) 22%,transparent); color: var(--sb); display: grid; place-items: center"><hx-icon name="soundboard" size="sm" /></span>
         <div style="flex: 1; min-width: 0"><b class="disp" style="font-size: 16px">Soundboard</b>
           <div style="font-size: 11.5px; color: var(--tx3)">Plays to everyone in {{ channelName() }}</div></div>
+        @if (layout.canDockSoundboard()) {
+          <button class="ibtn" [class.on]="docked()" [attr.aria-pressed]="docked()" [attr.aria-label]="docked() ? 'Undock soundboard' : 'Dock soundboard to the side'"
+                  [title]="docked() ? 'Undock (back to a popover)' : 'Dock to the side'" (click)="layout.toggleSoundboardDock()"><hx-icon name="panel-right" size="sm" /></button>
+        }
         <button class="ibtn" aria-label="Close soundboard" (click)="closed.emit()"><hx-icon name="x" size="sm" /></button>
       </div>
 
@@ -150,6 +158,9 @@ type Category = 'all' | 'favorites' | 'mine';
   `,
 })
 export class SoundboardPopover implements OnDestroy {
+  /** Concept B: pinned beside the main view instead of floating over it. */
+  readonly docked = input(false);
+  readonly layout = inject(LayoutService);
   readonly channelName = input('voice');
   readonly closed = output<void>();
 

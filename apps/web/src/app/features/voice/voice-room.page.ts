@@ -58,8 +58,10 @@ const GHOST_SHOW_AFTER_MS = 1_500;
         }
         @if (watching()) {
           <div class="seg" role="group" aria-label="Stream layout">
-            <button [attr.aria-pressed]="streamLayout() === 'focus'" (click)="streamLayout.set('focus')">Focus</button>
-            <button [attr.aria-pressed]="streamLayout() === 'grid'" (click)="streamLayout.set('grid')">Grid</button>
+            <button [attr.aria-pressed]="effectiveLayout() === 'focus'" (click)="streamLayout.set('focus')">Focus</button>
+            @if (gridAllowed()) {
+              <button [attr.aria-pressed]="effectiveLayout() === 'grid'" (click)="streamLayout.set('grid')">Grid</button>
+            }
           </div>
           <button class="btn sec" style="height: 32px" (click)="watching.set(false)"><hx-icon name="arrow-left" size="sm" />Back to voice</button>
         }
@@ -88,7 +90,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
         } @else {
           @if (watching()) {
             <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 96px; background: #050608">
-              <hx-stream-view [streams]="watchedStreams()" [(primaryKey)]="primaryKey" [(layout)]="streamLayout" />
+              <hx-stream-view [streams]="shownStreams()" [(primaryKey)]="primaryKey" [layout]="effectiveLayout()" (layoutChange)="streamLayout.set($event)" />
             </div>
           } @else {
             <div class="scroll" style="flex: 1; min-height: 0; padding: 20px 24px 120px">
@@ -199,8 +201,8 @@ const GHOST_SHOW_AFTER_MS = 1_500;
               </button>
               <button class="dbtn" [class.on]="media.sharing() === 'live'" [attr.aria-label]="media.sharing() === 'live' ? 'Stop sharing your screen' : 'Share your screen'"
                       [attr.aria-pressed]="media.sharing() === 'live'"
-                      [title]="media.canScreen() ? (media.sharing() === 'live' ? 'Stop sharing' : 'Share screen') : 'You cannot stream in this channel'"
-                      [disabled]="!media.canScreen() || media.sharing() === 'starting'" (click)="shareClick()">
+                      [title]="shareBlocked() ? 'Streaming needs a wider (desktop) window' : media.canScreen() ? (media.sharing() === 'live' ? 'Stop sharing' : 'Share screen') : 'You cannot stream in this channel'"
+                      [disabled]="!media.canScreen() || media.sharing() === 'starting' || shareBlocked()" (click)="shareClick()">
                 <hx-icon [name]="media.sharing() === 'live' ? 'screen-off' : 'screen'" size="lg" />
               </button>
               <button class="dbtn sb" [class.on]="sbOpen()" aria-label="Soundboard" [attr.aria-pressed]="sbOpen()" title="Soundboard"
@@ -293,6 +295,20 @@ export class VoiceRoomPage {
   readonly watchKeys = signal<string[] | null>(null);
   readonly primaryKey = signal<string | null>(null);
   readonly streamLayout = signal<'focus' | 'grid'>('focus');
+  /** Responsive: grid only ≥ 1280, or at 1080–1279 for two streams; below that Focus + strip. */
+  readonly gridAllowed = computed(() => {
+    const bp = this.layout.breakpoint();
+    return bp === 'lg' || bp === 'xl' || (bp === 'md' && this.watchedStreams().length <= 2);
+  });
+  readonly effectiveLayout = computed(() => (this.gridAllowed() ? this.streamLayout() : 'focus'));
+  /** Below 820 px watching is single-stream: just the focused one, no strip. */
+  readonly shownStreams = computed(() => {
+    const all = this.watchedStreams();
+    if (!this.layout.singleStream()) return all;
+    return all.filter((s) => s.key === this.primaryKey()).slice(0, 1).concat(all).slice(0, 1);
+  });
+  /** No streaming out on a phone-sized window (stopping one already live stays possible). */
+  readonly shareBlocked = computed(() => this.layout.singleStream() && this.media.sharing() !== 'live');
   private readonly restoreVolume = new Map<string, number>();
   /** userId → the peer as last seen and when it vanished from the room while still on the roster. */
   private readonly ghosts = signal<ReadonlyMap<string, { peer: RoomPeer; since: number }>>(new Map());

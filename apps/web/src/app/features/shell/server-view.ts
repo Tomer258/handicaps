@@ -29,14 +29,17 @@ import { ShareDialog } from '../voice/share-dialog';
           <hx-search-panel />
         }
         <!-- Call overlays live here so the dock and the sidebar voice panel open them on any page. -->
-        @if (media.connected() && layout.soundboardOpen()) {
+        @if (media.connected() && layout.soundboardOpen() && !layout.soundboardDocked()) {
           <hx-soundboard-popover [channelName]="voiceChannelName()" (closed)="layout.soundboardOpen.set(false)" />
         }
         @if (media.connected() && layout.shareOpen()) {
           <hx-share-dialog [channelName]="voiceChannelName()" [viewers]="viewers()" (closed)="layout.shareOpen.set(false)" />
         }
       </main>
-      @if (layout.membersOpen() && !layout.theater()) {
+      @if (dockedSoundboard()) {
+        <hx-soundboard-popover [docked]="true" [channelName]="voiceChannelName()" (closed)="layout.soundboardOpen.set(false)" />
+      }
+      @if (layout.membersOpen() && !layout.theater() && !(dockedSoundboard() && layout.breakpoint() === 'lg')) {
         @if (layout.membersOverlay()) {
           <div style="position: absolute; inset: 0; z-index: 27" (click)="layout.membersOpen.set(false)" aria-hidden="true"></div>
         }
@@ -63,6 +66,7 @@ export class ServerView {
   readonly voiceChannelName = computed(() => this.store.channel(this.media.channelId())?.name ?? 'voice');
   readonly viewers = computed(() => Math.max(0, this.media.peers().length - 1));
   readonly failed = signal(false);
+  readonly dockedSoundboard = computed(() => this.media.connected() && this.layout.soundboardOpen() && this.layout.soundboardDocked() && !this.layout.theater());
 
   constructor() {
     // Leaving the call closes its overlays, so they do not reappear on the next join.
