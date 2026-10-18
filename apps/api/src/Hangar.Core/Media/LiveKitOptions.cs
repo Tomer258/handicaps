@@ -24,4 +24,9 @@ public sealed class LiveKitOptions
     public int MaxCameras { get; set; } = 6;
     /// <summary>A reservation must be backed by a published track within this window, and is renewed while it is.</summary>
     public TimeSpan PublishWindow { get; set; } = TimeSpan.FromSeconds(60);
+    /// <summary>
+    /// Load testing only (runbooks/load-test.md): rooms whose name starts with this prefix are left alone by the
+    /// reconciler, so simulated `lk load-test` participants are not evicted. Empty (the default) = no exemption.
+    /// </summary>
+    public string LoadTestRoomPrefix { get; set; } = "";
 }

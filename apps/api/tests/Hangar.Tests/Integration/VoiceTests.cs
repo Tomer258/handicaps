@@ -411,6 +411,30 @@ public class VoiceTests(ApiFactory factory)
         await JoinOkAsync(owner, ranked); // would hit ux_voice_leases_one_active if the lease were resurrected
     }
 
+    [Fact]
+    public async Task Reconciler_evicts_strangers_unless_the_room_is_an_enabled_load_test_room()
+    {
+        var opts = factory.Services.GetRequiredService<IOptions<LiveKitOptions>>().Value;
+        factory.LiveKit.Connect("loadtest_a", "sim_pub_0");
+        await ReconcileAsync();
+        Assert.False(factory.LiveKit.IsConnected("loadtest_a", "sim_pub_0")); // off by default: evicted like anyone
+
+        opts.LoadTestRoomPrefix = "loadtest_";
+        try
+        {
+            factory.LiveKit.Connect("loadtest_a", "sim_pub_1");
+            factory.LiveKit.Connect("v_stranger_room_1", "sim_pub_2");
+            await ReconcileAsync();
+            Assert.True(factory.LiveKit.IsConnected("loadtest_a", "sim_pub_1"));
+            Assert.False(factory.LiveKit.IsConnected("v_stranger_room_1", "sim_pub_2")); // real rooms stay enforced
+        }
+        finally
+        {
+            opts.LoadTestRoomPrefix = "";
+            await ReconcileAsync(); // clean up the simulated participant
+        }
+    }
+
     private async Task ReconcileAsync()
     {
         using var scope = factory.Services.CreateScope();

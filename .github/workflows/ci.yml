@@ -53,6 +53,8 @@ jobs:
           python-version: "3.13"
       - run: python -m py_compile workers/asset-validator/validator.py workers/sound-publisher/publisher.py workers/auth-watchdog/watchdog.py workers/ops-monitor/monitor.py
       - run: python -I -m unittest discover -s workers/ops-monitor
+      - name: Load-test tooling (runbooks/load-test.md)
+        run: python -I infra/scripts/load-sample.py --self-test && bash -n infra/scripts/load-test.sh
       - name: Migrations are rollback-compatible (runbooks/rollback.md)
         run: python -I infra/scripts/check-migrations.py --self-test && python -I infra/scripts/check-migrations.py
 

@@ -501,6 +501,7 @@ public sealed class VoiceService(
         var complete = true;
         foreach (var room in roomNames.Union(remaining.Select(l => l.RoomName)).Distinct())
         {
+            if (O.LoadTestRoomPrefix.Length > 0 && room.StartsWith(O.LoadTestRoomPrefix, StringComparison.Ordinal)) continue;
             IReadOnlyList<LiveKitParticipant>? participants;
             try
             {

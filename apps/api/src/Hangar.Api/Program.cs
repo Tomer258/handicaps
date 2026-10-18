@@ -140,6 +140,15 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+var loadTestPrefix = app.Services.GetRequiredService<IOptions<LiveKitOptions>>().Value.LoadTestRoomPrefix;
+if (loadTestPrefix.Length > 0)
+{
+    // Real rooms are v_<channel>_<generation>: an overlapping prefix would switch off eviction for them.
+    if (loadTestPrefix.StartsWith("v_", StringComparison.Ordinal) || "v_".StartsWith(loadTestPrefix, StringComparison.Ordinal))
+        throw new InvalidOperationException("Hangar:LiveKit:LoadTestRoomPrefix must not overlap real room names (v_...).");
+    app.Logger.LogWarning("LOAD TEST MODE: the reconciler ignores LiveKit rooms starting with '{Prefix}'. Unset Hangar:LiveKit:LoadTestRoomPrefix after the test.", loadTestPrefix);
+}
+
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
