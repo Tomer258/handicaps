@@ -97,7 +97,7 @@ await owner.screenshot({ path: `${outDir}/settings-video.png` });
 await owner.getByRole('group', { name: 'Default stream quality' }).getByRole('button', { name: '1080p · 60' }).click();
 
 // 6. Invites: link shown once, listed, revoked.
-await nav('Invites & members');
+await nav('Invites');
 const note = `smoke ${Date.now() % 100000}`;
 await owner.getByLabel('Note (optional)').fill(note);
 await owner.getByRole('button', { name: 'Create invite link' }).click();
@@ -113,6 +113,7 @@ await owner.getByRole('button', { name: `Revoke invite ${note}` }).waitFor({ sta
 check(true, 'invite revoked');
 
 // 7. Roles: give Friend the Moderator role and take it away.
+await nav('Members');
 const modBtn = owner.getByRole('button', { name: 'Moderator role for Friend' });
 await modBtn.click();
 await owner.getByRole('button', { name: 'Moderator role for Friend', pressed: true }).waitFor();

@@ -28,6 +28,7 @@ public static class CoreServices
         services.AddSingleton<LoginThrottle>();
 
         services.AddScoped<AuditService>();
+        services.AddScoped<AuditLogService>();
         services.AddScoped<PermissionService>();
         services.AddScoped<SessionRevocationNotifier>();
         services.AddScoped<AuthService>();

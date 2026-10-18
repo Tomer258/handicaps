@@ -115,6 +115,31 @@ public class RoleTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.NoContent, (await owner.Http.DeleteAsync($"/api/v1/servers/{serverId}/roles/{r2}")).StatusCode);
     }
 
+    [Fact]
+    public async Task Audit_log_needs_ViewAudit_and_lists_admin_events_with_names_only()
+    {
+        var (owner, serverId) = await OwnerAsync(factory);
+        var (m, _) = await MemberAsync(factory, owner, serverId);
+        Assert.Equal(HttpStatusCode.Forbidden, (await m.Http.GetAsync($"/api/v1/servers/{serverId}/audit")).StatusCode);
+
+        var role = await CreateRoleAsync(owner, serverId, "audited");
+        var page = await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/audit?limit=100"));
+        var entries = page.GetProperty("entries").EnumerateArray().ToList();
+        var created = entries.First(e => e.GetProperty("action").GetString() == "role.create" && e.GetProperty("targetId").GetString() == role.ToString());
+        Assert.Equal("audited", created.GetProperty("targetName").GetString());
+        Assert.False(string.IsNullOrEmpty(created.GetProperty("actorName").GetString()));
+        Assert.DoesNotContain(entries, e => e.GetProperty("action").GetString() is "auth.login" or "auth.logout");
+        Assert.Contains(entries, e => e.GetProperty("action").GetString() == "auth.register");
+
+        // Paging: the cursor walks strictly older entries.
+        var first = await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/audit?limit=2"));
+        var before = first.GetProperty("before").GetDateTimeOffset();
+        var next = await Json(await owner.Http.GetAsync($"/api/v1/servers/{serverId}/audit?limit=2&before={Uri.EscapeDataString(before.ToString("O"))}"));
+        Assert.All(next.GetProperty("entries").EnumerateArray(), e => Assert.True(e.GetProperty("time").GetDateTimeOffset() < before));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.Http.DeleteAsync($"/api/v1/servers/{serverId}/roles/{role}")).StatusCode);
+    }
+
     private async Task<Guid> DefaultRoleAsync()
     {
         using var scope = factory.Services.CreateScope();

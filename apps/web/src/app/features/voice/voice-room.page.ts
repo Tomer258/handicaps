@@ -6,6 +6,8 @@ import { MediaSessionService, RoomPeer, StreamInfo } from '../../core/media/medi
 import { ToastService } from '../../core/ui/toast.service';
 import { avatarColor, avatarUrl, initials } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
+import { Dialog } from '@angular/cdk/dialog';
+import { canOpenChannelSettings, openChannelSettings } from '../shell/channel-settings.dialog';
 import { LayoutService } from '../shell/layout.service';
 import { PresenceStore } from '../presence/presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
@@ -42,6 +44,9 @@ interface Card {
           <h1 class="disp" style="margin: 0; font-size: 16px; font-weight: 600">{{ ch.name }}</h1>
           <span class="mono" style="font-size: 11.5px; color: var(--tx3)">{{ rosterCount() }} connected</span>
         </div>
+        @if (canChannelSettings()) {
+          <button class="ibtn" aria-label="Channel settings" title="Channel settings" (click)="channelSettings()"><hx-icon name="settings" /></button>
+        }
         @if (watching()) {
           <div class="seg" role="group" aria-label="Stream layout">
             <button [attr.aria-pressed]="streamLayout() === 'focus'" (click)="streamLayout.set('focus')">Focus</button>
@@ -236,6 +241,12 @@ export class VoiceRoomPage {
   readonly media = inject(MediaSessionService);
   readonly layout = inject(LayoutService);
   private readonly store = inject(WorkspaceStore);
+  private readonly dialog = inject(Dialog);
+  readonly canChannelSettings = computed(() => canOpenChannelSettings(this.store));
+
+  channelSettings(): void {
+    openChannelSettings(this.dialog, this.channelId());
+  }
   private readonly roster = inject(VoicePresenceStore);
   private readonly presence = inject(PresenceStore);
   private readonly api = inject(ApiService);

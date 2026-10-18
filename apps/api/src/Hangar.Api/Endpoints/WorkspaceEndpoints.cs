@@ -1,4 +1,5 @@
 using Hangar.Api.Infrastructure;
+using Hangar.Core.Audit;
 using Hangar.Core.Channels;
 using Hangar.Core.Identity;
 using Hangar.Core.Users;
@@ -67,6 +68,9 @@ public static class WorkspaceEndpoints
             await ws.ReorderRolesAsync(http.User.UserId(), serverId, req.RoleIds ?? [], ct);
             return Results.NoContent();
         });
+
+        servers.MapGet("/{serverId:guid}/audit", async (Guid serverId, DateTimeOffset? before, int? limit, HttpContext http, AuditLogService log, CancellationToken ct) =>
+            Results.Ok(await log.ListAsync(http.User.UserId(), serverId, before, limit, ct)));
 
         servers.MapPost("/{serverId:guid}/invitations", async (Guid serverId, CreateInvitationRequest req, HttpContext http,
             InvitationService invites, Microsoft.Extensions.Options.IOptions<HangarOptions> opt, CancellationToken ct) =>

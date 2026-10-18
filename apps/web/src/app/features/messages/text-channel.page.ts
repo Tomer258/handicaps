@@ -3,6 +3,8 @@ import { ApiError } from '../../core/api/api-error';
 import { Channel } from '../../core/api/models';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { Icon } from '../../shared/ui/icon';
+import { Dialog } from '@angular/cdk/dialog';
+import { canOpenChannelSettings, openChannelSettings } from '../shell/channel-settings.dialog';
 import { LayoutService } from '../shell/layout.service';
 import { VoicePill } from '../shell/voice-pill';
 import { WorkspaceStore } from '../workspaces/workspace.store';
@@ -39,6 +41,9 @@ import { PinsPanel } from './pins-panel';
           <hx-icon name="search" size="sm" /><span style="flex: 1">Search</span><span class="kbd" style="height: 20px; font-size: 10.5px">Ctrl K</span>
         </button>
         <button class="ibtn only-m" aria-label="Search messages" (click)="layout.searchOpen.set(!layout.searchOpen())"><hx-icon name="search" /></button>
+        @if (canChannelSettings()) {
+          <button class="ibtn" aria-label="Channel settings" title="Channel settings" (click)="channelSettings()"><hx-icon name="settings" /></button>
+        }
         <button class="ibtn" [class.on]="ui.pinsOpen()" aria-label="Pinned messages" [attr.aria-pressed]="ui.pinsOpen()" title="Pinned messages"
                 (click)="ui.pinsOpen.set(!ui.pinsOpen())"><hx-icon name="pin" /></button>
         <button class="ibtn" [class.on]="layout.membersOpen()" aria-label="Toggle member list" [attr.aria-pressed]="layout.membersOpen()"
@@ -131,6 +136,12 @@ export class TextChannelPage implements OnDestroy {
   readonly ui = inject(ChannelUi);
   readonly layout = inject(LayoutService);
   private readonly store = inject(WorkspaceStore);
+  private readonly dialog = inject(Dialog);
+  readonly canChannelSettings = computed(() => canOpenChannelSettings(this.store));
+
+  channelSettings(): void {
+    openChannelSettings(this.dialog, this.channelId());
+  }
   private readonly chat = inject(ChatStore);
   private readonly realtime = inject(RealtimeService);
 

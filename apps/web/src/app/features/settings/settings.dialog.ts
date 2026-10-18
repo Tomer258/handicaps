@@ -6,17 +6,20 @@ import { WorkspaceStore } from '../workspaces/workspace.store';
 import { AccountSection } from './account.section';
 import { AppearanceSection } from './appearance.section';
 import { NotificationsSection } from './notifications.section';
-import { ServerSection } from './server.section';
+import { AuditSection } from './audit.section';
+import { InvitesSection } from './invites.section';
+import { MembersSection } from './members.section';
+import { RolesSection } from './roles.section';
 import { SoundboardSection } from './soundboard.section';
 import { VideoSection } from './video.section';
 import { VoiceSection } from './voice.section';
 
-export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' | 'notif' | 'server';
+export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' | 'notif' | 'invites' | 'members' | 'roles' | 'audit';
 
 /** Full-window settings layer (prototype SETTINGS). Esc or the close button returns to the app. */
 @Component({
   selector: 'hx-settings',
-  imports: [AccountSection, VoiceSection, VideoSection, SoundboardSection, AppearanceSection, NotificationsSection, ServerSection],
+  imports: [AccountSection, VoiceSection, VideoSection, SoundboardSection, AppearanceSection, NotificationsSection, InvitesSection, MembersSection, RolesSection, AuditSection],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { style: 'display: contents' },
   template: `
@@ -31,12 +34,14 @@ export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' |
             <span style="width: 8px; height: 8px; border-radius: 2px" [style.background]="t.dot"></span>{{ t.label }}
           </button>
         }
-        @if (canAdmin()) {
+        @if (adminTabs().length) {
           <div class="lbl" style="padding: 18px 10px 8px">{{ serverName() }}</div>
-          <button class="snav" [attr.aria-pressed]="section() === 'server'" (click)="section.set('server')"
-                  [style.background]="section() === 'server' ? 'var(--bg3)' : null" [style.color]="section() === 'server' ? 'var(--tx)' : null">
-            <span style="width: 8px; height: 8px; border-radius: 2px; background: var(--accent)"></span>Invites &amp; members
-          </button>
+          @for (t of adminTabs(); track t.id) {
+            <button class="snav" [attr.aria-pressed]="section() === t.id" (click)="section.set(t.id)"
+                    [style.background]="section() === t.id ? 'var(--bg3)' : null" [style.color]="section() === t.id ? 'var(--tx)' : null">
+              <span style="width: 8px; height: 8px; border-radius: 2px" [style.background]="t.dot"></span>{{ t.label }}
+            </button>
+          }
         }
         <div style="flex: 1"></div>
         <button class="snav" (click)="logout()" style="color: var(--danger)">Log out</button>
@@ -50,7 +55,10 @@ export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' |
             @case ('sound') { <hx-soundboard-section /> }
             @case ('look') { <hx-appearance-section /> }
             @case ('notif') { <hx-notifications-section /> }
-            @case ('server') { <hx-server-section /> }
+            @case ('invites') { <hx-invites-section /> }
+            @case ('members') { <hx-members-section /> }
+            @case ('roles') { <hx-roles-section /> }
+            @case ('audit') { <hx-audit-section /> }
           }
         </div>
       </div>
@@ -80,9 +88,16 @@ export class SettingsDialog {
 
   readonly section = signal<SettingsSection>(this.data?.section ?? 'account');
   readonly serverName = computed(() => this.store.server()?.name ?? 'Server');
-  readonly canAdmin = computed(() => {
+  readonly adminTabs = computed(() => {
     const p = this.store.server()?.myPermissions ?? 0;
-    return has(p, Perm.Administrator) || has(p, Perm.ManageInvites) || has(p, Perm.ManageRoles);
+    const tabs: { id: SettingsSection; label: string; dot: string }[] = [];
+    if (has(p, Perm.ManageInvites)) tabs.push({ id: 'invites', label: 'Invites', dot: 'var(--accent)' });
+    if (has(p, Perm.ManageRoles)) {
+      tabs.push({ id: 'members', label: 'Members', dot: 'var(--accent)' });
+      tabs.push({ id: 'roles', label: 'Roles', dot: 'var(--accent)' });
+    }
+    if (has(p, Perm.ViewAudit)) tabs.push({ id: 'audit', label: 'Audit log', dot: 'var(--tx3)' });
+    return tabs;
   });
 
   async logout(): Promise<void> {

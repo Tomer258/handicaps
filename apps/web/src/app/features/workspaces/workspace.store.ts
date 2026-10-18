@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
-import { Channel, Member, ServerDetail, has, Perm } from '../../core/api/models';
+import { Channel, Member, Role, ServerDetail, has, Perm } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 
 /**
@@ -30,6 +30,33 @@ export class WorkspaceStore {
   readonly canManageInvites = computed(() => has(this.myPermissions(), Perm.ManageInvites));
   readonly isAdmin = computed(() => has(this.myPermissions(), Perm.Administrator));
   readonly memberById = computed(() => new Map(this._members().map((m) => [m.userId, m])));
+
+  // Role hierarchy (mirrors Hangar.Core.Permissions.RoleAuthority; the server enforces it, this only drives the UI).
+  readonly isOwner = computed(() => {
+    const s = this._server();
+    return !!s && !!s.ownerUserId && s.ownerUserId === this.session.userId();
+  });
+  readonly myTopPosition = computed(() => this.topPositionOf(this.memberById().get(this.session.userId() ?? '')));
+
+  topPositionOf(m: Member | undefined): number {
+    if (!m) return 0;
+    const roles = this._server()?.roles ?? [];
+    return Math.max(0, ...roles.filter((r) => !r.isDefault && m.roleIds.includes(r.id)).map((r) => r.position));
+  }
+
+  canManageRole(r: Role): boolean {
+    return this.isOwner() || r.position < this.myTopPosition();
+  }
+
+  canManageMember(m: Member): boolean {
+    if (m.isOwner) return false;
+    return this.isOwner() || m.userId === this.session.userId() || this.topPositionOf(m) < this.myTopPosition();
+  }
+
+  /** Permission bits the caller may hand out (in roles or channel overrides). */
+  canGrant(bit: number): boolean {
+    return this.isOwner() || has(this.myPermissions(), bit);
+  }
 
   constructor() {
     this.session.onTeardown(() => {
