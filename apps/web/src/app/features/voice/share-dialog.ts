@@ -46,9 +46,16 @@ import { Icon } from '../../shared/ui/icon';
             <hx-icon name="lock" size="sm" style="color: var(--accent-tx); margin-top: 1px" />
             <span>Next, <b>your browser</b> asks what to share — a screen, a window or a tab. Hangar can't see or pick anything until you choose there.</span>
           </div>
+          @if (audioFailed()) {
+            <div class="note w" role="alert" style="margin-top: 12px">
+              <hx-icon name="alert-triangle" size="sm" style="margin-top: 1px" />
+              <span>Windows wouldn't let the browser capture this PC's sound, so nothing was shared. You can share without sound now.
+                To fix sound: check the default playback device (Bluetooth headsets in call mode and apps using the device exclusively block it).</span>
+            </div>
+          }
           <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px">
             <button class="btn ghost" (click)="closed.emit()">Cancel</button>
-            <button class="btn pri" (click)="start()" [disabled]="busy()">Choose what to share</button>
+            <button class="btn pri" (click)="start()" [disabled]="busy()">{{ audioFailed() && !audio() ? 'Share without sound' : 'Choose what to share' }}</button>
           </div>
         </div>
       } @else {
@@ -81,6 +88,7 @@ export class ShareDialog {
   readonly audio = signal(true);
   readonly denied = signal(false);
   readonly busy = signal(false);
+  readonly audioFailed = signal(false);
 
   private done = false;
 
@@ -97,7 +105,11 @@ export class ShareDialog {
     const result = await this.media.startScreenShare(this.quality(), this.audio());
     this.busy.set(false);
     if (result === 'denied') this.denied.set(true);
-    else this.close();
+    else if (result === 'audio-failed') {
+      // Stay open: one click (a fresh user gesture, which the picker needs) shares video only.
+      this.audioFailed.set(true);
+      this.audio.set(false);
+    } else this.close();
   }
 
   private close(): void {

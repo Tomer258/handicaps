@@ -49,7 +49,8 @@ export interface RoomPeer {
 }
 
 export type ScreenQuality = '1080p60' | '720p30';
-export type ShareResult = 'ok' | 'denied' | 'failed';
+/** 'audio-failed': Windows refused system-audio loopback (NotReadableError); sharing without sound usually works. */
+export type ShareResult = 'ok' | 'denied' | 'failed' | 'audio-failed';
 
 /** A camera or screen stream in the room. Remote video is subscribed only while a tile watches it. */
 export interface StreamInfo {
@@ -353,6 +354,10 @@ export class MediaSessionService {
     } catch (e) {
       const name = (e as Error)?.name ?? 'Error';
       if (name === 'NotAllowedError' || name === 'AbortError') return 'denied';
+      if (name === 'NotReadableError' && withAudio) {
+        console.warn('screen capture with system audio failed', e);
+        return 'audio-failed';
+      }
       // Anything else used to fail silently: say what the browser said.
       console.warn('screen capture failed', e);
       this.toast.show(
