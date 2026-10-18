@@ -55,12 +55,19 @@ The unmodified `compose.prod.yml` runs inside a Docker-in-Docker "VPS" at `*.han
 - Rollback compatibility (2026-10-18): the previous release's API (`21fcf28`) ran against the latest schema. Four
   smokes passed and the server logged no errors. The migration lint runs in CI (rollback.md).
 
+- Session revocation drill rehearsal (2026-10-18, local POC test data set, through Caddy forward_auth → admission →
+  LiveKit): `gate-revocation.sh --domain hangar.localhost --insecure` passed 18/18. Before revocation both tokens
+  validate (200) and the initial one upgrades to a WebSocket (101); afterwards /rtc/validate, /rtc/v1/validate, fresh
+  /rtc and /rtc/v1 upgrades and a reconnect=1 resume all answer 403 for both tokens, and the cookie gets 401.
+
 This does not replace the host checks below, which need public networking.
 
 ## Manual, on the production host (not done yet, required)
 
 - [ ] Session revocation: obtain an initial and a server-refreshed LiveKit token, revoke the session, then replay
-      both tokens on fresh connections and on resume attempts. Every attempt must be denied.
+      both tokens on fresh connections and on resume attempts. Every attempt must be denied. Automated from outside
+      the host: `HANGAR_LOGIN=<test member> HANGAR_PASSWORD=… ./infra/scripts/gate-revocation.sh --domain <d>`
+      (an account without two-step login; it signs in a throwaway session and revokes only that one).
 - [ ] Bypass attempts: direct `:7880`, the IPv6 address, an HTTP request to the `turn.` hostname, and `:5349` from
       outside. None may give access.
 - [ ] TURN/TLS: a client with UDP and TCP 7881 blocked joins and hears audio via 443.
