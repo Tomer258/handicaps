@@ -45,6 +45,19 @@ export interface VoiceStateSignal {
   } | null;
 }
 
+/** Authoritative room playback state (SignalR hint; REST GET /channels/{id}/sound-plays is the source of truth). */
+export interface SoundPlayback {
+  playbackId: string;
+  serverId: string;
+  channelId: string;
+  soundId: string;
+  actorUserId: string;
+  state: 'accepted' | 'starting' | 'playing' | 'completed' | 'stopped' | 'failed' | 'expired' | 'rejected';
+  durationMs: number;
+  acceptedAt: string;
+  startedAt: string | null;
+}
+
 type Handler<T> = (value: T) => void;
 
 const HEARTBEAT_MS = 25_000;
@@ -76,6 +89,8 @@ export class RealtimeService {
   private readonly notificationHandlers = new Set<Handler<NotificationSignal>>();
   private readonly resubscribeHandlers = new Set<() => void>();
   private readonly voiceHandlers = new Set<Handler<VoiceStateSignal>>();
+  private readonly soundCatalogHandlers = new Set<Handler<{ serverId: string; soundId: string }>>();
+  private readonly soundPlaybackHandlers = new Set<Handler<SoundPlayback>>();
 
   constructor() {
     effect(() => {
@@ -135,6 +150,14 @@ export class RealtimeService {
     this.voiceHandlers.add(h);
   }
 
+  onSoundCatalog(h: Handler<{ serverId: string; soundId: string }>): void {
+    this.soundCatalogHandlers.add(h);
+  }
+
+  onSoundPlayback(h: Handler<SoundPlayback>): void {
+    this.soundPlaybackHandlers.add(h);
+  }
+
   private async start(): Promise<void> {
     if (this.conn) return;
     const conn = new HubConnectionBuilder()
@@ -151,6 +174,8 @@ export class RealtimeService {
     conn.on('typingChanged', (t: TypingSignal) => this.typingHandlers.forEach((h) => h(t)));
     conn.on('notificationCreated', (n: NotificationSignal) => this.notificationHandlers.forEach((h) => h(n)));
     conn.on('voiceStateChanged', (v: VoiceStateSignal) => this.voiceHandlers.forEach((h) => h(v)));
+    conn.on('soundCatalogChanged', (c: { serverId: string; soundId: string }) => this.soundCatalogHandlers.forEach((h) => h(c)));
+    conn.on('soundPlaybackChanged', (p: SoundPlayback) => this.soundPlaybackHandlers.forEach((h) => h(p)));
     conn.on('presenceChanged', (p: { userId: string; status: PresenceStatus }) => this.presence.set(p.userId, p.status));
     conn.on('memberUpdated', (m: { userId: string; displayName: string; avatarHue: number; avatarAssetId: string | null }) => {
       this.workspace.patchMember(m.userId, { displayName: m.displayName, avatarHue: m.avatarHue, avatarAssetId: m.avatarAssetId });

@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-17 — session 1 (after S5)
+**Last update:** 2026-10-18 — session 2 (S6 committed; starting S7)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -9,23 +9,30 @@
 - [x] S3 Text: channels, messages (send/edit/delete/reply/react), ChannelEvent outbox + dispatcher, SignalR hub, presence/typing, read positions/unreads, mentions/notifications; UI: sidebars, message list, composer, members
 - [x] S4 Voice: LiveKit compose, voice leases, JWT, admission endpoint, webhooks, reconciler; UI: MediaSessionService, voice control bar, participant grid, mute/deafen, per-user volume, audio buses, speaking
 - [x] S5 Screen share + camera: publication reservations (caps 4 screens/6 cameras), source grants via UpdateParticipant, track webhooks → roster flags; UI share dialog, stream view (focus/grid, per-stream audio), camera in pcards, live banner
-- [ ] S6 Soundboard: file storage, upload + asset-validator worker, catalog/favorites/preview, sound-plays (reservations/rate limits), sound-publisher worker, track registry; UI popover
+- [x] S6 Soundboard: file storage, upload + asset-validator worker, catalog/favorites/preview, sound-plays (reservations/rate limits), sound-publisher worker, track registry; UI popover
 - [ ] S7 Settings, admin (invites/roles), attachments/avatars, notifications, responsive
 - [ ] S8 Prod infra: Caddy (+forward_auth gate), prod compose, livekit.yaml, backups, runbooks, CI, AGENTS.md
 
 ## In progress
-- S6 Soundboard (not started).
+- S7 not started yet. Scope: settings dialog (profile/appearance/voice devices/soundboard prefs, sessions), admin (invites/roles), attachments/avatars, notifications, responsive.
+
+## S6 notes (done)
+- Backend: Core/Files/FileStore.cs, Core/Soundboard/{SoundboardService,SoundPlaybackService}.cs, Api/Endpoints/SoundboardEndpoints.cs, Api/Realtime/SoundboardRealtime.cs (SignalR soundCatalogChanged / soundPlaybackChanged, SoundboardLoop 1s). Workers: workers/asset-validator (ffmpeg), workers/sound-publisher (livekit rtc 1.1.20; shares livekit netns; 127.0.0.1:8090).
+- PublisherUrl must be 127.0.0.1 (not localhost: Windows tries ::1 first → 2 s connect delay).
+- Tests: SoundboardTests (6) with FakeSoundPublisher; ApiFactory sets Storage:Root to temp dir, WorkerKey, removes SoundboardLoop (tests call CollectAsync/ReconcileAsync). Validator simulated by copying input→output + writing spool/results json.
+- Frontend: features/soundboard/{soundboard.store,soundboard-popover,sound-upload.dialog}.ts; media-session subscribes sb_* participants' sfx_<userId> tracks (soundVolume/soundMuted/mutedActors in localStorage 'hangar.soundboard'); detach on TrackSubscriptionStatusChanged(Unsubscribed) because tracks only end after SFU renegotiation; re-attach on Subscribed. Dock z-index 26 above popover backdrop. Card menu: "Mute their soundboard".
 
 ## Next exact step
-- S6: file storage (./.data bind mount), upload endpoint + asset-validator worker (python 3.13, ffmpeg normalize/duration/loudness), catalog/favorites/preview endpoints, sound-plays (SoundPlaybackCommands, rate limit under advisory lock), sound-publisher worker (identity prefix sb_, network_mode service:livekit), soundboard popover UI (prototype Soundboard.dc.html). Enable dock soundboard button.
+1. S7: read docs/architecture roadmap for S7 scope + Main.dc.html settings (~1100-1200) and existing features/settings/settings.dialog.ts; plan sub-slices (settings → admin invites/roles → attachments/avatars → notifications → responsive), commit after each.
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
-- `cd apps/api && dotnet build` ; `dotnet test` (45 pass; integration uses Testcontainers postgres:18-alpine)
+- `cd apps/api && dotnet build` ; `dotnet test` (51 pass; stop the running API first — it locks bin/; integration uses Testcontainers postgres:18-alpine)
 - `cd apps/api && dotnet run --project src/Hangar.Api` → http://localhost:5080, migrates + seeds, logs one-time owner invite link
 - `cd apps/web && npx ng build --configuration development` ; `npx ng serve` (proxy → :5080). npm installs: `npx -y npm@11.6.2 install ...` (system npm 11.0.0 has arborist bug)
 - Voice smoke (real LiveKit, fake mic, 2 browsers): `cd tests/e2e && node scripts/smoke-voice.mjs ../../.tmp/shots` (needs compose livekit up)
 - Stream smoke (camera + screen share, live banner, stream view, flags): `cd tests/e2e && node scripts/smoke-stream.mjs ../../.tmp/shots`
+- Soundboard smoke (upload+trim via validator, play via publisher, receive sfx track, cooldown, favorites, per-actor mute): `cd tests/e2e && node scripts/smoke-soundboard.mjs ../../.tmp/shots` (needs full compose + API + ng serve)
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
 - `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations`

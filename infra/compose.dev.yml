@@ -28,8 +28,43 @@ services:
       - "127.0.0.1:7880:7880"
       - "127.0.0.1:7881:7881"
       - "127.0.0.1:7882:7882/udp"
+      # sound-publisher shares this network namespace; its private command port is published on loopback only.
+      - "127.0.0.1:8090:8090"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  # Publish-only soundboard participant. Shares livekit's network namespace so ws://127.0.0.1:7880 reaches the SFU.
+  sound-publisher:
+    build: ../workers/sound-publisher
+    network_mode: service:livekit
+    depends_on: [livekit]
+    environment:
+      LIVEKIT_URL: ws://127.0.0.1:7880
+      API_URL: http://host.docker.internal:5080
+      WORKER_KEY: hangar-dev-worker-key-local-only-0123456789
+      SOUNDS_ROOT: /data
+    volumes:
+      - ../.data/files/sounds:/data/sounds:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  # Untrusted-upload processing: no network, no secrets, unprivileged, bounded resources.
+  asset-validator:
+    build: ../workers/asset-validator
+    network_mode: none
+    volumes:
+      - ../.data/files/quarantine:/data/quarantine:ro
+      - ../.data/files/spool:/data/spool
+      - ../.data/files/sounds:/data/sounds
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    pids_limit: 64
+    restart: unless-stopped
 
 volumes:
   pgdata:

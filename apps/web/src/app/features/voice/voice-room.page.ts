@@ -5,6 +5,7 @@ import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from '../shell/layout.service';
 import { PresenceStore } from '../presence/presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { SoundboardPopover } from '../soundboard/soundboard-popover';
 import { ShareDialog } from './share-dialog';
 import { StreamTile } from './stream-tile';
 import { StreamView } from './stream-view';
@@ -26,7 +27,7 @@ interface Card {
 /** Voice channel view (prototype VOICE VIEW + STREAM VIEW): join screen, participant grid, live banner, stream viewer, dock. */
 @Component({
   selector: 'hx-voice-room-page',
-  imports: [Icon, StreamTile, StreamView, ShareDialog],
+  imports: [Icon, StreamTile, StreamView, ShareDialog, SoundboardPopover],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (channel(); as ch) {
@@ -142,7 +143,7 @@ interface Card {
             </div>
           }
 
-          <div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; pointer-events: none">
+          <div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; pointer-events: none; z-index: 26">
             <div class="dock" style="pointer-events: auto" role="toolbar" aria-label="Voice controls">
               <button class="dbtn" [class.bad]="media.muted() || media.deafened()" [attr.aria-label]="micLabel()" [attr.aria-pressed]="media.muted()"
                       [title]="micLabel()" (click)="media.toggleMute()" [disabled]="!media.canSpeak()">
@@ -164,13 +165,17 @@ interface Card {
                       [disabled]="!media.canScreen() || media.sharing() === 'starting'" (click)="shareClick()">
                 <hx-icon [name]="media.sharing() === 'live' ? 'screen-off' : 'screen'" size="lg" />
               </button>
-              <button class="dbtn sb" aria-label="Soundboard (coming soon)" title="Soundboard — coming soon" disabled style="opacity: .45"><hx-icon name="soundboard" size="lg" /></button>
+              <button class="dbtn sb" [class.on]="sbOpen()" aria-label="Soundboard" [attr.aria-pressed]="sbOpen()" title="Soundboard"
+                      (click)="sbOpen.set(!sbOpen())"><hx-icon name="soundboard" size="lg" /></button>
               <span style="width: 1px; height: 28px; background: var(--line2)"></span>
               <button class="dbtn leave" aria-label="Disconnect" title="Disconnect" (click)="media.leave()"><hx-icon name="hangup" size="lg" /></button>
             </div>
           </div>
         }
 
+        @if (sbOpen() && here()) {
+          <hx-soundboard-popover [channelName]="ch.name" (closed)="sbOpen.set(false)" />
+        }
         @if (shareOpen()) {
           <hx-share-dialog [channelName]="ch.name" [viewers]="viewers()" (closed)="shareOpen.set(false)" />
         }
@@ -196,6 +201,11 @@ interface Card {
                 <hx-icon name="mic-off" size="sm" /><span style="flex: 1">Mute for me</span>
                 <span class="sw" [attr.aria-pressed]="media.volumeOf(m.card.peer.userId) === 0" style="transform: scale(.8)"></span>
               </button>
+              <button class="menu-i" role="menuitemcheckbox" [attr.aria-checked]="media.soundMutedActors().has(m.card.peer.userId)"
+                      (click)="media.setActorSoundMuted(m.card.peer.userId, !media.soundMutedActors().has(m.card.peer.userId))">
+                <hx-icon name="soundboard" size="sm" style="color: var(--sb)" /><span style="flex: 1">Mute their soundboard</span>
+                <span class="sw sbsw" [attr.aria-pressed]="media.soundMutedActors().has(m.card.peer.userId)" style="transform: scale(.8)"></span>
+              </button>
             } @else {
               <div style="padding: 4px 10px 8px; font-size: 12.5px; color: var(--tx3)">This is you. Use the dock to mute, deafen, share or turn on your camera.</div>
             }
@@ -217,6 +227,7 @@ export class VoiceRoomPage {
 
   readonly menu = signal<{ card: Card; x: number; y: number } | null>(null);
   readonly shareOpen = signal(false);
+  readonly sbOpen = signal(false);
   readonly watching = signal(false);
   /** Keys of the streams picked for watching; null = every live screen. */
   readonly watchKeys = signal<string[] | null>(null);

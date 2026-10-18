@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using Hangar.Api.Realtime;
 using Hangar.Core.Media;
+using Hangar.Core.Soundboard;
 using Hangar.Core.Workspaces;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -38,12 +40,22 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Hangar:LiveKit:MaxScreens", MaxScreens.ToString());
         // Tests drive reconciliation explicitly; the background loop must not race them.
         builder.UseSetting("Hangar:LiveKit:ReconcileInterval", "01:00:00");
-        builder.ConfigureTestServices(s => s.AddSingleton<ILiveKitRooms>(LiveKit));
+        builder.UseSetting("Hangar:Storage:Root", Path.Combine(_dataDir, "files"));
+        builder.UseSetting("Hangar:Soundboard:WorkerKey", WorkerKey);
+        builder.ConfigureTestServices(s =>
+        {
+            s.AddSingleton<ILiveKitRooms>(LiveKit);
+            s.AddSingleton<ISoundPublisher>(Publisher);
+            // Tests collect validation results and reconcile playback explicitly.
+            foreach (var d in s.Where(d => d.ImplementationType == typeof(SoundboardLoop)).ToList()) s.Remove(d);
+        });
     }
 
     public const int MaxHumans = 6;
     public const int MaxScreens = 2;
     public FakeLiveKitRooms LiveKit { get; } = new();
+    public FakeSoundPublisher Publisher { get; } = new();
+    public const string WorkerKey = "test-worker-key-0123456789abcdef";
 
     /// <summary>Re-issues the owner bootstrap invitation (only possible while no owner exists) and returns its secret.</summary>
     public async Task<string> OwnerBootstrapSecretAsync()

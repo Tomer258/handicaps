@@ -5,12 +5,14 @@ import {
   LocalTrack,
   LocalVideoTrack,
   Participant,
+  RemoteAudioTrack,
   RemoteParticipant,
   RemoteTrack,
   RemoteTrackPublication,
   Room,
   RoomEvent,
   Track,
+  TrackPublication,
   VideoPreset,
   createLocalScreenTracks,
   createLocalVideoTrack,
@@ -61,6 +63,16 @@ export interface StreamInfo {
 }
 
 const VOLUME_KEY = 'hangar.voiceVolumes';
+const SOUND_KEY = 'hangar.soundboard';
+/** The soundboard worker joins as sb_<room> and publishes one track per actor named sfx_<userId>. */
+const SB_PREFIX = 'sb_';
+const SFX_PREFIX = 'sfx_';
+
+interface SoundPrefs {
+  volume: number;
+  muted: boolean;
+  mutedActors: string[];
+}
 const MAX_VOLUME = 2;
 const SCREEN_ENCODING: Record<ScreenQuality, { width: number; height: number; fps: number; bitrate: number; layers: VideoPreset[] }> = {
   // Capacity model: 8 Mbps high layer with 2.0 / 0.4 Mbps lower layers for thumbnails and weak links.
@@ -97,6 +109,7 @@ export class MediaSessionService {
   private readonly _canCamera = signal(false);
   private readonly _canScreen = signal(false);
   private readonly _streamVolumes = signal<Record<string, number>>({});
+  private readonly _sound = signal<SoundPrefs>(loadSoundPrefs());
   /** Bumped on any track change so stream lists/tiles recompute (LiveKit objects are not signals). */
   private readonly _version = signal(0);
 
@@ -121,6 +134,10 @@ export class MediaSessionService {
   readonly canCamera = this._canCamera.asReadonly();
   readonly canScreen = this._canScreen.asReadonly();
   readonly version = this._version.asReadonly();
+  /** Soundboard volume 0–1 (only what I hear). */
+  readonly soundVolume = computed(() => this._sound().volume);
+  readonly soundMuted = computed(() => this._sound().muted);
+  readonly soundMutedActors = computed(() => new Set(this._sound().mutedActors));
 
   /** Every camera/screen stream in the room, including my own (rendered from the local track). */
   readonly streams = computed<StreamInfo[]>(() => {
@@ -175,6 +192,27 @@ export class MediaSessionService {
       this._deafened();
       untracked(() => this.reportState());
     });
+  }
+
+  /** The current voice lease (authorizes soundboard plays); null when not in voice. */
+  currentLeaseId(): string | null {
+    return this.connected() ? this.leaseId : null;
+  }
+
+  setSoundVolume(volume: number): void {
+    this.updateSound({ volume: Math.max(0, Math.min(1, volume)) });
+  }
+
+  setSoundMuted(muted: boolean): void {
+    this.updateSound({ muted });
+  }
+
+  /** Mute one person's soundboard effects for me only (their voice is unaffected). */
+  setActorSoundMuted(userId: string, muted: boolean): void {
+    const set = new Set(this._sound().mutedActors);
+    if (muted) set.add(userId);
+    else set.delete(userId);
+    this.updateSound({ mutedActors: [...set] });
   }
 
   async join(channelId: string): Promise<void> {
@@ -473,10 +511,11 @@ export class MediaSessionService {
         this.refreshPeers();
         this.bump();
       })
-      .on(RoomEvent.TrackPublished, (pub) => {
+      .on(RoomEvent.TrackPublished, (pub: RemoteTrackPublication, p: RemoteParticipant) => {
         if (!live()) return;
         // Voice is always heard; stream audio waits until someone watches that stream.
         if (pub.source === Track.Source.Microphone) pub.setSubscribed(true);
+        if (isSoundboard(p)) this.syncSoundSubscription(pub);
         this.refreshPeers();
         this.bump();
       })
@@ -485,17 +524,29 @@ export class MediaSessionService {
         this.refreshPeers();
         this.bump();
       })
-      .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, p: RemoteParticipant) => {
+      .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, p: RemoteParticipant) => {
         if (!live()) return;
         if (track.kind === Track.Kind.Audio && this.audioHost) {
           this.audioHost.appendChild(track.attach());
-          this.applyVolumeFor(p);
+          if (isSoundboard(p)) this.applySoundVolume(pub);
+          else this.applyVolumeFor(p);
         }
         this.bump();
       })
       .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
         if (track.kind === Track.Kind.Audio) track.detach().forEach((el) => el.remove());
         if (live()) this.bump();
+      })
+      // Unsubscribing is immediate for us, but the track only ends after the SFU renegotiates: stop playing it now.
+      .on(RoomEvent.TrackSubscriptionStatusChanged, (pub: RemoteTrackPublication, status: TrackPublication.SubscriptionStatus, p: RemoteParticipant) => {
+        if (!live() || pub.kind !== Track.Kind.Audio || !pub.track) return;
+        if (status === TrackPublication.SubscriptionStatus.Unsubscribed) pub.track.detach().forEach((el) => el.remove());
+        else if (status === TrackPublication.SubscriptionStatus.Subscribed && pub.track.attachedElements.length === 0 && this.audioHost) {
+          // Re-subscribed before the old track ended: TrackSubscribed does not fire again.
+          this.audioHost.appendChild(pub.track.attach());
+          if (isSoundboard(p)) this.applySoundVolume(pub);
+          else this.applyVolumeFor(p);
+        }
       })
       .on(RoomEvent.LocalTrackUnpublished, () => live() && this.bump())
       .on(RoomEvent.TrackMuted, () => live() && this.refreshPeers())
@@ -542,6 +593,10 @@ export class MediaSessionService {
   }
 
   private subscribeAudio(p: RemoteParticipant): void {
+    if (isSoundboard(p)) {
+      for (const pub of p.audioTrackPublications.values()) this.syncSoundSubscription(pub);
+      return;
+    }
     const mic = p.getTrackPublication(Track.Source.Microphone) as RemoteTrackPublication | undefined;
     if (mic && !mic.isSubscribed) mic.setSubscribed(true);
   }
@@ -615,7 +670,41 @@ export class MediaSessionService {
   private applyVolumes(): void {
     const room = this.room;
     if (!room) return;
-    for (const p of room.remoteParticipants.values()) this.applyVolumeFor(p);
+    for (const p of room.remoteParticipants.values()) {
+      if (!isSoundboard(p)) {
+        this.applyVolumeFor(p);
+        continue;
+      }
+      for (const pub of p.audioTrackPublications.values()) {
+        this.syncSoundSubscription(pub);
+        this.applySoundVolume(pub);
+      }
+    }
+  }
+
+  /** Effects from muted actors (or with the soundboard muted) are not even received. */
+  private syncSoundSubscription(pub: RemoteTrackPublication): void {
+    const want = pub.kind === Track.Kind.Audio && this.soundAudible(pub);
+    if (pub.isDesired !== want) pub.setSubscribed(want);
+  }
+
+  private applySoundVolume(pub: RemoteTrackPublication): void {
+    if (pub.track) (pub.track as RemoteAudioTrack).setVolume(this._deafened() || !this.soundAudible(pub) ? 0 : this._sound().volume);
+  }
+
+  private soundAudible(pub: RemoteTrackPublication): boolean {
+    const actor = pub.trackName.startsWith(SFX_PREFIX) ? pub.trackName.slice(SFX_PREFIX.length) : null;
+    return !!actor && !this._sound().muted && !this._sound().mutedActors.includes(actor);
+  }
+
+  private updateSound(patch: Partial<SoundPrefs>): void {
+    this._sound.update((s) => ({ ...s, ...patch }));
+    try {
+      localStorage.setItem(SOUND_KEY, JSON.stringify(this._sound()));
+    } catch {
+      /* storage unavailable */
+    }
+    this.applyVolumes();
   }
 
   private applyVolumeFor(p: RemoteParticipant): void {
@@ -671,6 +760,25 @@ function userIdOf(p: Participant): string | null {
     return meta?.userId ?? null;
   } catch {
     return null;
+  }
+}
+
+function isSoundboard(p: Participant): boolean {
+  return p.identity.startsWith(SB_PREFIX);
+}
+
+function loadSoundPrefs(): SoundPrefs {
+  const fallback: SoundPrefs = { volume: 0.8, muted: false, mutedActors: [] };
+  try {
+    const raw = JSON.parse(localStorage.getItem(SOUND_KEY) ?? 'null') as Partial<SoundPrefs> | null;
+    if (!raw) return fallback;
+    return {
+      volume: typeof raw.volume === 'number' ? Math.max(0, Math.min(1, raw.volume)) : fallback.volume,
+      muted: raw.muted === true,
+      mutedActors: Array.isArray(raw.mutedActors) ? raw.mutedActors.filter((a): a is string => typeof a === 'string') : [],
+    };
+  } catch {
+    return fallback;
   }
 }
 

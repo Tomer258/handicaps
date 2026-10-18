@@ -1,10 +1,12 @@
 using Hangar.Core.Audit;
 using Hangar.Core.Channels;
+using Hangar.Core.Files;
 using Hangar.Core.Identity;
 using Hangar.Core.Media;
 using Hangar.Core.Messaging;
 using Hangar.Core.Permissions;
 using Hangar.Core.Persistence;
+using Hangar.Core.Soundboard;
 using Hangar.Core.Users;
 using Hangar.Core.Workspaces;
 using Microsoft.AspNetCore.Identity;
@@ -39,6 +41,9 @@ public static class CoreServices
         services.AddSingleton<VoiceStateCache>();
         services.AddScoped<VoiceService>();
         services.AddScoped<ISessionRevocationListener, VoiceRevocationListener>();
+        services.AddSingleton<LocalFileStore>();
+        services.AddScoped<SoundboardService>();
+        services.AddScoped<SoundPlaybackService>();
         return services;
     }
 }

@@ -25,6 +25,11 @@ builder.Services.Configure<WorkspaceBootstrapOptions>(config.GetSection("Hangar:
 builder.Services.PostConfigure<WorkspaceBootstrapOptions>(o => o.PublicBaseUrl = config["Hangar:PublicBaseUrl"] ?? o.PublicBaseUrl);
 builder.Services.Configure<HangarIdentityOptions>(config.GetSection("Hangar:Identity"));
 builder.Services.Configure<LiveKitOptions>(config.GetSection("Hangar:LiveKit"));
+builder.Services.Configure<Hangar.Core.Soundboard.SoundboardOptions>(config.GetSection("Hangar:Soundboard"));
+builder.Services.Configure<Hangar.Core.Files.StorageOptions>(config.GetSection("Hangar:Storage"));
+// Relative storage roots resolve from the content root (not the process working directory).
+builder.Services.PostConfigure<Hangar.Core.Files.StorageOptions>(o =>
+    o.Root = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, o.Root)));
 
 var hangar = config.GetSection("Hangar").Get<HangarOptions>() ?? new HangarOptions();
 var dataDir = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, hangar.DataDirectory));
@@ -47,6 +52,10 @@ builder.Services.AddHostedService<MaintenanceService>();
 builder.Services.AddHttpClient<ILiveKitRooms, LiveKitRoomClient>(c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddScoped<IVoiceEventSink, SignalRVoiceSink>();
 builder.Services.AddHostedService<VoiceReconciler>();
+// Soundboard: publisher worker client (private endpoint), catalog/playback push, validation + playback loop.
+builder.Services.AddHttpClient<Hangar.Core.Soundboard.ISoundPublisher, Hangar.Core.Soundboard.HttpSoundPublisher>(c => c.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddScoped<Hangar.Core.Soundboard.ISoundEventSink, SignalRSoundSink>();
+builder.Services.AddHostedService<SoundboardLoop>();
 builder.Services.AddSignalR(o =>
 {
     o.AddFilter<SessionHubFilter>();
@@ -159,7 +168,9 @@ api.MapAuth();
 api.MapWorkspaces();
 api.MapMessages();
 api.MapVoice();
+api.MapSoundboard();
 app.MapLiveKitInternal();
+app.MapSoundboardInternal();
 app.MapHub<HangarHub>(HangarHub.Path);
 
 await InitializeAsync(app);
