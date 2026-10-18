@@ -22,6 +22,9 @@ export class LayoutService {
   readonly navOpen = signal(false);
   /** Server message search panel (Ctrl K). */
   readonly searchOpen = signal(false);
+  /** Soundboard popover and Go-live dialog: opened from the call dock or the voice panel, shown on any page. */
+  readonly soundboardOpen = signal(false);
+  readonly shareOpen = signal(false);
   /** A search hit to scroll to once its channel is open. */
   readonly jumpTarget = signal<{ channelId: string; messageId: string } | null>(null);
 

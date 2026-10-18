@@ -5,8 +5,6 @@ import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from '../shell/layout.service';
 import { PresenceStore } from '../presence/presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
-import { SoundboardPopover } from '../soundboard/soundboard-popover';
-import { ShareDialog } from './share-dialog';
 import { StreamTile } from './stream-tile';
 import { StreamView } from './stream-view';
 import { VoicePresenceStore } from './voice-presence.store';
@@ -28,7 +26,7 @@ interface Card {
 /** Voice channel view (prototype VOICE VIEW + STREAM VIEW): join screen, participant grid, live banner, stream viewer, dock. */
 @Component({
   selector: 'hx-voice-room-page',
-  imports: [Icon, StreamTile, StreamView, ShareDialog, SoundboardPopover],
+  imports: [Icon, StreamTile, StreamView],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (channel(); as ch) {
@@ -174,12 +172,6 @@ interface Card {
           </div>
         }
 
-        @if (sbOpen() && here()) {
-          <hx-soundboard-popover [channelName]="ch.name" (closed)="sbOpen.set(false)" />
-        }
-        @if (shareOpen()) {
-          <hx-share-dialog [channelName]="ch.name" [viewers]="viewers()" (closed)="shareOpen.set(false)" />
-        }
         @if (menu(); as m) {
           <div style="position: absolute; inset: 0; z-index: 35" (click)="menu.set(null)" (contextmenu)="$event.preventDefault(); menu.set(null)"></div>
           <div class="pop fade" role="menu" [attr.aria-label]="m.card.name + ' options'"
@@ -227,8 +219,9 @@ export class VoiceRoomPage {
   private readonly presence = inject(PresenceStore);
 
   readonly menu = signal<{ card: Card; x: number; y: number } | null>(null);
-  readonly shareOpen = signal(false);
-  readonly sbOpen = signal(false);
+  // Shared with the sidebar voice panel; ServerView renders the soundboard popover and Go-live dialog.
+  readonly shareOpen = this.layout.shareOpen;
+  readonly sbOpen = this.layout.soundboardOpen;
   readonly watching = signal(false);
   /** Keys of the streams picked for watching; null = every live screen. */
   readonly watchKeys = signal<string[] | null>(null);
