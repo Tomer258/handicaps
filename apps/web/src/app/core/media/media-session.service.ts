@@ -122,6 +122,7 @@ export class MediaSessionService {
   /** User ids currently speaking (microphone only). */
   readonly speaking = this._speaking.asReadonly();
   readonly peers = this._peers.asReadonly();
+  private readonly peerHandlers: ((peers: RoomPeer[], room: number) => void)[] = [];
   readonly canSpeak = this._canSpeak.asReadonly();
   /** Microphone permission denied or device missing: listen-only until the user retries. */
   readonly micBlocked = this._micBlocked.asReadonly();
@@ -769,6 +770,12 @@ export class MediaSessionService {
     add(room.localParticipant, true);
     for (const p of room.remoteParticipants.values()) add(p, false);
     this._peers.set(list);
+    this.peerHandlers.forEach((h) => h(list, this.generation));
+  }
+
+  /** Synchronous roster callback (signal effects are deferred while the tab is in the background); `room` changes per connection. */
+  onPeersChanged(h: (peers: RoomPeer[], room: number) => void): void {
+    this.peerHandlers.push(h);
   }
 
   private reportState(): void {

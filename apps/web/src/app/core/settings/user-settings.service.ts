@@ -58,6 +58,8 @@ export class UserSettingsService {
         }
       });
     });
+    // A reload or tab close inside the debounce window would drop the change: send it with keepalive instead.
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', () => this.flushOnUnload());
   }
 
   setStatus(status: PreferredStatus): void {
@@ -101,6 +103,18 @@ export class UserSettingsService {
     this.pending = { ...this.pending, ...patch };
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.flush(), delay);
+  }
+
+  private flushOnUnload(): void {
+    if (!this.version || Object.keys(this.pending).length === 0) return;
+    clearTimeout(this.timer);
+    const body = JSON.stringify({ ...this.pending, expectedVersion: this.version });
+    this.pending = {};
+    const xsrf = decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))?.split('=')[1] ?? '');
+    void fetch('/api/v1/users/me/settings', {
+      method: 'PATCH', keepalive: true, credentials: 'same-origin', body,
+      headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
+    }).catch(() => undefined);
   }
 
   private async flush(retried = false): Promise<void> {

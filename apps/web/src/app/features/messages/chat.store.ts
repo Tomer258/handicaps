@@ -77,12 +77,6 @@ export class ChatStore {
     this.realtime.onChannelEvent((e) => this.receive(e));
     this.realtime.onResubscribe(() => void this.resubscribe());
     this.realtime.onTyping((t) => this.markTyping(t.channelId, t.userId));
-    this.realtime.onNotification((n) => {
-      if (n.channelId === this.activeChannelId() && this.visible()) return;
-      const who = n.actorUserId ? this.workspace.memberById().get(n.actorUserId)?.displayName : undefined;
-      const ch = this.workspace.channel(n.channelId)?.name;
-      this.toast.show(ch ? `${who ?? 'Someone'} mentioned you in #${ch}` : 'You were mentioned in another server');
-    });
 
     // Channel set changed (server switch, channel created/archived, policy reload) → (re)subscribe.
     const channelKey = computed(() => this.workspace.textChannels().map((c) => c.id).join(','));
