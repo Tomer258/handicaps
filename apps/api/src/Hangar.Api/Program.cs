@@ -175,14 +175,17 @@ app.MapLiveKitInternal();
 app.MapSoundboardInternal();
 app.MapHub<HangarHub>(HangarHub.Path);
 
-await InitializeAsync(app);
+// `--migrate`: one-off release job (apply migrations + bootstrap, then exit) so production never migrates on start.
+var migrateOnly = args.Contains("--migrate");
+await InitializeAsync(app, migrateOnly);
+if (migrateOnly) return;
 app.Run();
 
-static async Task InitializeAsync(WebApplication app)
+static async Task InitializeAsync(WebApplication app, bool forceMigrate)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<HangarDbContext>();
-    var migrate = app.Configuration.GetValue("Hangar:MigrateOnStartup", app.Environment.IsDevelopment());
+    var migrate = forceMigrate || app.Configuration.GetValue("Hangar:MigrateOnStartup", app.Environment.IsDevelopment());
     if (migrate) await db.Database.MigrateAsync();
     var opts = scope.ServiceProvider.GetRequiredService<IOptions<WorkspaceBootstrapOptions>>().Value;
     await scope.ServiceProvider.GetRequiredService<WorkspaceBootstrapper>().EnsureAsync(opts, CancellationToken.None);

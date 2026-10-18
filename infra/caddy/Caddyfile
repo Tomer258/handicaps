@@ -1,0 +1,135 @@
+# Hangar edge (single host). Caddy, LiveKit, the API and the sound publisher run with host networking and talk over
+# loopback; only this process listens publicly on TCP 80/443.
+#
+#   :443 (layer4) ── SNI {$TURN_HOST} ──> TLS terminated here ──> LiveKit TURN (plaintext 127.0.0.1:5349, external_tls)
+#                 └─ everything else ───> 127.0.0.1:8443 (this Caddy's HTTPS server, PROXY protocol keeps client IPs)
+#   :8443 (http app, loopback only)
+#        {$APP_HOST}  Angular SPA + /api + /hubs → API 127.0.0.1:8080; /internal blocked
+#        {$RTC_HOST}  /rtc, /rtc/v1, /rtc/validate … → forward_auth (API admission) → LiveKit 127.0.0.1:7880; rest 404
+#        {$TURN_HOST} certificate only (used by the layer4 TLS handler)
+# Certificates use HTTP-01 on :80 (TLS-ALPN cannot work because :443 is the layer4 listener).
+{
+	email {$ACME_EMAIL}
+	http_port 80
+	https_port 8443
+	default_bind 127.0.0.1
+	admin 127.0.0.1:2019
+
+	servers 127.0.0.1:8443 {
+		listener_wrappers {
+			proxy_protocol {
+				timeout 5s
+				allow 127.0.0.1/32
+			}
+			tls
+		}
+		protocols h1 h2
+	}
+
+	layer4 {
+		0.0.0.0:443 [::]:443 {
+			@turn tls sni {$TURN_HOST}
+			route @turn {
+				tls
+				proxy 127.0.0.1:5349
+			}
+			route {
+				proxy {
+					proxy_protocol v2
+					upstream 127.0.0.1:8443
+				}
+			}
+		}
+	}
+}
+
+# Plain HTTP: ACME challenges are answered automatically; everything else redirects to HTTPS.
+http://{$APP_HOST}, http://{$RTC_HOST}, http://{$TURN_HOST} {
+	bind 0.0.0.0 [::]
+	redir https://{host}{uri} 308
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+}
+
+{$APP_HOST} {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	# Service-to-service routes (LiveKit webhook, admission, soundboard worker) never leave the host.
+	handle /internal/* {
+		respond 404
+	}
+
+	handle /api/* {
+		request_body {
+			max_size 12MB
+		}
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle /hubs/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle {
+		root * /srv/web
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://{$RTC_HOST} https://{$RTC_HOST}; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		# Hashed bundles are immutable; index.html must always revalidate so deploys take effect.
+		@hashed path_regexp \.[0-9A-Z]{8}\.(js|css)$
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$RTC_HOST} {
+	import security_headers
+
+	# Access tokens travel in the query string: strip them from access logs.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete access_token
+				}
+				request>headers>Authorization delete
+			}
+		}
+	}
+
+	# Every LiveKit signaling entry point (pinned livekit-client 2.23 tries /rtc/v1 first, falls back to /rtc;
+	# /rtc/validate and /rtc/v1/validate explain failures). The API checks token, session, lease, membership, origin.
+	@signal path /rtc /rtc/*
+	handle @signal {
+		forward_auth 127.0.0.1:8080 {
+			uri /internal/livekit/admission
+		}
+		reverse_proxy 127.0.0.1:7880
+	}
+
+	# Twirp/admin RoomService, metrics and anything else stay private.
+	handle {
+		respond 404
+	}
+}
+
+{$TURN_HOST} {
+	respond 404
+}

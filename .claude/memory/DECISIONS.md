@@ -19,3 +19,15 @@
 - Lease id = LiveKit identity; participant metadata {"userId"}. Join token grants microphone only; camera/screen sources added per publication reservation (S5) via RoomService UpdateParticipant.
 - Roster visibility = lease Active, or Joining after having been confirmed (reconnect grace 45s). Confirmation is server-verified (webhook, POST /voice/{id}/confirm → ListParticipants, or reconciler).
 - /internal/livekit/{webhook,admission} live outside /api/v1 (no cookie/CSRF). S8 Caddy: block /internal publicly; forward_auth admission on ALL signaling routes: /rtc, /rtc/v1 (livekit-client 2.23 tries it first, falls back on 404), /rtc/validate.
+
+## S8 production infra (2026-10-18)
+- Single-host topology: edge (Caddy), livekit, api, sound-publisher use host networking and talk over 127.0.0.1; postgres published on loopback; asset-validator network none. API uid 10001 = validator uid (shared file store).
+- Edge = Caddy 2.11.4 + caddy-l4 v0.1.2 (v0.1.2 requires Caddy ≥2.11.4). :443 layer4: SNI turn.* → TLS terminate → LiveKit TURN 127.0.0.1:5349 (external_tls); everything else → PROXY protocol v2 → Caddy HTTPS server 127.0.0.1:8443. ACME via HTTP-01 on :80 (TLS-ALPN impossible behind layer4).
+- rtc.* host: forward_auth (API /internal/livekit/admission) on /rtc and /rtc/* then LiveKit; all else 404. Access logs strip access_token. app.* blocks /internal/*.
+- LiveKit v1.9.1 with bind_addresses [127.0.0.1] still binds TURN 5349/tcp on all interfaces (verified) → host firewall must drop 5349.
+- appsettings.json is production-safe (SecureCookies true, no connection string); dev values live in appsettings.Development.json. EF CLI needs `-- --environment Development`.
+- Production migrations: one-off `--migrate` job (API exits after migrate+bootstrap), never on startup.
+- Angular prod build: optimization.styles.inlineCritical=false so CSP script-src 'self' works (no inline onload).
+- Backups: pg_dump -Fc + file store + DP keys + manifest → age-encrypted single archive, rclone off-host daily/weekly; restore expires all sessions and voice leases.
+- Not implemented (documented gap): authorization watchdog closing public signaling after 60 s of unhealthy reconciliation.
+

@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 2 (S6, S7 committed; next S8 prod infra)
+**Last update:** 2026-10-18 — session 2 (S0–S8 committed; all planned slices done)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -11,7 +11,7 @@
 - [x] S5 Screen share + camera: publication reservations (caps 4 screens/6 cameras), source grants via UpdateParticipant, track webhooks → roster flags; UI share dialog, stream view (focus/grid, per-stream audio), camera in pcards, live banner
 - [x] S6 Soundboard: file storage, upload + asset-validator worker, catalog/favorites/preview, sound-plays (reservations/rate limits), sound-publisher worker, track registry; UI popover
 - [x] S7 Settings, admin (invites/roles), attachments/avatars, notifications, responsive
-- [ ] S8 Prod infra: Caddy (+forward_auth gate), prod compose, livekit.yaml, backups, runbooks, CI, AGENTS.md
+- [x] S8 Prod infra: Caddy (+forward_auth gate), prod compose, livekit.yaml, backups, runbooks, CI, AGENTS.md
 
 ## In progress
 - S7 split into sub-slices: [x] S7a settings dialog + invites/roles (46a2d9f) · [x] S7b attachments + avatars · [x] S7c notifications · [x] S7d responsive + keyboard shortcuts/a11y.
@@ -30,7 +30,11 @@
 - Frontend: features/soundboard/{soundboard.store,soundboard-popover,sound-upload.dialog}.ts; media-session subscribes sb_* participants' sfx_<userId> tracks (soundVolume/soundMuted/mutedActors in localStorage 'hangar.soundboard'); detach on TrackSubscriptionStatusChanged(Unsubscribed) because tracks only end after SFU renegotiation; re-attach on Subscribed. Dock z-index 26 above popover backdrop. Card menu: "Mute their soundboard".
 
 ## Next exact step
-1. S8 prod infra: read docs/architecture (deployment/security/roadmap) for Caddy + forward_auth admission on /rtc, /rtc/v1, /rtc/validate; block /internal publicly; infra/compose.prod.yml, infra/livekit.yaml (prod), Caddyfile, backups (pg_dump + files), runbooks (docs/runbooks), CI (.github/workflows: dotnet test, ng build, smoke optional), AGENTS.md. Validate with `docker compose -f infra/compose.prod.yml config` and `caddy validate` (in docker) — do not deploy.
+All slices S0–S8 are done. Remaining work is the manual production gates in docs/runbooks/pre-release-gates.md (needs a real VPS + domain), the authorization watchdog (architecture §3, not implemented), message search (Ctrl K in the prototype, not implemented), and Phase 7 hardening (load/soak, real Windows clients). Ask the user which to pursue next.
+
+## S8 notes (done)
+- apps/api/Dockerfile (uid 10001, 127.0.0.1:8080, `--migrate` one-off); infra/caddy/{Dockerfile,Caddyfile,Caddyfile.gate-dev}; infra/compose.prod.yml (profiles release/ops); infra/livekit.prod.yaml (key_file 0600); infra/config.example/*; infra/backup/{Dockerfile,backup.sh,restore.sh}; docs/runbooks/*; .github/workflows/ci.yml; AGENTS.md.
+- Verified locally: caddy validate (layer4 + forward_auth), compose config, LiveKit starts with prod config, gate-check.mjs + voice smoke through real Caddy forward_auth, API image --migrate on an empty DB, prod cookies `__Host-` behind trusted proxy, backup→restore round trip (identical counts).
 
 ## Verified commands
 - `docker compose -f infra/compose.dev.yml up -d`  (Postgres on 127.0.0.1:**55432** — 5432 is blocked on this PC)
@@ -44,12 +48,16 @@
 - Attachments smoke (real validator: image→webp, text card, drop, viewer, avatar 256² to friend, removal): `node scripts/smoke-attachments.mjs ../../.tmp/shots`
 - Notifications smoke (stubbed Notification + simulated background; chimes in Lounge): `node scripts/smoke-notifications.mjs`
 - Responsive smoke (1440/1200/390, shortcuts, drawer, pill, bottom sheet): `node scripts/smoke-responsive.mjs ../../.tmp/shots`
+- Gate check (Caddy forward_auth in front of dev LiveKit): see infra/caddy/Caddyfile.gate-dev header, then `node scripts/gate-check.mjs`
+- Edge image: `docker build -f infra/caddy/Dockerfile -t hangar-edge:dev .` ; API image: `docker build -t hangar-api:dev apps/api`
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
-- `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations`
+- `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations -- --environment Development`
 
 ## Known issues / notes
 - ng serve logs to .tmp/ng.log; API to .tmp/api.log.
+- Editing files with Python on Windows: open(..., newline='') / write with newline='
+' — text mode writes CRLF (breaks shell scripts copied into images).
 - Docker Desktop may need launching: user allowed `Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"`.
 - Backend layout: Hangar.Api (host, Endpoints/, Infrastructure/, Realtime/) + Hangar.Core (modules by folder; DbContext in Persistence/). Realtime: core/realtime/realtime.service.ts (single hub conn, presence heartbeat, policy reload); features/messages/chat.store.ts (per-channel cursor, gap resync, optimistic sends, unread badges, typing). Dev user 'friend' exists (same password). Voice: core/media/media-session.service.ts (one Room, explicit audio subs, webAudioMix per-user volume 0-200%), Core/Media/VoiceService.cs (leases, JWT, admission, webhook, reconcile).
 - Full DB schema (incl. media/soundboard tables) is in migration Initial.

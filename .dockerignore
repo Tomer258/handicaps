@@ -1,0 +1,16 @@
+# Repository-root build context (edge image). Keep secrets, data and caches out of every image.
+**/node_modules
+**/dist
+**/.angular
+**/bin
+**/obj
+.cache
+.tmp
+.tools
+.data
+.git
+_inputs
+*.zip
+infra/secrets
+**/.env
+**/.env.*

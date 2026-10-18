@@ -1,0 +1,78 @@
+# Pull-request / push checks. Media smokes (Playwright + LiveKit) stay local/scheduled: they need the full compose
+# stack and fake devices, and CI fake media cannot certify real capture (development-workflow.md §4).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API build + tests (PostgreSQL via Testcontainers)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test apps/api/Hangar.sln --configuration Release
+
+  web:
+    name: Angular production build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+      # The lockfile is written by npm 11.6.2 (package.json packageManager); the repo .npmrc cache path is Windows-local.
+      - run: npm install -g npm@11.6.2 --cache "$RUNNER_TEMP/npm"
+      - run: npm ci --cache "$RUNNER_TEMP/npm" --no-audit --no-fund
+      - run: npx ng build --configuration production
+
+  workers:
+    name: Python workers compile
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m py_compile workers/asset-validator/validator.py workers/sound-publisher/publisher.py
+
+  infra:
+    name: Images + Caddyfile + compose validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: |
+          docker build -t hangar-api:ci apps/api
+          docker build -t hangar-edge:ci -f infra/caddy/Dockerfile .
+          docker build -t hangar-asset-validator:ci workers/asset-validator
+          docker build -t hangar-sound-publisher:ci workers/sound-publisher
+          docker build -t hangar-backup:ci infra/backup
+      - name: Validate Caddyfile (layer4 + forward_auth)
+        run: |
+          docker run --rm -e APP_HOST=app.example.com -e RTC_HOST=rtc.example.com -e TURN_HOST=turn.example.com \
+            -e ACME_EMAIL=ops@example.com hangar-edge:ci caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Validate production compose with the example config
+        run: |
+          root="$RUNNER_TEMP/hangar"
+          mkdir -p "$root/config"
+          cp infra/config.example/*.env infra/config.example/livekit-keys.yaml "$root/config/"
+          cp infra/livekit.prod.yaml "$root/config/livekit.yaml"
+          printf x > "$root/config/postgres_password"
+          HANGAR_ROOT="$root" docker compose -f infra/compose.prod.yml --env-file infra/config.example/hangar.env \
+            --profile release --profile ops config --quiet

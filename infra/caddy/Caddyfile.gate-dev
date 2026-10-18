@@ -1,0 +1,21 @@
+# Local verification of the LiveKit signaling gate (no TLS, no layer4). Same forward_auth route as production.
+#   docker run --rm -d --name hangar-gate -p 127.0.0.1:7890:7890 --add-host host.docker.internal:host-gateway \
+#     -v "$PWD/infra/caddy/Caddyfile.gate-dev:/etc/caddy/Caddyfile:ro" hangar-edge:dev
+# then run the API with Hangar__LiveKit__PublicUrl=ws://localhost:7890 and `node scripts/gate-check.mjs`.
+{
+	admin off
+	auto_https off
+}
+
+:7890 {
+	@signal path /rtc /rtc/*
+	handle @signal {
+		forward_auth host.docker.internal:5080 {
+			uri /internal/livekit/admission
+		}
+		reverse_proxy host.docker.internal:7880
+	}
+	handle {
+		respond 404
+	}
+}
