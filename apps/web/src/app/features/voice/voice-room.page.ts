@@ -153,6 +153,9 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                     <button class="pcard" [attr.data-user]="c.peer.userId" [class.talk]="c.speaking" [attr.aria-label]="c.aria" (click)="openMenu($event, c)" (contextmenu)="openMenu($event, c)">
                       @if (c.cam; as cam) {
                         <hx-stream-tile [stream]="cam" fit="cover" [showLoading]="false" />
+                      } @else if (c.screen; as scr) {
+                        <!-- Handoff VoiceParticipantCard "live preview": the card shows what they are sharing. -->
+                        <hx-stream-tile [stream]="scr" fit="cover" [showLoading]="false" />
                       } @else {
                         <span class="av s72" [style.background]="c.color">@if (c.avatar; as u) {<img [src]="u" alt="" />} @else {{{ c.ini }}}</span>
                       }
@@ -201,7 +204,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
               </button>
               <button class="dbtn" [class.on]="media.sharing() === 'live'" [attr.aria-label]="media.sharing() === 'live' ? 'Stop sharing your screen' : 'Share your screen'"
                       [attr.aria-pressed]="media.sharing() === 'live'"
-                      [title]="shareBlocked() ? 'Streaming needs a wider (desktop) window' : media.canScreen() ? (media.sharing() === 'live' ? 'Stop sharing' : 'Share screen') : 'You cannot stream in this channel'"
+                      [title]="!media.screenCaptureSupported ? 'This browser cannot share its screen — use Chrome or Edge on a desktop' : shareBlocked() ? 'Streaming needs a wider (desktop) window' : media.canScreen() ? (media.sharing() === 'live' ? 'Stop sharing' : 'Share screen') : 'You cannot stream in this channel'"
                       [disabled]="!media.canScreen() || media.sharing() === 'starting' || shareBlocked()" (click)="shareClick()">
                 <hx-icon [name]="media.sharing() === 'live' ? 'screen-off' : 'screen'" size="lg" />
               </button>
@@ -308,7 +311,7 @@ export class VoiceRoomPage {
     return all.filter((s) => s.key === this.primaryKey()).slice(0, 1).concat(all).slice(0, 1);
   });
   /** No streaming out on a phone-sized window (stopping one already live stays possible). */
-  readonly shareBlocked = computed(() => this.layout.singleStream() && this.media.sharing() !== 'live');
+  readonly shareBlocked = computed(() => (this.layout.singleStream() || !this.media.screenCaptureSupported) && this.media.sharing() !== 'live');
   private readonly restoreVolume = new Map<string, number>();
   /** userId → the peer as last seen and when it vanished from the room while still on the roster. */
   private readonly ghosts = signal<ReadonlyMap<string, { peer: RoomPeer; since: number }>>(new Map());
@@ -383,6 +386,17 @@ export class VoiceRoomPage {
   });
 
   constructor() {
+    // Going live from this page opens my own stream, so I can see what everyone else sees.
+    let wasLive = false;
+    effect(() => {
+      const live = this.media.sharing() === 'live';
+      const mine = this.media.streams().find((s) => s.isLocal && s.kind === 'screen');
+      untracked(() => {
+        if (live && !wasLive && mine && this.here()) this.watch(mine);
+        if (live && !mine) return; // the track appears a tick after 'live'; try again then
+        wasLive = live;
+      });
+    });
     // States 15: a remote peer that leaves the room but stays on the server roster dropped unexpectedly (a deliberate
     // leave, a moderator disconnect or the grace timeout removes the roster entry). Keep its card until it is back.
     effect(() => {

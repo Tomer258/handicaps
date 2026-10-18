@@ -58,6 +58,16 @@ try {
   check(true, 'the card gives way once the stream is live');
   await owner.unroute('**/api/v1/voice/*/publications/screen');
 
+  // The presenter sees their own stream right away (no extra "Watch" click).
+  await owner.getByText('Your stream').waitFor({ timeout: 10000 });
+  await owner.waitForFunction(() => [...document.querySelectorAll('.tile.prim video')].some((v) => v.videoWidth > 0), null, { timeout: 10000 });
+  check(true, "going live opens the presenter's own stream preview");
+  await owner.screenshot({ path: `${outDir}/presenter-preview.png` });
+  // Friends see a live preview on the presenter's card before they choose to watch.
+  await friend.waitForFunction(() => [...document.querySelectorAll('button.pcard video')].some((v) => v.videoWidth > 0), null, { timeout: 20000 });
+  check(true, "the presenter's card shows a live preview of the screen");
+  await friend.screenshot({ path: `${outDir}/card-preview.png` });
+
   // 09 — the viewer's player runs dry: a buffering overlay over the stream, gone when frames resume.
   await friend.getByRole('button', { name: /^Watch Tomer$/ }).click({ timeout: 15000 });
   await friend.waitForFunction(() => [...document.querySelectorAll('.tile.prim video')].some((v) => v.videoWidth > 0 && v.readyState >= 2), null, { timeout: 20000 });

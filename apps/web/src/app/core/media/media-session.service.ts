@@ -142,6 +142,8 @@ export class MediaSessionService {
   readonly connected = computed(() => this._connection() === 'connected' || this._connection() === 'reconnecting');
   readonly sharing = this._sharing.asReadonly();
   readonly shareHasAudio = this._shareHasAudio.asReadonly();
+  /** getDisplayMedia exists (missing in embedded/in-app browsers and on phones). */
+  readonly screenCaptureSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia;
   /** Quality being negotiated or sent while sharing. */
   readonly shareQuality = this._shareQuality.asReadonly();
   /** My own link is poor or lost. */
@@ -349,7 +351,16 @@ export class MediaSessionService {
         surfaceSwitching: 'include',
       });
     } catch (e) {
-      return (e as Error)?.name === 'NotAllowedError' || (e as Error)?.name === 'AbortError' ? 'denied' : 'failed';
+      const name = (e as Error)?.name ?? 'Error';
+      if (name === 'NotAllowedError' || name === 'AbortError') return 'denied';
+      // Anything else used to fail silently: say what the browser said.
+      console.warn('screen capture failed', e);
+      this.toast.show(
+        name === 'NotReadableError' ? 'The screen could not be captured — Windows or another app blocked it. Try sharing a different screen or window.'
+          : name === 'NotSupportedError' || name === 'TypeError' ? "This browser can't share its screen here — use Chrome or Edge on a desktop."
+          : `Screen capture failed (${name}${(e as Error)?.message ? ': ' + (e as Error).message : ''}).`,
+        'danger');
+      return 'failed';
     }
     const gen = this.generation;
     const video = tracks.find((t) => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
