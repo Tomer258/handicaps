@@ -63,6 +63,8 @@ try {
   check(true, 'disconnect removes the friend from the call');
   await card.waitFor({ state: 'detached', timeout: 15000 });
   check(true, 'friend\'s card disappears for the owner');
+  await owner.waitForTimeout(5000);
+  check(await card.count() === 0 && await friend.getByRole('button', { name: 'Join voice' }).isVisible(), 'a disconnected member is not rejoined automatically');
 } finally {
   await browser.close();
 }

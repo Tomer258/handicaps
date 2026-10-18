@@ -52,6 +52,8 @@ export class ChatStore {
   private readonly realtime = inject(RealtimeService);
   private readonly badges = inject(ChannelBadges);
   private readonly toast = inject(ToastService);
+  /** Automatic resend attempts per clientMessageId (429/503 only). */
+  private readonly autoRetries = new Map<string, number>();
 
   private readonly _chats = signal<Record<string, ChannelChat>>({});
   private readonly _pins = signal<Record<string, Message[] | undefined>>({});
@@ -471,6 +473,7 @@ export class ChatStore {
         attachmentIds: m.attachments.map((a) => a.id),
       });
       this.upsert(dto);
+      this.autoRetries.delete(m.clientMessageId);
       if (this.activeChannelId() === m.channelId) this.scheduleRead(m.channelId);
       return true;
     } catch (e) {
@@ -482,13 +485,15 @@ export class ChatStore {
         return false;
       }
       this.replacePending(m.channelId, m.clientMessageId, { ...m, pending: 'failed' });
-      if (err.status === 429) {
-        // Throttled: say so once and resend by itself when the server allows it (same clientMessageId → no duplicate).
-        this.toast.show(err.message, 'warn');
+      const tries = (this.autoRetries.get(m.clientMessageId) ?? 0) + 1;
+      if ((err.status === 429 || err.status === 503) && tries <= 6) {
+        // Throttled or briefly unavailable: say so once and resend by itself (same clientMessageId → no duplicate).
+        this.autoRetries.set(m.clientMessageId, tries);
+        if (tries === 1) this.toast.show(err.message, 'warn');
         setTimeout(() => {
           const still = this._chats()[m.channelId]?.messages.some((x) => x.pending === 'failed' && x.clientMessageId === m.clientMessageId);
           if (still) void this.retry(m);
-        }, err.retryAfterMs ?? 2000);
+        }, err.retryAfterMs ?? (err.status === 503 ? 5000 : 2000));
       }
       return true;
     }

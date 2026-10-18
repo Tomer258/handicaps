@@ -25,6 +25,13 @@ public sealed class AppProblemHandler(IProblemDetailsService problems, ILogger<A
             pd = new ProblemDetails { Status = bad.StatusCode, Title = "The request could not be read." };
             pd.Extensions["code"] = bad.StatusCode == 413 ? "request.too_large" : "request.invalid";
         }
+        else if (IsDatabaseUnavailable(ex))
+        {
+            log.LogWarning(ex, "Database unavailable for {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+            pd = new ProblemDetails { Status = 503, Title = "The server is having trouble right now. Try again in a moment." };
+            pd.Extensions["code"] = "service.unavailable";
+            ctx.Response.Headers.RetryAfter = "5";
+        }
         else if (ex is OperationCanceledException && ctx.RequestAborted.IsCancellationRequested)
         {
             return true;
@@ -38,6 +45,14 @@ public sealed class AppProblemHandler(IProblemDetailsService problems, ILogger<A
 
         ctx.Response.StatusCode = pd.Status ?? 500;
         return await problems.TryWriteAsync(new ProblemDetailsContext { HttpContext = ctx, ProblemDetails = pd, Exception = ex });
+    }
+
+    /// <summary>Lost/refused PostgreSQL connections (outage, restart, failover) are transient: 503 rather than 500.</summary>
+    private static bool IsDatabaseUnavailable(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+            if (e is Npgsql.NpgsqlException { IsTransient: true } or System.Net.Sockets.SocketException) return true;
+        return false;
     }
 }
 

@@ -180,6 +180,8 @@ export class MediaSessionService {
   private leaseId: string | null = null;
   /** Incremented per join; callbacks from an older room are ignored. */
   private generation = 0;
+  /** True while automatically rejoining after an unexpected disconnect (SFU restart, network). */
+  private rejoining = false;
   private mutedBeforeDeafen = false;
   private readonly audioHost: HTMLElement | null = typeof document !== 'undefined' ? document.createElement('div') : null;
 
@@ -227,7 +229,7 @@ export class MediaSessionService {
   }
 
   async join(channelId: string): Promise<void> {
-    if (this.connected() && this._channelId() === channelId) return;
+    if (this.connected() && this._channelId() === channelId && !this.rejoining) return;
     if (this._connection() === 'joining') return;
     if (this.room || this.leaseId) await this.leave();
 
@@ -606,7 +608,9 @@ export class MediaSessionService {
           this.toast.show('You left voice — joined from another tab or removed by a moderator.', 'warn');
         } else {
           if (lease) this.releaseLease(lease);
-          this.fail('Voice connection lost.');
+          const channelId = this._channelId();
+          if (channelId) void this.autoRejoin(channelId);
+          else this.fail('Voice connection lost.');
         }
       });
   }
@@ -824,7 +828,35 @@ export class MediaSessionService {
     void fetch(`/api/v1/voice/${leaseId}`, { method: 'DELETE', keepalive, credentials: 'same-origin', headers: { 'X-XSRF-TOKEN': xsrf } }).catch(() => undefined);
   }
 
+  /** A few quiet rejoin attempts (fresh lease and token each time) before reporting the loss. */
+  private async autoRejoin(channelId: string): Promise<void> {
+    this._connection.set('reconnecting');
+    this.rejoining = true;
+    try {
+      for (const delay of [1500, 4000, 8000]) {
+        const gen = this.generation;
+        await new Promise((r) => setTimeout(r, delay));
+        if (gen !== this.generation || this._channelId() !== channelId) return; // the user left or moved meanwhile
+        this._connection.set('reconnecting');
+        await this.join(channelId);
+        if (this._connection() === 'connected') {
+          this.toast.show('Reconnected to voice', 'info');
+          return;
+        }
+      }
+    } finally {
+      this.rejoining = false;
+    }
+    if (this._channelId() === channelId) this.fail('Voice connection lost. Join again when you are ready.');
+  }
+
   private fail(message: string): void {
+    if (this.rejoining) {
+      // Intermediate failure during an automatic rejoin: stay "reconnecting" and keep quiet.
+      this._connection.set('reconnecting');
+      this._error.set(null);
+      return;
+    }
     this._connection.set('error');
     this._error.set(message);
     this.toast.show(message, 'danger');

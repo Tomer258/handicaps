@@ -31,6 +31,20 @@ The unmodified `compose.prod.yml` runs inside a Docker-in-Docker "VPS" at `*.han
   relays, and LiveKit advertises an address they cannot reach. Every selected path was `relay/tls`, through Caddy's
   layer4 `turn.` route to LiveKit TURN. Voice, soundboard and screen share all worked. 3/3 runs passed.
 
+## Restart, outage and abuse drills (dev stack, `tests/e2e/scripts/resilience-drill.mjs`)
+
+**Passed 2026-10-18 (3/3 runs, plus once more with automatic voice rejoin):**
+- API killed and restarted (~8 s down): voice kept flowing, session cookies stayed valid, realtime chat resumed
+  without a reload, and nobody dropped from voice.
+- PostgreSQL stopped for 20 s: `/healthz` returned 503 and writes returned 503 `service.unavailable` with `Retry-After`.
+  Voice kept flowing. The API recovered on its own about 2 s after PostgreSQL returned. A message typed during the
+  outage was delivered automatically afterwards.
+- LiveKit restarted: both clients rejoined on their own within about 7 s (fresh lease each time), the voice roster
+  matched after a reconcile pass, and a moderator's "Disconnect" is still not undone by the automatic rejoin.
+- Sound publisher restarted: the soundboard played again straight away.
+- Abuse limits: per-user 429 `rate_limited` with `Retry-After` on message/upload/voice/write floods and a
+  per-connection hub budget (integration tests `RateLimitTests`). All 12 dev smokes pass with limits on.
+
 This does not replace the host checks below, which need public networking.
 
 ## Manual, on the production host (not done yet, required)
