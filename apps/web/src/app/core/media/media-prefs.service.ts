@@ -1,12 +1,15 @@
 import { Injectable, signal } from '@angular/core';
 import type { ScreenQuality } from './media-session.service';
 
+/** off = raw mic · standard = the browser's WebRTC suppression · enhanced = RNNoise (core/media/noise-filter.ts). */
+export type NoiseMode = 'off' | 'standard' | 'enhanced';
+
 export interface MediaPrefs {
   /** '' = browser/OS default. Device ids are per-origin and per-browser, so they stay local. */
   inputDeviceId: string;
   outputDeviceId: string;
   cameraDeviceId: string;
-  noiseSuppression: boolean;
+  noiseMode: NoiseMode;
   echoCancellation: boolean;
   autoGainControl: boolean;
   streamQuality: ScreenQuality;
@@ -19,7 +22,7 @@ const DEFAULTS: MediaPrefs = {
   inputDeviceId: '',
   outputDeviceId: '',
   cameraDeviceId: '',
-  noiseSuppression: true,
+  noiseMode: 'enhanced',
   echoCancellation: true,
   autoGainControl: true,
   streamQuality: '1080p60',
@@ -44,13 +47,14 @@ export class MediaPrefsService {
 
 function load(): MediaPrefs {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<MediaPrefs> | null;
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as (Partial<MediaPrefs> & { noiseSuppression?: boolean }) | null;
     if (!raw) return DEFAULTS;
     return {
       inputDeviceId: typeof raw.inputDeviceId === 'string' ? raw.inputDeviceId : '',
       outputDeviceId: typeof raw.outputDeviceId === 'string' ? raw.outputDeviceId : '',
       cameraDeviceId: typeof raw.cameraDeviceId === 'string' ? raw.cameraDeviceId : '',
-      noiseSuppression: raw.noiseSuppression !== false,
+      // Before the modes there was only an on/off switch (noiseSuppression); 'on' becomes enhanced.
+      noiseMode: raw.noiseMode === 'off' || raw.noiseMode === 'standard' || raw.noiseMode === 'enhanced' ? raw.noiseMode : raw.noiseSuppression === false ? 'off' : 'enhanced',
       echoCancellation: raw.echoCancellation !== false,
       autoGainControl: raw.autoGainControl !== false,
       streamQuality: raw.streamQuality === '720p30' ? '720p30' : '1080p60',

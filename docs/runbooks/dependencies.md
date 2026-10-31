@@ -10,7 +10,7 @@ one pull request that changes a pin and passes CI, the dev smokes and, for media
 | Base images (PostgreSQL 18.6, Python 3.13.16, .NET SDK 10.0.402 / ASP.NET 10.0.13, Node 22.22.0, Caddy 2.11.4, LiveKit v1.9.1, docker 28.5.1-dind) | Dockerfiles, `infra/compose.*.yml`, `poc-local.sh` | `tag@sha256:` multi-arch index digest |
 | Caddy layer4 module | `infra/caddy/Dockerfile` | `caddy-l4@v0.1.2`, built with xcaddy for Caddy v2.11.4 |
 | NuGet | `*.csproj` | exact versions; EF Core pinned to 10.0.13 through an explicit Relational reference |
-| npm | `apps/web/package-lock.json` | `npm ci` with npm 11.6.2 (Angular 21.2.25, livekit-client 2.23.0, @microsoft/signalr 10.0.11, qrcode-generator 1.4.4 for the 2FA QR) |
+| npm | `apps/web/package-lock.json` | `npm ci` with npm 11.6.2 (Angular 21.2.25, livekit-client 2.23.0, @microsoft/signalr 10.0.11, qrcode-generator 1.4.4 for the 2FA QR, @sapphi-red/web-noise-suppressor 0.4.1 for the RNNoise mic filter — its wasm/worklet are copied to `/noise` by angular.json) |
 | Python (sound publisher) | `workers/sound-publisher/requirements.lock` | full graph with hashes; `pip install --require-hashes --only-binary=:all:` |
 | Alpine packages (backup) | `infra/backup/Dockerfile` | `age=1.3.2-r1 rclone=1.74.1-r3` |
 | Debian ffmpeg (asset validator) | `workers/asset-validator/Dockerfile` | **not version-pinned**: Debian removes superseded security builds, which would break the build. The pinned base fixes the Debian release (13 trixie); currently `7.1.5-0+deb13u1`. |

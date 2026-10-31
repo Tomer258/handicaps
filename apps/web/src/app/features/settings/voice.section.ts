@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { DevicesService } from '../../core/media/devices.service';
-import { MediaPrefs, MediaPrefsService } from '../../core/media/media-prefs.service';
+import { MediaPrefs, MediaPrefsService, NoiseMode } from '../../core/media/media-prefs.service';
+import { MediaSessionService } from '../../core/media/media-session.service';
+import { createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
 
 /** Voice & audio: microphone / speaker choice, a real input level test and browser audio processing. */
 @Component({
@@ -43,8 +45,16 @@ import { MediaPrefs, MediaPrefsService } from '../../core/media/media-prefs.serv
       @if (testError()) { <div class="note e" role="alert" style="margin-top: 10px">{{ testError() }}</div> }
     </div>
 
-    <div class="srow"><div><div class="t">Noise suppression</div><div class="d">Filters keyboards, fans and that one friend's mechanical switches</div></div>
-      <button class="sw" aria-label="Noise suppression" [attr.aria-pressed]="prefs.prefs().noiseSuppression" (click)="set({ noiseSuppression: !prefs.prefs().noiseSuppression })"></button></div>
+    <div class="srow"><div><div class="t">Noise suppression</div>
+        <div class="d">{{ noiseHint[prefs.prefs().noiseMode] }}</div>
+        @if (prefs.prefs().noiseMode === 'enhanced' && media.noiseFilterUnavailable()) {
+          <div class="d" role="status" style="color: var(--warn)">Enhanced isn't available in this browser right now — Standard is used instead.</div>
+        }</div>
+      <div class="seg" role="group" aria-label="Noise suppression">
+        <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'off'" (click)="set({ noiseMode: 'off' })">Off</button>
+        <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'standard'" (click)="set({ noiseMode: 'standard' })">Standard</button>
+        <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'enhanced'" (click)="set({ noiseMode: 'enhanced' })">Enhanced</button>
+      </div></div>
     <div class="srow"><div><div class="t">Echo cancellation</div><div class="d">Keep on if you use speakers instead of headphones</div></div>
       <button class="sw" aria-label="Echo cancellation" [attr.aria-pressed]="prefs.prefs().echoCancellation" (click)="set({ echoCancellation: !prefs.prefs().echoCancellation })"></button></div>
     <div class="srow"><div><div class="t">Automatic gain control</div><div class="d">Evens out your volume when you lean back or shout</div></div>
@@ -57,6 +67,12 @@ import { MediaPrefs, MediaPrefsService } from '../../core/media/media-prefs.serv
 export class VoiceSection {
   readonly devices = inject(DevicesService);
   readonly prefs = inject(MediaPrefsService);
+  readonly media = inject(MediaSessionService);
+  readonly noiseHint: Record<NoiseMode, string> = {
+    off: 'Sends your microphone as it is — for studio mics and quiet rooms',
+    standard: "The browser's built-in filter: steady hum and fans",
+    enhanced: "AI filter on your PC: keyboards, fans, clicks and that one friend's mechanical switches",
+  };
 
   readonly testing = signal(false);
   readonly level = signal(0);
@@ -64,6 +80,8 @@ export class VoiceSection {
   private stream?: MediaStream;
   private ctx?: AudioContext;
   private raf = 0;
+  /** Bumped by every start/stop so a slow getUserMedia or filter load cannot revive a stopped test. */
+  private testRun = 0;
 
   constructor() {
     void this.devices.refresh();
@@ -82,24 +100,46 @@ export class VoiceSection {
 
   private async startTest(): Promise<void> {
     this.stopTest();
+    const run = ++this.testRun;
     this.testError.set('');
     const p = this.prefs.prefs();
+    const enhanced = p.noiseMode === 'enhanced' && !this.media.noiseFilterUnavailable();
+    let stream: MediaStream;
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: p.inputDeviceId ? { exact: p.inputDeviceId } : undefined,
-          noiseSuppression: p.noiseSuppression, echoCancellation: p.echoCancellation, autoGainControl: p.autoGainControl,
+          // Same capture as a call: Enhanced runs RNNoise below instead of the browser's filter.
+          noiseSuppression: p.noiseMode === 'standard' || (p.noiseMode === 'enhanced' && !enhanced),
+          echoCancellation: p.echoCancellation, autoGainControl: p.autoGainControl,
         },
       });
     } catch (e) {
-      this.testError.set((e as Error)?.name === 'NotAllowedError' ? 'Microphone access was denied. Allow it in the browser address bar.' : 'That microphone is unavailable.');
+      if (run === this.testRun)
+        this.testError.set((e as Error)?.name === 'NotAllowedError' ? 'Microphone access was denied. Allow it in the browser address bar.' : 'That microphone is unavailable.');
       return;
     }
+    if (run !== this.testRun) return stream.getTracks().forEach((t) => t.stop());
+    this.stream = stream;
     void this.devices.refresh();
-    this.ctx = new AudioContext();
-    const analyser = this.ctx.createAnalyser();
+    let ctx: AudioContext | undefined;
+    let filter: AudioNode | undefined;
+    if (enhanced) {
+      try {
+        ctx = await noiseContext();
+        filter = await createNoiseFilter(ctx);
+      } catch {
+        void ctx?.close().catch(() => undefined);
+        ctx = filter = undefined;
+      }
+    }
+    ctx ??= new AudioContext();
+    if (run !== this.testRun) return void ctx.close().catch(() => undefined);
+    this.ctx = ctx;
+    const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
-    this.ctx.createMediaStreamSource(this.stream).connect(analyser);
+    const source = ctx.createMediaStreamSource(stream);
+    (filter ? source.connect(filter) : source).connect(analyser);
     const buf = new Float32Array(analyser.fftSize);
     this.testing.set(true);
     const tick = () => {
@@ -114,6 +154,7 @@ export class VoiceSection {
   }
 
   private stopTest(): void {
+    this.testRun++;
     cancelAnimationFrame(this.raf);
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = undefined;

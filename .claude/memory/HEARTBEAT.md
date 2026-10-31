@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-18 — session 3 (S9 admin/permissions done) · session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
+**Last update:** 2026-10-31 — session 4 (Enhanced noise suppression / RNNoise) · 2026-10-18 — session 3 (S9 admin/permissions done) · session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -50,6 +50,10 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
       dependency/license review, host quote; tests: external port scan, forced TURN, abuse/rate, DB outage, API/worker/SFU restarts,
       interrupted upload, disk-full, expired-cert alert, rollback with compatible schema.
 
+## Session 4 (2026-10-31)
+- [x] Enhanced noise suppression: core/media/noise-filter.ts (NoiseFilterProcessor = LiveKit audio TrackProcessor, RNNoise worklet in own 48 kHz ctx); MediaPrefs.noiseMode off|standard|enhanced (default enhanced, migrates old noiseSuppression); MediaSessionService.syncNoiseFilter (serialized) after mic enable/unmute and on prefs change, fallback noiseFilterUnavailable → toast + browser NS; settings Voice: Off/Standard/Enhanced seg + mic test through the filter; Caddy CSP 'wasm-unsafe-eval'. smoke-noise.mjs (DSP pink noise, migration, sender track = MediaStreamAudioDestinationNode, live switch, blocked-filter fallback) passes; smoke-voice now uses lib/fake-voice.mjs (shared with poc-smoke) — passes; smoke-settings, smoke-voice-panel, smoke-reconnect pass; prod build ok; license report all permissive.
+- Not pushed (CLAUDE.md: never push) — user's start prompt asked to push; confirm with the user.
+
 ## Next exact step
 ### HANDOFF — end of 2026-10-18 session (read this first)
 State: all feature phases (1–6) done; Phase 7 ~55% (every locally-testable item done); overall ~85% to first release. 81 backend tests + ~29 smokes pass. Everything committed and pushed (last: d29b0dc server settings). Working tree clean except the untracked 'start prompt.txt' (never commit it).
@@ -94,6 +98,7 @@ Voice panel (sidebar, above the user row) now has the prototype's 4-button row: 
 - Search smoke (Ctrl K, filters, Hebrew, cross-channel jump, deep jump through 120 newer messages): `node scripts/smoke-search.mjs ../../.tmp/shots`
 - Watchdog drill (gate container with .tmp/watchdog mounted + watchdog on host with TRIP_AFTER=15 RECOVER_AFTER=8 INTERVAL=2; script kills/restarts the API): see header of `node scripts/watchdog-drill.mjs`. Afterwards restart the API normally (the drill leaves it on PublicUrl ws://localhost:7890).
 - Voice panel smoke (sidebar call actions from a text page: soundboard, share, camera, voice settings): `node scripts/smoke-voice-panel.mjs ../../.tmp/shots`
+- Noise suppression smoke: `cd tests/e2e && node scripts/smoke-noise.mjs ../../.tmp/shots`
 - Chat smoke (2 browsers, realtime/mentions/typing/reply/react/edit/badge/delete): `cd tests/e2e && node scripts/smoke-chat.mjs ../../.tmp/shots` (needs API + ng serve running)
 - E2E/smoke: `cd tests/e2e && node scripts/smoke-owner.mjs ../../.tmp/api.log ../../.tmp/shots` (Playwright chromium in .cache/ms-playwright). Dev login: tomer / "correct horse battery" (local dev DB only)
 - `cd apps/api && dotnet dotnet-ef migrations add <Name> -p src/Hangar.Core -s src/Hangar.Api -o Persistence/Migrations -- --environment Development`

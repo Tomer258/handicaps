@@ -3,6 +3,7 @@ import {
   ConnectionQuality,
   ConnectionState,
   DisconnectReason,
+  LocalAudioTrack,
   LocalTrack,
   LocalVideoTrack,
   Participant,
@@ -20,6 +21,7 @@ import {
 } from 'livekit-client';
 import { ApiService } from '../api/api.service';
 import { MediaPrefsService } from './media-prefs.service';
+import { NOISE_FILTER, NoiseFilterProcessor } from './noise-filter';
 import { ApiError } from '../api/api-error';
 import { SessionService } from '../auth/session.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -164,6 +166,8 @@ export class MediaSessionService {
   readonly soundVolume = computed(() => this._sound().volume);
   readonly soundMuted = computed(() => this._sound().muted);
   readonly soundMutedActors = computed(() => new Set(this._sound().mutedActors));
+  /** Enhanced (RNNoise) suppression could not run in this page; the browser's standard filter is used instead. */
+  readonly noiseFilterUnavailable = signal(false);
 
   /** Every camera/screen stream in the room, including my own (rendered from the local track). */
   readonly streams = computed<StreamInfo[]>(() => {
@@ -203,6 +207,8 @@ export class MediaSessionService {
   /** True while automatically rejoining after an unexpected disconnect (SFU restart, network). */
   private rejoining = false;
   private mutedBeforeDeafen = false;
+  /** Serializes noise-filter changes on the mic track (mute toggles and settings can overlap). */
+  private noiseSync: Promise<void> = Promise.resolve();
   private readonly audioHost: HTMLElement | null = typeof document !== 'undefined' ? document.createElement('div') : null;
 
   constructor() {
@@ -721,7 +727,8 @@ export class MediaSessionService {
     return {
       deviceId: p.inputDeviceId || undefined,
       echoCancellation: p.echoCancellation,
-      noiseSuppression: p.noiseSuppression,
+      // Enhanced replaces the browser's filter (both at once only adds artifacts) unless RNNoise cannot run.
+      noiseSuppression: p.noiseMode === 'standard' || (p.noiseMode === 'enhanced' && this.noiseFilterUnavailable()),
       autoGainControl: p.autoGainControl,
       channelCount: 1,
     };
@@ -738,9 +745,14 @@ export class MediaSessionService {
     try {
       if (output !== prev.output) await room.switchActiveDevice('audiooutput', output || 'default');
       const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack;
-      if (mic && capture !== prev.capture) {
-        const o = this.captureOptions();
-        await mic.restartTrack({ ...o, deviceId: o.deviceId ? { exact: o.deviceId } : undefined });
+      if (mic) {
+        // Drop the filter before a restart that does not want it, so it is not rebuilt in between.
+        if (!this.wantsNoiseFilter()) await this.syncNoiseFilter();
+        if (capture !== prev.capture) {
+          const o = this.captureOptions();
+          await mic.restartTrack({ ...o, deviceId: o.deviceId ? { exact: o.deviceId } : undefined });
+        }
+        await this.syncNoiseFilter();
       }
       if (this.cameraTrack && camera !== prev.camera) await this.cameraTrack.restartTrack({ deviceId: camera || undefined, resolution: { width: 1280, height: 720, frameRate: 30 } });
     } catch {
@@ -752,9 +764,9 @@ export class MediaSessionService {
     const room = this.room;
     if (!room || gen !== this.generation || !this._canSpeak()) return;
     try {
-      // Device choice arrives with the settings dialog (S7); until then the OS default input is used.
-      await room.localParticipant.setMicrophoneEnabled(!this._muted());
+      await room.localParticipant.setMicrophoneEnabled(!this._muted(), this.captureOptions());
       this._micBlocked.set(false);
+      await this.syncNoiseFilter();
     } catch {
       if (gen !== this.generation) return;
       this._micBlocked.set(true);
@@ -792,13 +804,45 @@ export class MediaSessionService {
     const room = this.room;
     if (room && this._canSpeak()) {
       try {
-        await room.localParticipant.setMicrophoneEnabled(!muted);
+        await room.localParticipant.setMicrophoneEnabled(!muted, this.captureOptions());
       } catch {
         this._micBlocked.set(true);
         this._muted.set(true);
       }
+      await this.syncNoiseFilter();
     }
     this.refreshPeers();
+  }
+
+  private wantsNoiseFilter(): boolean {
+    return this.mediaPrefs.prefs().noiseMode === 'enhanced' && !this.noiseFilterUnavailable();
+  }
+
+  /** Puts RNNoise on the mic track or takes it off, to match the noise mode. Never throws. */
+  private syncNoiseFilter(): Promise<void> {
+    this.noiseSync = this.noiseSync.then(async () => {
+      const mic = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack as LocalAudioTrack | undefined;
+      if (!mic) return;
+      const want = this.wantsNoiseFilter();
+      if (want === (mic.getProcessor()?.name === NOISE_FILTER)) return;
+      try {
+        if (want) await mic.setProcessor(new NoiseFilterProcessor(() => this.noiseFilterFailed()));
+        else await mic.stopProcessor();
+      } catch {
+        if (want) this.noiseFilterFailed();
+      }
+    });
+    return this.noiseSync;
+  }
+
+  /** RNNoise could not start or crashed: fall back to the browser's filter for the rest of this page's life. */
+  private noiseFilterFailed(): void {
+    if (this.noiseFilterUnavailable()) return;
+    this.noiseFilterUnavailable.set(true);
+    this.toast.show("Enhanced noise suppression isn't available here — using the browser's standard filter.", 'warn');
+    const p = this.mediaPrefs.prefs();
+    // The capture constraints changed (browser suppression on): restart the mic without the filter.
+    void this.applyDevicePrefs(p.inputDeviceId, p.outputDeviceId, p.cameraDeviceId);
   }
 
   private applyVolumes(): void {

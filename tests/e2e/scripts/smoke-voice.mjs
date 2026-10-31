@@ -2,12 +2,14 @@
 // see each other, get speaking indicators, mute state, roster updates, switching and leave.
 // Usage: node scripts/smoke-voice.mjs <out-dir>   (needs compose livekit + API + ng serve; users tomer & friend)
 import { chromium } from '@playwright/test';
+import { fakeVoiceFile } from './lib/fake-voice.mjs';
 
 const [, , outDir] = process.argv;
 const BASE = 'http://localhost:4200';
 const PASSWORD = 'correct horse battery';
 const browser = await chromium.launch({
-  args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
+  args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${fakeVoiceFile()}`,
+    '--autoplay-policy=no-user-gesture-required'],
 });
 
 async function newPage(name) {

@@ -87,7 +87,7 @@ http://{$APP_HOST}, http://{$RTC_HOST}, http://{$TURN_HOST} {
 
 	handle {
 		root * /srv/web
-		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://{$RTC_HOST} https://{$RTC_HOST}; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss://{$RTC_HOST} https://{$RTC_HOST}; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		# Hashed bundles are immutable; index.html must always revalidate so deploys take effect.
 		@hashed path_regexp \.[0-9A-Z]{8}\.(js|css)$
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
