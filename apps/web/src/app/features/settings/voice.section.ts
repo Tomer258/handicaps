@@ -34,7 +34,7 @@ import { createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
     <div class="card" style="margin-top: 20px">
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
         <div><div style="font-weight: 600">Mic test</div>
-          <div style="font-size: 12.5px; color: var(--tx3)">Talk normally — the bar shows what your microphone picks up with the settings below.</div></div>
+          <div style="font-size: 12.5px; color: var(--tx3)">Talk normally — you'll hear yourself the way friends hear you, with the settings below. Use headphones to avoid feedback.</div></div>
         <button class="btn" [class.pri]="!testing()" [class.sec]="testing()" (click)="toggleTest()">{{ testing() ? 'Stop test' : "Let's check" }}</button>
       </div>
       <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px">
@@ -139,7 +139,11 @@ export class VoiceSection {
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     const source = ctx.createMediaStreamSource(stream);
-    (filter ? source.connect(filter) : source).connect(analyser);
+    // Play it back like Discord's mic test: what friends hear, after the same processing, on the chosen speakers.
+    (filter ? source.connect(filter) : source).connect(analyser).connect(ctx.destination);
+    const sink = ctx as AudioContext & { setSinkId?: (id: string) => Promise<void> };
+    if (p.outputDeviceId && sink.setSinkId) await sink.setSinkId(p.outputDeviceId).catch(() => undefined);
+    if (run !== this.testRun) return;
     const buf = new Float32Array(analyser.fftSize);
     this.testing.set(true);
     const tick = () => {
