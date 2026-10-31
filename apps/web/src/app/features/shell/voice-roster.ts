@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { Router } from '@angular/router';
 import { Channel } from '../../core/api/models';
 import { MediaSessionService } from '../../core/media/media-session.service';
+import { UserMenuService } from '../profile/user-menu';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { Avatar } from '../../shared/ui/avatar';
@@ -25,7 +26,7 @@ import { Icon } from '../../shared/ui/icon';
         }
       </button>
       @for (p of people(); track p.userId) {
-        <div class="vp" role="group" [attr.aria-label]="p.name + (p.muted ? ', muted' : '') + (p.deafened ? ', deafened' : '') + (p.screen ? ', live' : '')">
+        <div class="vp" role="group" (contextmenu)="menus.show($event, p.userId)" [attr.aria-label]="p.name + (p.muted ? ', muted' : '') + (p.deafened ? ', deafened' : '') + (p.screen ? ', live' : '')">
           <hx-avatar [name]="p.name" [hue]="p.hue" [assetId]="p.assetId" [size]="20" [speaking]="media.speaking().has(p.userId)" />
           <span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto"
                 [style.color]="media.speaking().has(p.userId) ? 'var(--tx)' : null">{{ p.name }}</span>
@@ -43,6 +44,7 @@ export class VoiceRoster {
   readonly picked = output<void>();
 
   readonly media = inject(MediaSessionService);
+  readonly menus = inject(UserMenuService);
   private readonly presence = inject(VoicePresenceStore);
   private readonly store = inject(WorkspaceStore);
   private readonly router = inject(Router);

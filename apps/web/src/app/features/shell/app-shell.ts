@@ -8,6 +8,7 @@ import { Icon } from '../../shared/ui/icon';
 import { LayoutService } from './layout.service';
 import { ToastHost } from './toast-host';
 import { ProfilePopover } from '../profile/profile-popover';
+import { UserMenu } from '../profile/user-menu';
 import { CameraProblemDialog } from '../voice/camera-problem.dialog';
 import { Notifier } from '../notifications/notifier.service';
 import { ChatStore } from '../messages/chat.store';
@@ -20,7 +21,7 @@ import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { serverIconUrl, short } from '../../shared/ui/server-icon';
 @Component({
   selector: 'hx-app-shell',
-  imports: [RouterOutlet, RouterLink, Icon, ToastHost, CameraProblemDialog, ProfilePopover],
+  imports: [RouterOutlet, RouterLink, Icon, ToastHost, CameraProblemDialog, ProfilePopover, UserMenu],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'onKey($event)' },
   template: `
@@ -57,6 +58,7 @@ import { serverIconUrl, short } from '../../shared/ui/server-icon';
       <hx-toast-host />
       <hx-camera-problem />
       <hx-profile-popover />
+      <hx-user-menu />
 
       @if (session.expired()) {
         <div class="scrim" role="alertdialog" aria-modal="true" aria-labelledby="expired-title">

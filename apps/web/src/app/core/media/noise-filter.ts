@@ -41,7 +41,13 @@ export async function noiseContext(): Promise<AudioContext> {
 export async function createNoiseFilter(ctx: AudioContext): Promise<RnnoiseWorkletNode> {
   const wasmBinary = await loadNoiseModel();
   await ctx.audioWorklet.addModule(ASSETS + 'rnnoise/workletProcessor.js');
-  return new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary });
+  const node = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary });
+  // Mix any stereo input down to one channel: RNNoise only processes the first channel, so a stereo mic would
+  // come out with the right side silent. The mono output then plays in both ears.
+  node.channelCount = 1;
+  node.channelCountMode = 'explicit';
+  node.channelInterpretation = 'speakers';
+  return node;
 }
 
 /**

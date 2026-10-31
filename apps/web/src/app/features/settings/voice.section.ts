@@ -55,7 +55,7 @@ import { createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
         <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'standard'" (click)="set({ noiseMode: 'standard' })">Standard</button>
         <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'enhanced'" (click)="set({ noiseMode: 'enhanced' })">Enhanced</button>
       </div></div>
-    <div class="srow"><div><div class="t">Echo cancellation</div><div class="d">Keep on if you use speakers instead of headphones</div></div>
+    <div class="srow"><div><div class="t">Echo cancellation</div><div class="d">Keep on if you use speakers instead of headphones. Applies in calls; the mic test plays without it.</div></div>
       <button class="sw" aria-label="Echo cancellation" [attr.aria-pressed]="prefs.prefs().echoCancellation" (click)="set({ echoCancellation: !prefs.prefs().echoCancellation })"></button></div>
     <div class="srow"><div><div class="t">Automatic gain control</div><div class="d">Evens out your volume when you lean back or shout</div></div>
       <button class="sw" aria-label="Automatic gain control" [attr.aria-pressed]="prefs.prefs().autoGainControl" (click)="set({ autoGainControl: !prefs.prefs().autoGainControl })"></button></div>
@@ -111,7 +111,9 @@ export class VoiceSection {
           deviceId: p.inputDeviceId ? { exact: p.inputDeviceId } : undefined,
           // Same capture as a call: Enhanced runs RNNoise below instead of the browser's filter.
           noiseSuppression: p.noiseMode === 'standard' || (p.noiseMode === 'enhanced' && !enhanced),
-          echoCancellation: p.echoCancellation, autoGainControl: p.autoGainControl,
+          // No echo cancellation here: it treats the test's own playback as echo and chops the voice up. In a call
+          // it cancels the friends' voices coming out of your speakers, which the test has none of.
+          echoCancellation: false, autoGainControl: p.autoGainControl, channelCount: 1,
         },
       });
     } catch (e) {

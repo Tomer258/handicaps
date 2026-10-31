@@ -207,6 +207,7 @@ export class MediaSessionService {
   /** True while automatically rejoining after an unexpected disconnect (SFU restart, network). */
   private rejoining = false;
   private mutedBeforeDeafen = false;
+  private readonly volumeBeforeMute = new Map<string, number>();
   /** Serializes noise-filter changes on the mic track (mute toggles and settings can overlap). */
   private noiseSync: Promise<void> = Promise.resolve();
   private readonly audioHost: HTMLElement | null = typeof document !== 'undefined' ? document.createElement('div') : null;
@@ -573,6 +574,17 @@ export class MediaSessionService {
 
   volumeOf(userId: string): number {
     return this._volumes()[userId] ?? 1;
+  }
+
+  /** "Mute for me": volume 0, and back to the volume they had before (100% if unknown). */
+  toggleLocalMute(userId: string): void {
+    const v = this.volumeOf(userId);
+    if (v === 0) {
+      this.setVolume(userId, this.volumeBeforeMute.get(userId) ?? 1);
+    } else {
+      this.volumeBeforeMute.set(userId, v);
+      this.setVolume(userId, 0);
+    }
   }
 
   // ---- internals ------------------------------------------------------------------------------

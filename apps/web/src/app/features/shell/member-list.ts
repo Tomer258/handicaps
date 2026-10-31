@@ -10,6 +10,7 @@ import { Icon } from '../../shared/ui/icon';
 import { Member, Perm } from '../../core/api/models';
 import { ago } from '../../shared/ui/time-ago';
 import { ProfileService } from '../profile/profile.service';
+import { UserMenuService } from '../profile/user-menu';
 import { Dialog } from '@angular/cdk/dialog';
 import { openInviteDialog } from '../invites/invite.dialog';
 
@@ -61,7 +62,7 @@ interface Group {
             @for (m of g.members; track m.userId) {
               <div role="listitem">
               <button class="vp" style="padding-left: 8px; height: 42px; width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left"
-                      [style.opacity]="m.status === 'offline' ? 0.5 : 1" [attr.aria-label]="m.displayName + ', ' + m.status" (click)="profiles.show(m.userId, $event)">
+                      [style.opacity]="m.status === 'offline' ? 0.5 : 1" [attr.aria-label]="m.displayName + ', ' + m.status" (click)="profiles.show(m.userId, $event)" (contextmenu)="menus.show($event, m.userId)">
                 <hx-avatar [name]="m.displayName" [hue]="m.avatarHue" [assetId]="m.avatarAssetId" [size]="32" [status]="m.status" [speaking]="media.speaking().has(m.userId)" />
                 <span style="flex: 1; min-width: 0">
                   <span style="display: block; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto">{{ m.displayName }}</span>
@@ -86,6 +87,7 @@ export class MemberList {
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
   readonly profiles = inject(ProfileService);
+  readonly menus = inject(UserMenuService);
 
   /** States 04: nobody else is online — say who was here last and offer to wait in voice. */
   readonly quiet = computed(() => {

@@ -52,6 +52,7 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
 
 ## Session 4 (2026-10-31)
 - [x] Enhanced noise suppression: core/media/noise-filter.ts (NoiseFilterProcessor = LiveKit audio TrackProcessor, RNNoise worklet in own 48 kHz ctx); MediaPrefs.noiseMode off|standard|enhanced (default enhanced, migrates old noiseSuppression); MediaSessionService.syncNoiseFilter (serialized) after mic enable/unmute and on prefs change, fallback noiseFilterUnavailable → toast + browser NS; settings Voice: Off/Standard/Enhanced seg + mic test through the filter; Caddy CSP 'wasm-unsafe-eval'. smoke-noise.mjs (DSP pink noise, migration, sender track = MediaStreamAudioDestinationNode, live switch, blocked-filter fallback) passes; smoke-voice now uses lib/fake-voice.mjs (shared with poc-smoke) — passes; smoke-settings, smoke-voice-panel, smoke-reconnect pass; prod build ok; license report all permissive.
+- [x] Mic test plays back (bbcd86e). Fixes: RNNoise node downmixes to mono (stereo mics were left-ear only); mic test runs without echo cancellation (it fought its own playback). Right-click user menu (features/profile/user-menu.ts, hx-user-menu in AppShell; sidebar voice list + member list): profile, volume 0–200%, mute for me (MediaSessionService.toggleLocalMute, shared), mute soundboard, server mute / disconnect per the voice channel's perms. smoke-voice covers it.
 - Not pushed (CLAUDE.md: never push) — user's start prompt asked to push; confirm with the user.
 
 ## Next exact step

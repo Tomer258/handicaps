@@ -235,7 +235,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                 <input type="range" class="rng" min="0" max="200" step="5" [value]="pct(media.volumeOf(m.card.peer.userId))"
                        (input)="media.setVolume(m.card.peer.userId, +$any($event.target).value / 100)" [attr.aria-label]="m.card.name + ' volume'" style="width: 100%" />
               </div>
-              <button class="menu-i" role="menuitemcheckbox" [attr.aria-checked]="media.volumeOf(m.card.peer.userId) === 0" (click)="toggleLocalMute(m.card.peer.userId)">
+              <button class="menu-i" role="menuitemcheckbox" [attr.aria-checked]="media.volumeOf(m.card.peer.userId) === 0" (click)="media.toggleLocalMute(m.card.peer.userId)">
                 <hx-icon name="mic-off" size="sm" /><span style="flex: 1">Mute for me</span>
                 <span class="sw" [attr.aria-pressed]="media.volumeOf(m.card.peer.userId) === 0" style="transform: scale(.8)"></span>
               </button>
@@ -312,7 +312,6 @@ export class VoiceRoomPage {
   });
   /** No streaming out on a phone-sized window (stopping one already live stays possible). */
   readonly shareBlocked = computed(() => (this.layout.singleStream() || !this.media.screenCaptureSupported) && this.media.sharing() !== 'live');
-  private readonly restoreVolume = new Map<string, number>();
   /** userId → the peer as last seen and when it vanished from the room while still on the roster. */
   private readonly ghosts = signal<ReadonlyMap<string, { peer: RoomPeer; since: number }>>(new Map());
   private readonly clock = signal(Date.now());
@@ -522,16 +521,6 @@ export class VoiceRoomPage {
       this.toast.show(`Disconnected ${card.name} from voice`);
     } catch (e) {
       this.toast.show(ApiError.from(e).message, 'warn');
-    }
-  }
-
-  toggleLocalMute(userId: string): void {
-    const v = this.media.volumeOf(userId);
-    if (v === 0) {
-      this.media.setVolume(userId, this.restoreVolume.get(userId) ?? 1);
-    } else {
-      this.restoreVolume.set(userId, v);
-      this.media.setVolume(userId, 0);
     }
   }
 

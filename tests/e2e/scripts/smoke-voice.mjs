@@ -67,6 +67,31 @@ await owner.locator('.pcard.talk', { hasText: 'Friend' }).waitFor({ timeout: 150
 check(true, 'owner sees friend speaking (fake microphone audio flows through the SFU)');
 await owner.screenshot({ path: `${outDir}/voice-owner.png` });
 
+// 3b. Right-click a person in the sidebar voice list → menu with their volume (like Discord), applied to the call.
+await owner.locator('.vp[role=group]', { hasText: 'Friend' }).click({ button: 'right' });
+const userMenu = owner.getByRole('menu', { name: 'Friend options' });
+await userMenu.waitFor();
+await userMenu.getByRole('slider', { name: 'Friend volume' }).fill('150');
+const volTag = (pct) => owner.locator('.pcard', { hasText: 'Friend' }).locator('.tag.mono', { hasText: new RegExp(`^\s*${pct}%\s*$`) }).waitFor({ timeout: 5000 });
+await volTag(150);
+check(true, 'right-click menu in the sidebar sets Friend to 150%');
+await userMenu.getByRole('menuitemcheckbox', { name: 'Mute for me' }).click();
+await volTag(0);
+check(true, '"Mute for me" silences Friend');
+await userMenu.getByRole('menuitemcheckbox', { name: 'Mute for me' }).click();
+await volTag(150);
+check(true, 'unmuting restores the 150% volume');
+await owner.keyboard.press('Escape');
+await userMenu.waitFor({ state: 'detached' });
+// Same menu from the member list.
+await owner.locator('[role=listitem] button', { hasText: '@friend' }).click({ button: 'right' });
+await userMenu.waitFor();
+check((await userMenu.getByRole('slider', { name: 'Friend volume' }).inputValue()) === '150', 'member list right-click opens the same menu');
+await owner.waitForTimeout(400); // let the fade-in finish
+await owner.screenshot({ path: `${outDir}/voice-user-menu.png` });
+await userMenu.getByRole('slider', { name: 'Friend volume' }).fill('100');
+await owner.keyboard.press('Escape');
+
 // 4. Mute → other side sees muted badge and no speaking ring.
 const dock = friend.getByRole('toolbar', { name: 'Voice controls' });
 await dock.getByRole('button', { name: 'Mute', exact: true }).click();

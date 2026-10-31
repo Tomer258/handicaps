@@ -81,7 +81,7 @@ const MY_STATUS: { id: PreferredStatus; label: string; color: string }[] = [
               @if (v.canMention) {
                 <button class="btn pri" style="flex: 1" (click)="mention(v.login)">Mention</button>
               }
-              <button class="btn sec" [attr.aria-pressed]="v.localMuted" (click)="toggleMute(v.userId)" [title]="v.localMuted ? 'Hear their voice again' : 'Mute their voice for you'">
+              <button class="btn sec" [attr.aria-pressed]="v.localMuted" (click)="media.toggleLocalMute(v.userId)" [title]="v.localMuted ? 'Hear their voice again' : 'Mute their voice for you'">
                 {{ v.localMuted ? 'Unmute' : 'Mute' }}
               </button>
               <button class="btn sec" [attr.aria-pressed]="v.soundsMuted" (click)="media.setActorSoundMuted(v.userId, !v.soundsMuted)" title="Mute their soundboard sounds" style="color: var(--sb)">
@@ -107,8 +107,6 @@ export class ProfilePopover {
   private readonly dialog = inject(Dialog);
   private readonly card = viewChild<ElementRef<HTMLElement>>('card');
   readonly myStatus = MY_STATUS;
-  /** Remembered voice volume to restore on "Unmute". */
-  private readonly restore = new Map<string, number>();
 
   readonly view = computed(() => {
     const req = this.profiles.open();
@@ -164,16 +162,6 @@ export class ProfilePopover {
       if (el) queueMicrotask(() => el.focus());
     });
     this.session.onTeardown(() => this.profiles.open.set(null));
-  }
-
-  toggleMute(userId: string): void {
-    const v = this.media.volumeOf(userId);
-    if (v === 0) {
-      this.media.setVolume(userId, this.restore.get(userId) ?? 1);
-    } else {
-      this.restore.set(userId, v);
-      this.media.setVolume(userId, 0);
-    }
   }
 
   mention(login: string): void {
