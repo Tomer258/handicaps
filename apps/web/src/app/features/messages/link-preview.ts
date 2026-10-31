@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, Injectable, computed, inject, input, signal } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
 import { SessionService } from '../../core/auth/session.service';
+import { MediaSessionService } from '../../core/media/media-session.service';
 import { Icon } from '../../shared/ui/icon';
+import { WatchTogether } from '../voice/watch-together';
 
 export interface LinkPreview {
   url: string;
@@ -91,6 +93,11 @@ export class LinkPreviews {
               @if (p.youtubeId) { <span class="lp-play" aria-hidden="true"><hx-icon name="play" /></span> }
             </a>
           }
+          @if (p.youtubeId && media.connected()) {
+            <button class="btn sec" style="align-self: flex-start; height: 30px; margin-top: 6px; font-size: 12.5px" (click)="together.start(url())">
+              <hx-icon name="tv" size="sm" />Watch together in the call
+            </button>
+          }
         </div>
       }
     }
@@ -99,6 +106,8 @@ export class LinkPreviews {
 export class LinkPreviewCard {
   readonly url = input.required<string>();
   private readonly previews = inject(LinkPreviews);
+  readonly media = inject(MediaSessionService);
+  readonly together = inject(WatchTogether);
   readonly preview = computed(() => this.previews.get(this.url()) ?? null);
   readonly broken = signal(false);
 

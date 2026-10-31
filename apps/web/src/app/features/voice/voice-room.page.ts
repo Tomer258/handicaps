@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
 import { ApiError } from '../../core/api/api-error';
 import { SessionService } from '../../core/auth/session.service';
@@ -16,6 +16,7 @@ import { WorkspaceStore } from '../workspaces/workspace.store';
 import { StreamTile } from './stream-tile';
 import { StreamView } from './stream-view';
 import { VoicePresenceStore } from './voice-presence.store';
+import { WatchTogether } from './watch-together';
 
 interface Card {
   peer: RoomPeer;
@@ -88,6 +89,10 @@ const GHOST_SHOW_AFTER_MS = 1_500;
             }
           </div>
         } @else {
+          @if (together.active() && !watching()) {
+            <!-- The shared YouTube player (hx-watch-player in AppShell) is laid over this box. -->
+            <div #wtSlot class="wt-slot" aria-hidden="true"><div></div></div>
+          }
           @if (watching()) {
             <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 96px; background: #050608">
               <hx-stream-view [streams]="shownStreams()" [(primaryKey)]="primaryKey" [layout]="effectiveLayout()" (layoutChange)="streamLayout.set($event)" />
@@ -208,6 +213,8 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                       [disabled]="!media.canScreen() || media.sharing() === 'starting' || shareBlocked()" (click)="shareClick()">
                 <hx-icon [name]="media.sharing() === 'live' ? 'screen-off' : 'screen'" size="lg" />
               </button>
+              <button class="dbtn" [class.on]="!!together.active()" aria-label="Watch together" [attr.aria-pressed]="!!together.active()"
+                      title="Watch together (YouTube)" (click)="together.dialogOpen.set(true)"><hx-icon name="tv" size="lg" /></button>
               <button class="dbtn sb" [class.on]="sbOpen()" aria-label="Soundboard" [attr.aria-pressed]="sbOpen()" title="Soundboard"
                       (click)="sbOpen.set(!sbOpen())"><hx-icon name="soundboard" size="lg" /></button>
               <span style="width: 1px; height: 28px; background: var(--line2)"></span>
@@ -288,6 +295,8 @@ export class VoiceRoomPage {
   private readonly toast = inject(ToastService);
   private readonly session = inject(SessionService);
   private readonly profiles = inject(ProfileService);
+  readonly together = inject(WatchTogether);
+  private readonly wtSlot = viewChild<ElementRef<HTMLElement>>('wtSlot');
 
   readonly menu = signal<{ card: Card; x: number; y: number } | null>(null);
   // Shared with the sidebar voice panel; ServerView renders the soundboard popover and Go-live dialog.
@@ -385,6 +394,14 @@ export class VoiceRoomPage {
   });
 
   constructor() {
+    // Lend the watch-together player this page's slot (only the room I'm in has one).
+    effect(() => {
+      const el = this.wtSlot()?.nativeElement ?? null;
+      untracked(() => this.together.slot.set(el));
+    });
+    inject(DestroyRef).onDestroy(() => {
+      if (this.together.slot() === this.wtSlot()?.nativeElement || !this.together.slot()?.isConnected) this.together.slot.set(null);
+    });
     // Going live from this page opens my own stream, so I can see what everyone else sees.
     let wasLive = false;
     effect(() => {

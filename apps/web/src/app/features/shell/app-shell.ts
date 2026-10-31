@@ -9,6 +9,7 @@ import { LayoutService } from './layout.service';
 import { ToastHost } from './toast-host';
 import { ProfilePopover } from '../profile/profile-popover';
 import { UserMenu } from '../profile/user-menu';
+import { WatchPlayer } from '../voice/watch-together';
 import { CameraProblemDialog } from '../voice/camera-problem.dialog';
 import { Notifier } from '../notifications/notifier.service';
 import { ChatStore } from '../messages/chat.store';
@@ -22,7 +23,7 @@ import { ServerBadges } from './server-badges.service';
 import { serverIconUrl, short } from '../../shared/ui/server-icon';
 @Component({
   selector: 'hx-app-shell',
-  imports: [RouterOutlet, RouterLink, Icon, ToastHost, CameraProblemDialog, ProfilePopover, UserMenu],
+  imports: [RouterOutlet, RouterLink, Icon, ToastHost, CameraProblemDialog, ProfilePopover, UserMenu, WatchPlayer],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'onKey($event)' },
   template: `
@@ -63,6 +64,7 @@ import { serverIconUrl, short } from '../../shared/ui/server-icon';
       <hx-camera-problem />
       <hx-profile-popover />
       <hx-user-menu />
+      <hx-watch-player />
 
       @if (session.expired()) {
         <div class="scrim" role="alertdialog" aria-modal="true" aria-labelledby="expired-title">

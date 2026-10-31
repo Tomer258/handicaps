@@ -37,6 +37,27 @@ export interface NotificationSignal {
   actorUserId: string | null;
 }
 
+export interface WatchState {
+  serverId: string;
+  channelId: string;
+  videoId: string;
+  title: string | null;
+  playing: boolean;
+  /** Seconds at updatedAt; add the elapsed time while playing. */
+  position: number;
+  updatedAt: string;
+  version: number;
+  startedBy: string;
+  controlledBy: string;
+  serverNow: string;
+}
+
+export interface WatchSignal {
+  serverId: string;
+  channelId: string;
+  state: WatchState | null;
+}
+
 export interface VoiceStateSignal {
   serverId: string;
   channelId: string;
@@ -101,6 +122,7 @@ export class RealtimeService {
   private readonly soundCatalogHandlers = new Set<Handler<{ serverId: string; soundId: string }>>();
   private readonly soundPlaybackHandlers = new Set<Handler<SoundPlayback>>();
   private readonly voicePingHandlers = new Set<Handler<VoicePing>>();
+  private readonly watchHandlers = new Set<Handler<WatchSignal>>();
 
   constructor() {
     effect(() => {
@@ -132,6 +154,11 @@ export class RealtimeService {
 
   onVoicePing(h: Handler<VoicePing>): void {
     this.voicePingHandlers.add(h);
+  }
+
+  /** Watch together: the player of a voice channel changed (state null = stopped). */
+  onWatch(h: Handler<WatchSignal>): void {
+    this.watchHandlers.add(h);
   }
 
   /** Fires after every (re)connect and after a policy change cleared server-side subscriptions. */
@@ -195,6 +222,7 @@ export class RealtimeService {
     conn.on('soundCatalogChanged', (c: { serverId: string; soundId: string }) => this.soundCatalogHandlers.forEach((h) => h(c)));
     conn.on('soundPlaybackChanged', (p: SoundPlayback) => this.soundPlaybackHandlers.forEach((h) => h(p)));
     conn.on('voicePing', (p: VoicePing) => this.voicePingHandlers.forEach((h) => h(p)));
+    conn.on('watchChanged', (w: WatchSignal) => this.watchHandlers.forEach((h) => h(w)));
     conn.on('presenceChanged', (p: { userId: string; status: PresenceStatus }) => this.presence.set(p.userId, p.status));
     conn.on('memberUpdated', (m: { userId: string; displayName: string; avatarHue: number; avatarAssetId: string | null }) => {
       this.workspace.patchMember(m.userId, { displayName: m.displayName, avatarHue: m.avatarHue, avatarAssetId: m.avatarAssetId });

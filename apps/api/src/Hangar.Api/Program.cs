@@ -72,6 +72,9 @@ builder.Services.AddHttpClient(LinkPreviewService.ClientName, c =>
     .ConfigurePrimaryHttpMessageHandler(sp => SafeHttp.CreateHandler(sp.GetRequiredService<IOptions<LinkPreviewOptions>>().Value.AllowPrivateAddresses))
     .SetHandlerLifetime(TimeSpan.FromMinutes(10));
 builder.Services.AddSingleton<LinkPreviewService>();
+builder.Services.AddSingleton<WatchTogetherStore>();
+builder.Services.AddScoped<WatchTogetherService>();
+builder.Services.AddHostedService<WatchTogetherSweeper>();
 builder.Services.AddSignalR(o =>
 {
     o.AddFilter<SessionHubFilter>();
@@ -189,6 +192,7 @@ api.MapAuth();
 api.MapWorkspaces();
 api.MapMessages();
 api.MapLinkPreviews();
+api.MapWatchTogether();
 api.MapVoice();
 api.MapSoundboard();
 api.MapFiles();

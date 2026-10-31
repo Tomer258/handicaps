@@ -37,6 +37,8 @@ export const ICONS = {
   'paperclip': `<path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/>`,
   'pin': `<path d="M9 4h6l-1 6 4 3H6l4-3z"/><path d="M12 13v8"/>`,
   'pip': `<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/>`,
+  'tv': `<rect x="3" y="7" width="18" height="13" rx="2"/><path d="m8 3 4 4 4-4"/>`,
+  'pause': `<path d="M8 5v14M16 5v14"/>`,
   'play': `<path d="M7 4v16l13-8z"/>`,
   'plus': `<path d="M12 5v14M5 12h14"/>`,
   'reply': `<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v4"/>`,
