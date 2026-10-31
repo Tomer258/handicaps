@@ -14,6 +14,7 @@ import { openUserSettings } from '../settings/settings.dialog';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { ProfileService } from './profile.service';
+import { DirectMessages } from '../messages/dms';
 
 const WIDTH = 320;
 const STATUS_LABEL = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Offline' } as const;
@@ -77,9 +78,10 @@ const MY_STATUS: { id: PreferredStatus; label: string; color: string }[] = [
                        (input)="media.setVolume(v.userId, +$any($event.target).value / 100)" [attr.aria-label]="v.name + ' volume'" />
               </div>
             }
-            <div style="display: flex; gap: 8px; margin-top: 14px">
+            <button class="btn pri" style="width: 100%; margin-top: 14px" (click)="message(v.userId)"><hx-icon name="message" size="sm" />Message</button>
+            <div style="display: flex; gap: 8px; margin-top: 8px">
               @if (v.canMention) {
-                <button class="btn pri" style="flex: 1" (click)="mention(v.login)">Mention</button>
+                <button class="btn sec" style="flex: 1" (click)="mention(v.login)">Mention</button>
               }
               <button class="btn sec" [attr.aria-pressed]="v.localMuted" (click)="media.toggleLocalMute(v.userId)" [title]="v.localMuted ? 'Hear their voice again' : 'Mute their voice for you'">
                 {{ v.localMuted ? 'Unmute' : 'Mute' }}
@@ -105,6 +107,7 @@ export class ProfilePopover {
   private readonly chat = inject(ChatStore);
   private readonly router = inject(Router);
   private readonly dialog = inject(Dialog);
+  private readonly dms = inject(DirectMessages);
   private readonly card = viewChild<ElementRef<HTMLElement>>('card');
   readonly myStatus = MY_STATUS;
 
@@ -162,6 +165,11 @@ export class ProfilePopover {
       if (el) queueMicrotask(() => el.focus());
     });
     this.session.onTeardown(() => this.profiles.open.set(null));
+  }
+
+  message(userId: string): void {
+    this.profiles.open.set(null);
+    void this.dms.open([userId]);
   }
 
   mention(login: string): void {

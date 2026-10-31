@@ -82,7 +82,7 @@ public sealed class HangarHub(
         var info = registry.Get(Context.ConnectionId);
         if (info is null || !info.Channels.ContainsKey(channelId)) return;
         var channel = await db.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.Id == channelId);
-        if (channel is null || channel.Type != ChannelType.Text) return;
+        if (channel is null || !ChannelTypes.IsText(channel.Type)) return;
         var mask = await permissions.ChannelPermissionsAsync(info.UserId, channel, Context.ConnectionAborted);
         if (!mask.HasFlag(Permission.SendMessages)) return;
         await presence.TypingAsync(channel, info.UserId, Context.ConnectionId);

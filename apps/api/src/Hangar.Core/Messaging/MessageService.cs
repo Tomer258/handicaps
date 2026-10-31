@@ -42,7 +42,7 @@ public sealed partial class MessageService(
     public async Task<MessagePageDto> HistoryAsync(Guid userId, Guid channelId, string? before, int? limit, CancellationToken ct)
     {
         var (channel, _) = await permissions.RequireChannelAsync(userId, channelId, Permission.ViewChannel, ct);
-        if (channel.Type != ChannelType.Text) throw AppProblem.BadRequest("channel.not_text", "Not a text channel.");
+        if (!ChannelTypes.IsText(channel.Type)) throw AppProblem.BadRequest("channel.not_text", "Not a text channel.");
         var beforeSeq = Guard.Cursor(before, "before") ?? long.MaxValue;
         var take = Guard.Limit(limit, 50, 100);
 
@@ -147,7 +147,7 @@ public sealed partial class MessageService(
         var visible = await permissions.VisibleChannelsAsync(userId, serverId, ct);
         var ids = visible.Keys.ToList();
         var channels = await db.Channels.AsNoTracking()
-            .Where(c => ids.Contains(c.Id) && c.Type == ChannelType.Text)
+            .Where(c => ids.Contains(c.Id) && (c.Type == ChannelType.Text || c.Type == ChannelType.Direct || c.Type == ChannelType.Group))
             .Select(c => new { c.Id, Last = c.NextMessageSequence - 1 }).ToListAsync(ct);
         var reads = await db.ChannelReadPositions.AsNoTracking()
             .Where(r => r.UserId == userId && ids.Contains(r.ChannelId))
@@ -190,7 +190,7 @@ public sealed partial class MessageService(
         var now = clock.GetUtcNow();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var channel = await LockChannelAsync(channelId, ct);
-        if (channel.Type != ChannelType.Text) throw AppProblem.BadRequest("channel.not_text", "Not a text channel.");
+        if (!ChannelTypes.IsText(channel.Type)) throw AppProblem.BadRequest("channel.not_text", "Not a text channel.");
 
         if (req.ReplyToId is { } replyId && !await db.Messages.AnyAsync(m => m.Id == replyId && m.ChannelId == channelId, ct))
             throw AppProblem.BadRequest("validation.replyTo", "Reply target must be in the same channel.");
@@ -226,7 +226,11 @@ public sealed partial class MessageService(
         foreach (var uid in mentioned) message.Mentions.Add(new MessageMention { MentionedUserId = uid });
         db.Messages.Add(message);
 
-        foreach (var uid in mentioned)
+        // Direct messages notify every other participant, like a mention does.
+        var notified = new HashSet<Guid>(mentioned);
+        if (ChannelTypes.IsDm(channel.Type))
+            notified.UnionWith(await db.ChannelMembers.Where(m => m.ChannelId == channelId && m.UserId != userId).Select(m => m.UserId).ToListAsync(ct));
+        foreach (var uid in notified)
             db.Notifications.Add(new Notification
             {
                 Id = Guid.CreateVersion7(), UserId = uid, Type = NotificationTypes.Mention, MessageId = message.Id,

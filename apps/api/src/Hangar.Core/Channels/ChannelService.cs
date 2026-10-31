@@ -26,7 +26,7 @@ public sealed partial class ChannelService(HangarDbContext db, PermissionService
             "voice" => ChannelType.Voice,
             _ => throw AppProblem.BadRequest("validation.type", "type must be text or voice."),
         };
-        var count = await db.Channels.CountAsync(c => c.ServerId == serverId && c.ArchivedAt == null, ct);
+        var count = await db.Channels.CountAsync(c => c.ServerId == serverId && c.ArchivedAt == null && (c.Type == ChannelType.Text || c.Type == ChannelType.Voice), ct);
         if (count >= 100) throw AppProblem.Conflict("channel.limit", "Channel limit reached.");
 
         var maxPos = await db.Channels.Where(c => c.ServerId == serverId).MaxAsync(c => (int?)c.Position, ct) ?? -1;

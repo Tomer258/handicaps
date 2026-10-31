@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ApiError } from '../../core/api/api-error';
-import { Channel } from '../../core/api/models';
+import { Channel, isDm } from '../../core/api/models';
+import { DirectMessages } from './dms';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { Icon } from '../../shared/ui/icon';
 import { Dialog } from '@angular/cdk/dialog';
@@ -26,8 +27,11 @@ import { PinsPanel } from './pins-panel';
       <header style="height: 52px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line)">
         <button class="ibtn only-m" aria-label="Open channels" (click)="layout.navOpen.set(true)"><hx-icon name="menu" /></button>
         <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1">
-          <hx-icon name="hash" style="color: var(--tx3)" />
-          <h1 class="disp" style="margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap">{{ ch.name }}</h1>
+          <hx-icon [name]="ch.type === 'group' ? 'users' : ch.type === 'direct' ? 'message' : 'hash'" style="color: var(--tx3)" />
+          <h1 class="disp" style="margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis" dir="auto">{{ ch.name }}</h1>
+          @if (ch.type === 'group') {
+            <span class="hide-m mono" style="font-size: 11px; color: var(--tx3); white-space: nowrap">{{ ch.participants?.length ?? 0 }} people</span>
+          }
           @if (ch.topic) {
             <span class="hide-m" style="width: 1px; height: 20px; background: var(--line2)"></span>
             <span class="hide-m" style="font-size: 13px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ ch.topic }}</span>
@@ -41,7 +45,12 @@ import { PinsPanel } from './pins-panel';
           <hx-icon name="search" size="sm" /><span style="flex: 1">Search</span><span class="kbd" style="height: 20px; font-size: 10.5px">Ctrl K</span>
         </button>
         <button class="ibtn only-m" aria-label="Search messages" (click)="layout.searchOpen.set(!layout.searchOpen())"><hx-icon name="search" /></button>
-        @if (canChannelSettings()) {
+        @if (ch.type === 'group') {
+          <button class="ibtn" aria-label="Add people" title="Add people" (click)="dms.pick(ch)"><hx-icon name="user-plus" /></button>
+          <button class="ibtn" aria-label="Rename group" title="Rename group" (click)="renameGroup(ch)"><hx-icon name="edit" /></button>
+          <button class="ibtn" aria-label="Leave group" title="Leave group" (click)="leaveGroup(ch)" style="color: var(--danger)"><hx-icon name="logout" /></button>
+        }
+        @if (!isDm(ch) && canChannelSettings()) {
           <button class="ibtn" aria-label="Channel settings" title="Channel settings" (click)="channelSettings()"><hx-icon name="settings" /></button>
         }
         <button class="ibtn" [class.on]="ui.pinsOpen()" aria-label="Pinned messages" [attr.aria-pressed]="ui.pinsOpen()" title="Pinned messages"
@@ -56,7 +65,7 @@ import { PinsPanel } from './pins-panel';
           <div data-testid="drop-zone" style="position: absolute; inset: 12px; border-radius: 18px; border: 2px dashed var(--accent); background: color-mix(in oklab,var(--bg2) 82%,var(--accent)); display: grid; place-items: center; z-index: 20; pointer-events: none">
             <div style="text-align: center">
               <hx-icon name="upload" style="width: 40px; height: 40px; color: var(--accent-tx)" />
-              <div class="disp" style="font-size: 22px; font-weight: 700; margin-top: 8px">Drop to share in #{{ ch.name }}</div>
+              <div class="disp" style="font-size: 22px; font-weight: 700; margin-top: 8px">Drop to share in {{ isDm(ch) ? '' : '#' }}{{ ch.name }}</div>
               <div style="color: var(--tx2); font-size: 13px">Images up to 10 MB · text files up to 1 MB</div>
             </div>
           </div>
@@ -135,6 +144,8 @@ export class TextChannelPage implements OnDestroy {
 
   readonly ui = inject(ChannelUi);
   readonly layout = inject(LayoutService);
+  readonly dms = inject(DirectMessages);
+  readonly isDm = isDm;
   private readonly store = inject(WorkspaceStore);
   private readonly dialog = inject(Dialog);
   readonly canChannelSettings = computed(() => canOpenChannelSettings(this.store));
@@ -220,5 +231,14 @@ export class TextChannelPage implements OnDestroy {
     const m = this.ui.deleting();
     this.ui.deleting.set(null);
     if (m) await this.chat.remove(m);
+  }
+
+  renameGroup(ch: Channel): void {
+    const name = prompt('Group name (empty to use everyone\u2019s names)', ch.participants && ch.name ? ch.name : '');
+    if (name !== null) void this.dms.rename(ch.id, name.trim());
+  }
+
+  leaveGroup(ch: Channel): void {
+    if (confirm(`Leave ${ch.name}? You will not see it again unless someone adds you back.`)) void this.dms.leave(ch);
   }
 }

@@ -27,6 +27,7 @@ public sealed class HangarDbContext(DbContextOptions<HangarDbContext> options) :
     public DbSet<MemberRole> MemberRoles => Set<MemberRole>();
     public DbSet<Channel> Channels => Set<Channel>();
     public DbSet<ChannelPermission> ChannelPermissions => Set<ChannelPermission>();
+    public DbSet<ChannelMember> ChannelMembers => Set<ChannelMember>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
     public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
@@ -114,8 +115,21 @@ public sealed class HangarDbContext(DbContextOptions<HangarDbContext> options) :
             e.Property(x => x.Name).HasMaxLength(48);
             e.Property(x => x.Topic).HasMaxLength(240);
             e.Property(x => x.Version).IsRowVersion();
-            e.ToTable(t => t.HasCheckConstraint("ck_channels_type", "type IN (0, 1)"));
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("ck_channels_type", "type IN (0, 1, 2, 3)");
+                t.HasCheckConstraint("ck_channels_dm_key", "(type = 2) = (dm_key IS NOT NULL)");
+            });
+            e.Property(x => x.DmKey).HasMaxLength(73);
+            e.HasIndex(x => x.DmKey).IsUnique().HasFilter("dm_key IS NOT NULL");
             e.HasOne<Server>().WithMany().HasForeignKey(x => x.ServerId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<ChannelMember>(e =>
+        {
+            e.HasKey(x => new { x.ChannelId, x.UserId });
+            e.HasIndex(x => x.UserId);
+            e.HasOne<Channel>().WithMany().HasForeignKey(x => x.ChannelId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ChannelPermission>(e =>
         {

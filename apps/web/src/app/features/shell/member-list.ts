@@ -7,7 +7,8 @@ import { MediaSessionService } from '../../core/media/media-session.service';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { Avatar } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
-import { Member, Perm } from '../../core/api/models';
+import { Member, Perm, isDm } from '../../core/api/models';
+import { ChatStore } from '../messages/chat.store';
 import { ago } from '../../shared/ui/time-ago';
 import { ProfileService } from '../profile/profile.service';
 import { UserMenuService } from '../profile/user-menu';
@@ -88,6 +89,15 @@ export class MemberList {
   private readonly router = inject(Router);
   readonly profiles = inject(ProfileService);
   readonly menus = inject(UserMenuService);
+  private readonly chat = inject(ChatStore);
+
+  /** In a direct or group message, only the people in it. */
+  private readonly people = computed(() => {
+    const c = this.store.channel(this.chat.activeChannelId());
+    if (!isDm(c)) return this.store.members();
+    const ids = new Set(c!.participants ?? []);
+    return this.store.members().filter((m) => ids.has(m.userId));
+  });
 
   /** States 04: nobody else is online — say who was here last and offer to wait in voice. */
   readonly quiet = computed(() => {
@@ -121,7 +131,7 @@ export class MemberList {
     const server = this.store.server();
     const hoisted = (server?.roles ?? []).filter((r) => r.hoist && !r.isDefault).sort((a, b) => b.position - a.position);
     const byUser = this.voice.byUser();
-    const decorated = this.store.members().map((m) => ({
+    const decorated = this.people().map((m) => ({
       ...m,
       status: this.presence.status(m.userId),
       live: !!byUser.get(m.userId)?.screen,

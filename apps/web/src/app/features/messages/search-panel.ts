@@ -58,7 +58,7 @@ const dateFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numer
             <span style="min-width: 0; flex: 1">
               <span style="display: flex; gap: 8px; align-items: baseline">
                 <b style="font-size: 13px">{{ r.name }}</b>
-                <span class="mono" style="font-size: 11px; color: var(--tx3); white-space: nowrap">#{{ r.channel }} · {{ r.time }}</span>
+                <span class="mono" style="font-size: 11px; color: var(--tx3); white-space: nowrap">{{ r.channel }} · {{ r.time }}</span>
               </span>
               <span dir="auto" style="display: block; font-size: 13px; color: var(--tx2); overflow-wrap: anywhere">@for (s of r.parts; track $index) {@if (s.hit) {<mark style="background: color-mix(in oklab,var(--accent) 35%,transparent); color: inherit; border-radius: 3px">{{ s.text }}</mark>} @else {{{ s.text }}}}@if (r.files) {<span style="color: var(--tx3)"> · 📎 {{ r.files }}</span>}</span>
             </span>
@@ -123,7 +123,7 @@ export class SearchPanel implements OnDestroy {
         color: avatarColor(member?.avatarHue ?? 210),
         ini: initials(name),
         avatar: avatarUrl(member?.avatarAssetId),
-        channel: this.store.channel(m.channelId)?.name ?? 'unknown',
+        channel: ((c) => (c ? (c.type === 'text' ? '#' : '') + c.name : '#unknown'))(this.store.channel(m.channelId)),
         time: dateFmt.format(new Date(m.createdAt)),
         parts: highlight(previewText(m.body, byId), needle),
         files: m.attachments.length ? (m.attachments.length === 1 ? m.attachments[0].name : `${m.attachments.length} files`) : '',

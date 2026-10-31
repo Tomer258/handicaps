@@ -94,12 +94,29 @@ public sealed class OutboxDispatcher(
 
                 if (e.Type == ChannelEventTypes.MessageCreated || e.Type == ChannelEventTypes.MessageUpdated)
                     await NotifyMentionsAsync(e, envelope.Payload, channel, Allowed, ct);
+                if (e.Type == ChannelEventTypes.MessageCreated && ChannelTypes.IsDm(channel.Type))
+                    await NotifyDirectAsync(db, e, channel, Allowed, ct);
             }
             e.DispatchedAt = DateTimeOffset.UtcNow;
             e.DispatchAttempts++;
         }
         await db.SaveChangesAsync(ct);
         return batch.Count;
+    }
+
+    /// <summary>Every new direct message notifies the other participants (type "direct"), mentioned or not.</summary>
+    private async Task NotifyDirectAsync(HangarDbContext db, ChannelEvent e, Channel channel, Func<Guid, Channel, Task<bool>> allowed, CancellationToken ct)
+    {
+        var others = await db.ChannelMembers.AsNoTracking().Where(m => m.ChannelId == channel.Id && m.UserId != e.ActorUserId)
+            .Select(m => m.UserId).ToListAsync(ct);
+        foreach (var uid in others)
+        {
+            if (!await allowed(uid, channel)) continue;
+            var conns = registry.ForUser(uid).Select(c => c.ConnectionId).ToList();
+            if (conns.Count > 0)
+                await hub.Clients.Clients(conns).SendAsync("notificationCreated",
+                    new { type = "direct", channelId = e.ChannelId, serverId = e.ServerId, messageId = e.EntityId, actorUserId = e.ActorUserId }, ct);
+        }
     }
 
     private async Task NotifyMentionsAsync(ChannelEvent e, JsonElement payload, Channel channel,

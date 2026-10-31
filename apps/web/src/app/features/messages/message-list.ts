@@ -53,19 +53,19 @@ const GROUP_WINDOW_MS = 7 * 60_000;
         } @else if (rows().length) {
           <div style="padding: 24px 20px 8px">
             <div style="width: 56px; height: 56px; border-radius: 18px; background: var(--bg3); border: 1px solid var(--line); display: grid; place-items: center; color: var(--accent-tx)">
-              <hx-icon name="hash" size="lg" />
+              <hx-icon [name]="icon()" size="lg" />
             </div>
-            <h2 class="disp" style="margin: 12px 0 4px; font-size: 22px; font-weight: 700">Welcome to #{{ channel().name }}</h2>
+            <h2 class="disp" style="margin: 12px 0 4px; font-size: 22px; font-weight: 700">Welcome to {{ prefix() }}{{ channel().name }}</h2>
             <p style="margin: 0; color: var(--tx2)">This is the start of the channel.@if (channel().topic) { {{ channel().topic }}}</p>
           </div>
         }
         @if (!rows().length && !chatState().hasMore) {
           <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px; text-align: center">
             <div style="position: relative; width: 96px; height: 96px; border-radius: 28px; background: var(--bg3); border: 1px solid var(--line); display: grid; place-items: center; color: var(--accent-tx)">
-              <hx-icon name="hash" style="width: 40px; height: 40px; stroke-width: 1.4" />
+              <hx-icon [name]="icon()" style="width: 40px; height: 40px; stroke-width: 1.4" />
               <span style="position: absolute; right: -8px; top: -8px; width: 26px; height: 26px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center"><hx-icon name="plus" size="sm" /></span>
             </div>
-            <h2 class="disp" style="margin: 0; font-size: 24px; font-weight: 700">This is the start of #{{ channel().name }}</h2>
+            <h2 class="disp" style="margin: 0; font-size: 24px; font-weight: 700">This is the start of {{ prefix() }}{{ channel().name }}</h2>
             <p style="margin: 0; max-width: 380px; color: var(--tx2)">Nobody has posted here yet. Share a link or write the first message — it is a blank page.</p>
             @if (canSend()) {
               <button class="btn pri" (click)="ui.focusComposer()">Write the first message</button>
@@ -93,6 +93,8 @@ const GROUP_WINDOW_MS = 7 * 60_000;
 })
 export class MessageList {
   readonly channel = input.required<Channel>();
+  readonly prefix = computed(() => (this.channel().type === 'text' ? '#' : this.channel().type === 'direct' ? '@' : ''));
+  readonly icon = computed(() => (this.channel().type === 'group' ? 'users' : this.channel().type === 'direct' ? 'message' : 'hash'));
   /** Placeholder rows while history loads (widths vary so it reads as messages, not a table). */
   readonly skeleton = [
     { name: 30, text: 85, media: false },

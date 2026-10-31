@@ -13,6 +13,7 @@ import {
   seqCmp,
   seqMax,
   seqNext,
+  isDm,
 } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
@@ -83,7 +84,7 @@ export class ChatStore {
     this.realtime.onTyping((t) => this.markTyping(t.channelId, t.userId));
 
     // Channel set changed (server switch, channel created/archived, policy reload) → (re)subscribe.
-    const channelKey = computed(() => this.workspace.textChannels().map((c) => c.id).join(','));
+    const channelKey = computed(() => this.workspace.messageChannels().map((c) => c.id).join(','));
     effect(() => {
       channelKey();
       untracked(() => void this.resubscribe());
@@ -262,7 +263,7 @@ export class ChatStore {
 
   private async resubscribe(): Promise<void> {
     if (!this.realtime.connected) return;
-    const ids = this.workspace.textChannels().map((c) => c.id);
+    const ids = this.workspace.messageChannels().map((c) => c.id);
     const wanted = new Set(ids);
     for (const id of this.subscribed) if (!wanted.has(id)) this.forget(id);
     this.subscribed = wanted;
@@ -407,7 +408,7 @@ export class ChatStore {
   }
 
   private countUnread(m: Message): void {
-    this.workspace.patchChannel(m.channelId, { lastMessageSequence: m.messageSequence });
+    this.workspace.patchChannel(m.channelId, { lastMessageSequence: m.messageSequence, lastActivityAt: m.createdAt });
     const known = this.knownLast.get(m.channelId) ?? '0';
     if (seqCmp(m.messageSequence, known) <= 0) return;
     this.knownLast.set(m.channelId, m.messageSequence);
@@ -418,7 +419,7 @@ export class ChatStore {
       return;
     }
     this.badges.setUnread(m.channelId, this.badges.unread(m.channelId) + 1);
-    if ((me && m.mentions.includes(me)) || m.mentionsEveryone) this.badges.setMentions(m.channelId, this.badges.mentions(m.channelId) + 1);
+    if ((me && m.mentions.includes(me)) || m.mentionsEveryone || isDm(this.workspace.channel(m.channelId))) this.badges.setMentions(m.channelId, this.badges.mentions(m.channelId) + 1);
   }
 
   private async markRead(channelId: string): Promise<void> {

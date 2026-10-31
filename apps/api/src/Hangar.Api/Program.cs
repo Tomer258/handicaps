@@ -193,6 +193,7 @@ api.MapWorkspaces();
 api.MapMessages();
 api.MapLinkPreviews();
 api.MapWatchTogether();
+api.MapDirectMessages();
 api.MapVoice();
 api.MapSoundboard();
 api.MapFiles();

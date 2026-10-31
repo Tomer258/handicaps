@@ -30,7 +30,8 @@ export interface VoicePing {
 }
 
 export interface NotificationSignal {
-  type: 'mention';
+  /** direct: a new message in a direct/group conversation I am in. */
+  type: 'mention' | 'direct';
   channelId: string;
   serverId: string;
   messageId: string;

@@ -32,6 +32,8 @@ public sealed class PermissionService(HangarDbContext db)
     public async Task<Permission> ChannelPermissionsAsync(Guid userId, Channel channel, CancellationToken ct)
     {
         var input = await LoadInputAsync(userId, channel.ServerId, ct);
+        if (ChannelTypes.IsDm(channel.Type))
+            return PermissionEvaluator.DmLevel(input, await db.ChannelMembers.AnyAsync(m => m.ChannelId == channel.Id && m.UserId == userId, ct));
         var overrides = await LoadOverridesAsync([channel.Id], ct);
         return PermissionEvaluator.ChannelLevel(input, channel.Type, overrides.GetValueOrDefault(channel.Id) ?? []);
     }
@@ -44,11 +46,16 @@ public sealed class PermissionService(HangarDbContext db)
             .Where(c => c.ServerId == serverId && c.ArchivedAt == null)
             .Select(c => new { c.Id, c.Type }).ToListAsync(ct);
         var overrides = await LoadOverridesAsync(channels.Select(c => c.Id).ToList(), ct);
+        var dmIds = channels.Where(c => ChannelTypes.IsDm(c.Type)).Select(c => c.Id).ToList();
+        var mine = dmIds.Count == 0 ? [] : (await db.ChannelMembers.AsNoTracking()
+            .Where(m => m.UserId == userId && dmIds.Contains(m.ChannelId)).Select(m => m.ChannelId).ToListAsync(ct)).ToHashSet();
 
         var result = new Dictionary<Guid, Permission>();
         foreach (var c in channels)
         {
-            var mask = PermissionEvaluator.ChannelLevel(input, c.Type, overrides.GetValueOrDefault(c.Id) ?? []);
+            var mask = ChannelTypes.IsDm(c.Type)
+                ? PermissionEvaluator.DmLevel(input, mine.Contains(c.Id))
+                : PermissionEvaluator.ChannelLevel(input, c.Type, overrides.GetValueOrDefault(c.Id) ?? []);
             if (mask != Permission.None) result[c.Id] = mask;
         }
         return result;

@@ -16,7 +16,7 @@ import { formatFull, previewText } from './message-text';
     <div class="pop fade" role="dialog" aria-labelledby="pins-title"
          style="position: absolute; right: 12px; top: 8px; width: 360px; max-width: calc(100% - 24px); max-height: 70%; display: flex; flex-direction: column; z-index: 15">
       <div style="display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line)">
-        <b id="pins-title" class="disp" style="flex: 1; font-size: 15px">Pinned in #{{ channel().name }}</b>
+        <b id="pins-title" class="disp" style="flex: 1; font-size: 15px">Pinned in {{ channel().type === 'text' ? '#' : '' }}{{ channel().name }}</b>
         <button class="ibtn" aria-label="Close pins" (click)="ui.pinsOpen.set(false)"><hx-icon name="x" size="sm" /></button>
       </div>
       <div class="scroll" style="padding: 8px">

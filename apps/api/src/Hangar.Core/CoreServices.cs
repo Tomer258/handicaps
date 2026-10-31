@@ -37,6 +37,7 @@ public static class CoreServices
         services.AddScoped<WorkspaceBootstrapper>();
         services.AddScoped<WorkspaceService>();
         services.AddScoped<ChannelService>();
+        services.AddScoped<DmService>();
         services.AddScoped<UserService>();
         services.AddScoped<MessageService>();
         services.AddScoped<RetentionService>();

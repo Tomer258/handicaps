@@ -85,7 +85,7 @@ interface Suggestion {
                  (change)="onPick($event)" data-testid="attach-input" />
         }
         <textarea #box id="composer" class="txt" rows="1" [attr.aria-label]="'Message ' + channel().name" autocomplete="off"
-                  [placeholder]="canSend() ? 'Message #' + channel().name : 'You cannot send messages in this channel'"
+                  [placeholder]="canSend() ? 'Message ' + (channel().type === 'text' ? '#' : channel().type === 'direct' ? '@' : '') + channel().name : 'You cannot send messages in this channel'"
                   [disabled]="!canSend()" [value]="draft()" [maxLength]="maxLength"
                   (input)="onInput()" (keydown)="onKey($event)" (click)="refreshSuggestions()" (blur)="closeSuggestions()" (paste)="onPaste($event)"></textarea>
         @if (draft().length > maxLength - 200) {

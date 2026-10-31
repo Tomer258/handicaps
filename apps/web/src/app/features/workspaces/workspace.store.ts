@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
-import { Channel, Member, Role, ServerDetail, has, Perm } from '../../core/api/models';
+import { Channel, Member, Role, ServerDetail, has, isDm, Perm } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 
 /**
@@ -22,8 +22,20 @@ export class WorkspaceStore {
   readonly loading = this._loading.asReadonly();
 
   readonly serverId = computed(() => this._server()?.id ?? null);
-  readonly channels = computed(() => this._server()?.channels ?? []);
+  /** Direct/group messages carry a display name made from their participants (or the group name). */
+  readonly channels = computed(() => {
+    const list = this._server()?.channels ?? [];
+    if (!list.some(isDm)) return list;
+    const members = this.memberById();
+    const me = this.session.userId();
+    return list.map((c) => (isDm(c) ? { ...c, name: dmTitle(c, members, me) } : c));
+  });
   readonly textChannels = computed(() => this.channels().filter((c) => c.type === 'text'));
+  /** Direct and group messages, most recent first. */
+  readonly dmChannels = computed(() =>
+    this.channels().filter(isDm).sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? '')));
+  /** Every channel that carries messages (subscriptions, unread). */
+  readonly messageChannels = computed(() => this.channels().filter((c) => c.type === 'text' || isDm(c)));
   readonly voiceChannels = computed(() => this.channels().filter((c) => c.type === 'voice'));
   readonly myPermissions = computed(() => this._server()?.myPermissions ?? 0);
   readonly canManageChannels = computed(() => has(this.myPermissions(), Perm.ManageChannels));
@@ -130,4 +142,12 @@ export class WorkspaceStore {
     this._server.update((s) => (s ? { ...s, channels: [...s.channels, ch].sort((a, b) => a.position - b.position) } : s));
     return ch;
   }
+}
+
+/** "Friend" for a direct message; the group name, else "Ana, Ben, Cy" for a group. */
+export function dmTitle(c: Channel, members: Map<string, Member>, me: string | null): string {
+  if (c.type === 'group' && c.name.trim()) return c.name;
+  const others = (c.participants ?? []).filter((id) => id !== me).map((id) => members.get(id)?.displayName ?? 'Someone');
+  if (others.length === 0) return c.type === 'group' ? 'Just you' : 'Someone';
+  return others.join(', ');
 }

@@ -22,7 +22,7 @@ export interface MeResponse {
   sessionId: string;
 }
 
-export type ChannelType = 'text' | 'voice';
+export type ChannelType = 'text' | 'voice' | 'direct' | 'group';
 
 export interface Channel {
   id: string;
@@ -33,6 +33,15 @@ export interface Channel {
   position: number;
   permissions: number;
   lastMessageSequence: string;
+  /** Direct/group messages: who is in it (creation order). */
+  participants?: string[];
+  /** Direct/group messages: newest message (or creation) time, for ordering the list. */
+  lastActivityAt?: string;
+}
+
+/** Direct or group message channel (participants only). */
+export function isDm(c: Pick<Channel, 'type'> | undefined | null): boolean {
+  return c?.type === 'direct' || c?.type === 'group';
 }
 
 export interface Role {

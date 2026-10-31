@@ -92,6 +92,11 @@ namespace Hangar.Core.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DmKey")
+                        .HasMaxLength(73)
+                        .HasColumnType("character varying(73)")
+                        .HasColumnName("dm_key");
+
                     b.Property<long>("MediaGeneration")
                         .HasColumnType("bigint")
                         .HasColumnName("media_generation");
@@ -143,13 +148,43 @@ namespace Hangar.Core.Persistence.Migrations
                     b.HasAlternateKey("ServerId", "Id")
                         .HasName("ak_channels_server_id_id");
 
+                    b.HasIndex("DmKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_channels_dm_key")
+                        .HasFilter("dm_key IS NOT NULL");
+
                     b.HasIndex("ServerId", "Position")
                         .HasDatabaseName("ix_channels_server_id_position");
 
                     b.ToTable("channels", null, t =>
                         {
-                            t.HasCheckConstraint("ck_channels_type", "type IN (0, 1)");
+                            t.HasCheckConstraint("ck_channels_dm_key", "(type = 2) = (dm_key IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_channels_type", "type IN (0, 1, 2, 3)");
                         });
+                });
+
+            modelBuilder.Entity("Hangar.Core.Channels.ChannelMember", b =>
+                {
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("channel_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.HasKey("ChannelId", "UserId")
+                        .HasName("pk_channel_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_channel_members_user_id");
+
+                    b.ToTable("channel_members", (string)null);
                 });
 
             modelBuilder.Entity("Hangar.Core.Channels.ChannelPermission", b =>
@@ -1514,6 +1549,23 @@ namespace Hangar.Core.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_channels_servers_server_id");
+                });
+
+            modelBuilder.Entity("Hangar.Core.Channels.ChannelMember", b =>
+                {
+                    b.HasOne("Hangar.Core.Channels.Channel", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_channel_members_channels_channel_id");
+
+                    b.HasOne("Hangar.Core.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_channel_members_users_user_id");
                 });
 
             modelBuilder.Entity("Hangar.Core.Channels.ChannelPermission", b =>

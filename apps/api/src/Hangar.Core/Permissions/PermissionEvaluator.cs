@@ -33,6 +33,17 @@ public static class PermissionEvaluator
         return mask.HasFlag(Permission.Administrator) ? Permission.All : mask;
     }
 
+    /// <summary>
+    /// Direct/group messages: only participants, and only while active members of the server. Owner/Administrator get no
+    /// bypass (nobody reads other people's DMs); roles still limit sending, attaching and reacting server-wide.
+    /// </summary>
+    public static Permission DmLevel(PolicyInput p, bool isParticipant)
+    {
+        var baseMask = ServerLevel(p);
+        if (!isParticipant || baseMask == Permission.None) return Permission.None;
+        return Permission.ViewChannel | (baseMask & (Permission.SendMessages | Permission.AttachFiles | Permission.AddReactions));
+    }
+
     public static Permission ChannelLevel(PolicyInput p, ChannelType type, IReadOnlyList<ChannelOverride> overrides)
     {
         var baseMask = ServerLevel(p);
@@ -62,7 +73,7 @@ public static class PermissionEvaluator
 
         if (!mask.HasFlag(Permission.ViewChannel)) return Permission.None;
 
-        mask &= type == ChannelType.Text ? ~PermissionSets.VoiceOnly : ~PermissionSets.TextOnly;
+        mask &= ChannelTypes.IsText(type) ? ~PermissionSets.VoiceOnly : ~PermissionSets.TextOnly;
         return mask;
     }
 }

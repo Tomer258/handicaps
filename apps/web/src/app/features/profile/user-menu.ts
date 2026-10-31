@@ -10,6 +10,7 @@ import { Icon } from '../../shared/ui/icon';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 import { ProfileService } from './profile.service';
+import { DirectMessages } from '../messages/dms';
 
 const WIDTH = 240;
 
@@ -52,6 +53,7 @@ export class UserMenuService {
         </div>
         <button class="menu-i" role="menuitem" (click)="profile(v.userId)"><hx-icon name="user" size="sm" /><span style="flex: 1">Profile</span></button>
         @if (!v.isMe) {
+          <button class="menu-i" role="menuitem" (click)="message(v.userId)"><hx-icon name="message" size="sm" /><span style="flex: 1">Message</span></button>
           <div style="padding: 6px 10px">
             <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--tx3); margin-bottom: 6px">
               <span>User volume</span><span class="mono">{{ v.volume }}%</span>
@@ -97,6 +99,7 @@ export class UserMenu {
   private readonly session = inject(SessionService);
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
+  private readonly dms = inject(DirectMessages);
   private readonly menu = viewChild<ElementRef<HTMLElement>>('menu');
 
   readonly view = computed(() => {
@@ -136,6 +139,11 @@ export class UserMenu {
       if (el) queueMicrotask(() => el.focus());
     });
     this.session.onTeardown(() => this.menus.open.set(null));
+  }
+
+  message(userId: string): void {
+    this.menus.open.set(null);
+    void this.dms.open([userId]);
   }
 
   profile(userId: string): void {

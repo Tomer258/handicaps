@@ -9,7 +9,9 @@ namespace Hangar.Core.Workspaces;
 
 public sealed record ServerSummaryDto(Guid Id, string Name, bool IsOwner, Guid? IconAssetId = null);
 
-public sealed record ChannelDto(Guid Id, Guid ServerId, string Type, string Name, string? Topic, int Position, long Permissions, string LastMessageSequence);
+/// <summary>Participants and LastActivityAt are set for direct/group messages only.</summary>
+public sealed record ChannelDto(Guid Id, Guid ServerId, string Type, string Name, string? Topic, int Position, long Permissions, string LastMessageSequence,
+    IReadOnlyList<Guid>? Participants = null, DateTimeOffset? LastActivityAt = null);
 
 public sealed record RoleDto(Guid Id, string Name, long Permissions, bool IsDefault, int Position, string? Color, bool Hoist);
 
@@ -81,8 +83,10 @@ public sealed class WorkspaceService(HangarDbContext db, PermissionService permi
         var roles = await db.Roles.AsNoTracking().Where(r => r.ServerId == serverId).OrderByDescending(r => r.Position)
             .Select(r => new RoleDto(r.Id, r.Name, (long)r.PermissionMask, r.IsDefault, r.Position, r.Color, r.Hoist)).ToListAsync(ct);
 
+        var shown = channels.Where(c => visible.ContainsKey(c.Id)).ToList();
+        var dms = await DmDetailsAsync(shown.Where(c => ChannelTypes.IsDm(c.Type)).Select(c => c.Id).ToList(), ct);
         return new ServerDetailDto(server.Id, server.Name, server.OwnerUserId, (long)mine, server.PolicyVersion.ToString(),
-            channels.Where(c => visible.ContainsKey(c.Id)).Select(c => ToDto(c, visible[c.Id])).ToList(), roles,
+            shown.Select(c => dms.TryGetValue(c.Id, out var d) ? ToDto(c, visible[c.Id], d.Participants, d.LastActivityAt ?? c.CreatedAt) : ToDto(c, visible[c.Id])).ToList(), roles,
             server.IconAssetId, server.JoinMessageChannelId, !server.JoinMessagesOff);
     }
 
@@ -239,9 +243,31 @@ public sealed class WorkspaceService(HangarDbContext db, PermissionService permi
         await policySink.PolicyChangedAsync(serverId, server.PolicyVersion, [targetUserId], ct);
     }
 
-    internal static ChannelDto ToDto(Channel c, Permission mask) =>
-        new(c.Id, c.ServerId, c.Type == ChannelType.Text ? "text" : "voice", c.Name, c.Topic, c.Position, (long)mask,
-            (c.NextMessageSequence - 1).ToString());
+    internal static ChannelDto ToDto(Channel c, Permission mask, IReadOnlyList<Guid>? participants = null, DateTimeOffset? lastActivityAt = null) =>
+        new(c.Id, c.ServerId, TypeName(c.Type), c.Name, c.Topic, c.Position, (long)mask,
+            (c.NextMessageSequence - 1).ToString(), participants, lastActivityAt);
+
+    public static string TypeName(ChannelType t) => t switch
+    {
+        ChannelType.Voice => "voice",
+        ChannelType.Direct => "direct",
+        ChannelType.Group => "group",
+        _ => "text",
+    };
+
+    /// <summary>Participants and the newest message time of direct/group message channels.</summary>
+    internal async Task<Dictionary<Guid, (IReadOnlyList<Guid> Participants, DateTimeOffset? LastActivityAt)>> DmDetailsAsync(
+        IReadOnlyCollection<Guid> channelIds, CancellationToken ct)
+    {
+        if (channelIds.Count == 0) return [];
+        var members = await db.ChannelMembers.AsNoTracking().Where(m => channelIds.Contains(m.ChannelId))
+            .OrderBy(m => m.AddedAt).Select(m => new { m.ChannelId, m.UserId }).ToListAsync(ct);
+        var last = await db.Messages.AsNoTracking().Where(m => channelIds.Contains(m.ChannelId))
+            .GroupBy(m => m.ChannelId).Select(g => new { g.Key, At = g.Max(m => m.CreatedAt) }).ToDictionaryAsync(x => x.Key, x => x.At, ct);
+        return channelIds.ToDictionary(id => id, id => (
+            (IReadOnlyList<Guid>)members.Where(m => m.ChannelId == id).Select(m => m.UserId).ToList(),
+            last.TryGetValue(id, out var at) ? at : (DateTimeOffset?)null));
+    }
 }
 
 /// <summary>Receives committed policy changes so connections, media grants and playback can be reconciled.</summary>

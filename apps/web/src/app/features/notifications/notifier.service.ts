@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { ChannelEvent, Message } from '../../core/api/models';
+import { ChannelEvent, Message, isDm } from '../../core/api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { MediaSessionService } from '../../core/media/media-session.service';
 import { NotificationSignal, RealtimeService, VoicePing } from '../../core/realtime/realtime.service';
@@ -72,8 +72,11 @@ export class Notifier {
     if (this.dnd) return;
     if (this.media.connected() && !this.settings.notifications().mentionsInVoice) return;
     const who = (n.actorUserId && this.workspace.memberById().get(n.actorUserId)?.displayName) || 'Someone';
-    const ch = this.workspace.channel(n.channelId)?.name;
-    const title = ch ? `${who} mentioned you in #${ch}` : 'You were mentioned in another server';
+    const c = this.workspace.channel(n.channelId);
+    const ch = c?.name;
+    const title = isDm(c) || n.type === 'direct'
+      ? (c?.type === 'group' ? `${who} in ${ch}` : who)
+      : ch ? `${who} mentioned you in #${ch}` : 'You were mentioned in another server';
     if (this.focused) {
       if (n.channelId !== this.chat.activeChannelId()) this.toast.show(title);
       return;
@@ -114,6 +117,7 @@ export class Notifier {
     this.recent.set(m.id, m);
     if (this.recent.size > RECENT_MAX) this.recent.delete(this.recent.keys().next().value!);
     if (e.type !== 'message.created' || this.dnd || this.focused) return;
+    if (isDm(this.workspace.channel(e.channelId))) return; // the server's direct signal announces it
     const me = this.session.userId();
     if (!me || m.authorUserId === me || this.seen.has(m.id)) return;
     const mentioned = m.mentions.includes(me) || m.mentionsEveryone;

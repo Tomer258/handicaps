@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Channel, ChannelType } from '../../core/api/models';
+import { Channel } from '../../core/api/models';
 import { ApiError } from '../../core/api/api-error';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 
@@ -32,7 +32,7 @@ import { WorkspaceStore } from '../workspaces/workspace.store';
   `,
 })
 export class CreateChannelDialog {
-  readonly data = inject<{ type: ChannelType }>(DIALOG_DATA);
+  readonly data = inject<{ type: 'text' | 'voice' }>(DIALOG_DATA);
   readonly ref = inject<DialogRef<Channel>>(DialogRef);
   private readonly store = inject(WorkspaceStore);
   readonly busy = signal(false);
