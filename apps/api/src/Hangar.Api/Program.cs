@@ -29,6 +29,7 @@ builder.Services.Configure<Hangar.Core.Soundboard.SoundboardOptions>(config.GetS
 builder.Services.Configure<Hangar.Core.Files.StorageOptions>(config.GetSection("Hangar:Storage"));
 builder.Services.Configure<Hangar.Core.Files.AttachmentOptions>(config.GetSection("Hangar:Files"));
 builder.Services.Configure<LinkPreviewOptions>(config.GetSection("Hangar:LinkPreviews"));
+builder.Services.Configure<ResourceOptions>(config.GetSection("Hangar:Resources"));
 // Relative storage roots resolve from the content root (not the process working directory).
 builder.Services.PostConfigure<Hangar.Core.Files.StorageOptions>(o =>
     o.Root = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, o.Root)));
@@ -75,6 +76,10 @@ builder.Services.AddSingleton<LinkPreviewService>();
 builder.Services.AddSingleton<WatchTogetherStore>();
 builder.Services.AddScoped<WatchTogetherService>();
 builder.Services.AddHostedService<WatchTogetherSweeper>();
+// System page: resource samples (process, host, services from the ops monitor).
+builder.Services.AddSingleton<ResourceSampler>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ResourceSampler>());
+builder.Services.AddScoped<SystemStatusService>();
 builder.Services.AddSignalR(o =>
 {
     o.AddFilter<SessionHubFilter>();
@@ -194,6 +199,7 @@ api.MapMessages();
 api.MapLinkPreviews();
 api.MapWatchTogether();
 api.MapDirectMessages();
+api.MapSystemStatus();
 api.MapVoice();
 api.MapSoundboard();
 api.MapFiles();

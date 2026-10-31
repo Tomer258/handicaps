@@ -19,6 +19,8 @@ x-hardening: &hardening
 
 services:
   edge:
+    # Own cgroup per service: the ops monitor reports CPU/memory per service from it (System page).
+    cgroup_parent: hangar-edge.slice
     image: hangar-edge:${HANGAR_VERSION:?set HANGAR_VERSION}
     build: { context: .., dockerfile: infra/caddy/Dockerfile }
     network_mode: host
@@ -39,6 +41,7 @@ services:
   # Closes public voice (edge flag + LiveKit room deletion) when reconciliation is unhealthy for 60 s.
   # The host directory must be owned by uid 10003 (see runbooks/deploy.md).
   auth-watchdog:
+    cgroup_parent: hangar-auth-watchdog.slice
     image: hangar-auth-watchdog:${HANGAR_VERSION:?}
     build: { context: ../workers/auth-watchdog }
     network_mode: host
@@ -58,6 +61,7 @@ services:
   # Minimal alert path: disk, CPU, RAM, traffic, certificate expiry, backup age, API and reconcile health → webhook.
   # The host directory must be owned by uid 10004 (poc-bootstrap.sh does this).
   ops-monitor:
+    cgroup_parent: hangar-ops-monitor.slice
     image: hangar-ops-monitor:${HANGAR_VERSION:?}
     build: { context: ../workers/ops-monitor }
     network_mode: host
@@ -75,10 +79,13 @@ services:
     volumes:
       - ${HANGAR_ROOT:-/srv/hangar}/monitor:/state
       - ${HANGAR_ROOT:-/srv/hangar}/backups:/backups:ro
+      # Read-only cgroup tree: per-service CPU/memory for resources.json.
+      - /sys/fs/cgroup:/host/cgroup:ro
     tmpfs: [/tmp]
     mem_limit: 64m
 
   postgres:
+    cgroup_parent: hangar-postgres.slice
     image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     restart: unless-stopped
     logging: *logging
@@ -102,6 +109,7 @@ services:
 
   # One-off release job: `docker compose ... run --rm migrate` (backup first; see runbooks/deploy.md).
   migrate:
+    cgroup_parent: hangar-migrate.slice
     image: hangar-api:${HANGAR_VERSION:?}
     build: { context: ../apps/api }
     profiles: [release]
@@ -117,6 +125,7 @@ services:
       postgres: { condition: service_healthy }
 
   api:
+    cgroup_parent: hangar-api.slice
     image: hangar-api:${HANGAR_VERSION:?}
     build: { context: ../apps/api }
     network_mode: host
@@ -125,15 +134,19 @@ services:
       - ${HANGAR_ROOT:-/srv/hangar}/config/api.env
     environment:
       Hangar__MigrateOnStartup: "false"
+      Hangar__Resources__ServicesFile: /run/hangar-monitor/resources.json
     volumes:
       # keys/ (Data Protection, back up!) and files/{quarantine,spool,sounds,images,attachments}
       - ${HANGAR_ROOT:-/srv/hangar}/data:/data
+      # Per-service usage written by ops-monitor (System page).
+      - ${HANGAR_ROOT:-/srv/hangar}/monitor:/run/hangar-monitor:ro
     tmpfs: [/tmp]
     depends_on:
       postgres: { condition: service_healthy }
     mem_limit: 768m
 
   livekit:
+    cgroup_parent: hangar-livekit.slice
     image: livekit/livekit-server:v1.9.1@sha256:c039a1bfa154c8479ac369c380665638e92a7e9531e69664549c0c0d3eb65e63
     network_mode: host
     restart: unless-stopped
@@ -146,6 +159,7 @@ services:
     mem_limit: 2g
 
   sound-publisher:
+    cgroup_parent: hangar-sound-publisher.slice
     image: hangar-sound-publisher:${HANGAR_VERSION:?}
     build: { context: ../workers/sound-publisher }
     network_mode: host
@@ -165,6 +179,7 @@ services:
 
   # Untrusted uploads: no network, no secrets, bounded resources.
   asset-validator:
+    cgroup_parent: hangar-asset-validator.slice
     image: hangar-asset-validator:${HANGAR_VERSION:?}
     build: { context: ../workers/asset-validator }
     network_mode: none
@@ -180,6 +195,7 @@ services:
 
   # Nightly: `docker compose ... run --rm backup` from the host's cron (see runbooks/backup-restore.md).
   backup:
+    cgroup_parent: hangar-backup.slice
     image: hangar-backup:${HANGAR_VERSION:?}
     build: { context: backup }
     profiles: [ops]

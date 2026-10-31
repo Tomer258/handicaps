@@ -99,4 +99,14 @@ every 6 h while it stays bad, and once when it recovers:
 | api / reconcile | `/healthz` failing for 3 min / authorization reconciliation failing for 5 min |
 
 Current results: `cat /srv/hangar/monitor/status.json`. Without a webhook, alerts only appear in `dc logs ops-monitor`.
+
+### Resource usage (Settings → System)
+
+Administrators see how much Hangar takes on the machine in **Settings → System**: CPU and memory per service, the
+machine's totals, disk, database size and largest tables, and who is online / in voice, with the last hour as charts.
+Every compose service runs in its own cgroup (`cgroup_parent: hangar-<service>.slice`); `ops-monitor` reads them from
+the host's `/sys/fs/cgroup` (mounted read-only, no Docker socket) every 10 s and writes `/srv/hangar/monitor/resources.json`,
+which the API reads. Check it with `cat /srv/hangar/monitor/resources.json`. If the page says only the API process is
+measured, look for `no hangar-*.slice` in `dc logs ops-monitor`. CPU is a share of the whole machine (all cores = 100%);
+memory excludes reclaimable page cache, like `docker stats`.
 Test the webhook: stop the API for 3 minutes (`dc stop api`, then `dc start api`) and expect an ALERT and a RESOLVED.

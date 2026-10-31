@@ -14,6 +14,10 @@ Standard library only, host network, no inbound ports. Every INTERVAL seconds it
 and posts to ALERT_WEBHOOK_URL when a check turns bad, every REMIND_HOURS while it stays bad, and once when it
 recovers. Discord/Slack-style webhooks get JSON, ntfy (or anything else) gets plain text. The latest results are
 written to STATE_DIR/status.json; counters survive restarts in STATE_DIR/state.json.
+
+Every RESOURCE_INTERVAL seconds it also writes STATE_DIR/resources.json: CPU and memory per project service, read from
+the cgroup each compose service is placed in (cgroup_parent hangar-<service>.slice; the host's /sys/fs/cgroup is
+mounted read-only at CGROUP_ROOT). The API shows it on the admin System page. No Docker socket is needed.
 """
 
 import json
@@ -54,6 +58,8 @@ CFG = {
     "api_min": env("API_ALERT_MIN", 3.0),
     "reconcile_min": env("RECONCILE_ALERT_MIN", 5.0),
     "proc": env("PROC_ROOT", "/proc"),
+    "cgroup_root": env("CGROUP_ROOT", "/host/cgroup"),
+    "resource_interval": env("RESOURCE_INTERVAL", 10),
     "instance": env("INSTANCE_NAME", "") or os.environ.get("APP_HOST", "") or socket.gethostname(),
 }
 
@@ -85,6 +91,72 @@ def mem_percent(meminfo_text):
         vals[k] = int(rest.split()[0]) if rest.split() else 0
     total = vals.get("MemTotal", 0)
     return 100.0 * (total - vals.get("MemAvailable", total)) / total if total else 0.0
+
+
+def service_slices(cgroup_root):
+    """{service: path} for hangar-<service>.slice, under the root (cgroupfs driver) or hangar.slice (systemd driver)."""
+    found = {}
+    for parent in (cgroup_root, os.path.join(cgroup_root, "hangar.slice")):
+        try:
+            names = os.listdir(parent)
+        except OSError:
+            continue
+        for n in names:
+            if n.startswith("hangar-") and n.endswith(".slice") and os.path.isdir(os.path.join(parent, n)):
+                found.setdefault(n[len("hangar-"):-len(".slice")], os.path.join(parent, n))
+    return found
+
+
+def cgroup_memory_bytes(current_text, stat_text):
+    """Memory in use like `docker stats`: memory.current minus reclaimable inactive page cache."""
+    current = int(current_text.strip())
+    for line in stat_text.splitlines():
+        k, _, v = line.partition(" ")
+        if k == "inactive_file":
+            return max(0, current - int(v))
+    return current
+
+
+def cgroup_cpu_usec(stat_text):
+    for line in stat_text.splitlines():
+        k, _, v = line.partition(" ")
+        if k == "usage_usec":
+            return int(v)
+    return 0
+
+
+def memory_limit_bytes(max_texts):
+    """Sum of the containers' memory.max inside a slice; None when any of them is unlimited."""
+    total = 0
+    for t in max_texts:
+        t = t.strip()
+        if not t.isdigit():
+            return None
+        total += int(t)
+    return total or None
+
+
+def sample_services(cgroup_root, prev, now, cores):
+    """[{name, cpuPercent, memoryMb, memoryLimitMb}] plus the new cpu counters. CPU is a share of the whole machine."""
+    out, counters = [], {}
+    for name, path in sorted(service_slices(cgroup_root).items()):
+        try:
+            usec = cgroup_cpu_usec(read(f"{path}/cpu.stat"))
+            mem = cgroup_memory_bytes(read(f"{path}/memory.current"), read(f"{path}/memory.stat"))
+            limits = [read(os.path.join(path, c, "memory.max")) for c in os.listdir(path)
+                      if os.path.isfile(os.path.join(path, c, "memory.max"))]
+        except (OSError, ValueError):
+            continue
+        counters[name] = [now, usec]
+        cpu = 0.0
+        if name in prev and now > prev[name][0] and usec >= prev[name][1]:
+            cpu = 100.0 * (usec - prev[name][1]) / ((now - prev[name][0]) * 1e6 * cores)
+        if mem == 0 and not limits:
+            continue  # an empty slice: the service is not running (one-off jobs such as backup)
+        limit = memory_limit_bytes(limits)
+        out.append({"name": name, "cpuPercent": round(min(cpu, 100.0), 2), "memoryMb": round(mem / 2**20, 1),
+                    "memoryLimitMb": round(limit / 2**20, 1) if limit else None})
+    return out, counters
 
 
 def default_iface(route_text):
@@ -278,23 +350,35 @@ def main():
     state = load_state()
     alerts = state.setdefault("alerts", {})
     log(f"ops monitor started (webhook {'set' if CFG['webhook'] else 'NOT set — alerts only in this log'})")
+    cores = os.cpu_count() or 1
+    counters, next_check = {}, 0.0
+    if not service_slices(CFG["cgroup_root"]):
+        log(f"no hangar-*.slice under {CFG['cgroup_root']}: per-service usage off (mount the host's /sys/fs/cgroup there)")
     while True:
         now = time.time()
         try:
-            results = check_once(state, now)
-            for name, (bad, detail) in sorted(results.items()):
-                msg = evaluate(alerts, name, bad, detail, now, CFG["remind_hours"] * 3600)
-                if msg:
-                    send(msg)
-            save("status.json", {"checkedAt": int(now), "checks": {k: {"bad": b, "detail": d} for k, (b, d) in results.items()}})
-            save("state.json", state)
+            services, counters = sample_services(CFG["cgroup_root"], counters, now, cores)
+            if services:
+                save("resources.json", {"at": int(now), "services": services})
         except Exception as e:
-            log(f"check failed: {e}")
+            log(f"resource sample failed: {e}")
+        if now >= next_check:
+            next_check = now + CFG["interval"]
+            try:
+                results = check_once(state, now)
+                for name, (bad, detail) in sorted(results.items()):
+                    msg = evaluate(alerts, name, bad, detail, now, CFG["remind_hours"] * 3600)
+                    if msg:
+                        send(msg)
+                save("status.json", {"checkedAt": int(now), "checks": {k: {"bad": b, "detail": d} for k, (b, d) in results.items()}})
+                save("state.json", state)
+            except Exception as e:
+                log(f"check failed: {e}")
         with open("/tmp/heartbeat", "w") as f:
             f.write(str(int(now)))
         if "--once" in sys.argv:
             return
-        time.sleep(CFG["interval"])
+        time.sleep(max(1, min(CFG["resource_interval"], CFG["interval"])))
 
 
 if __name__ == "__main__":

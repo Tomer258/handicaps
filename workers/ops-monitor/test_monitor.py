@@ -9,6 +9,34 @@ sys.path.insert(0, os.path.dirname(__file__))
 import monitor as m  # noqa: E402
 
 
+class Services(unittest.TestCase):
+    def make(self, root, path, usec, current, inactive, limit):
+        d = os.path.join(root, *path)
+        os.makedirs(os.path.join(d, "abc123"), exist_ok=True)
+        for name, text in (("cpu.stat", f"usage_usec {usec}\nuser_usec 1\n"), ("memory.current", f"{current}\n"),
+                           ("memory.stat", f"anon 1\ninactive_file {inactive}\n")):
+            with open(os.path.join(d, name), "w") as f:
+                f.write(text)
+        with open(os.path.join(d, "abc123", "memory.max"), "w") as f:
+            f.write(f"{limit}\n")
+
+    def test_slices_cpu_and_memory(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            self.make(root, ["hangar-api.slice"], 1_000_000, 300 * 2**20, 100 * 2**20, 768 * 2**20)  # cgroupfs driver
+            self.make(root, ["hangar.slice", "hangar-postgres.slice"], 0, 50 * 2**20, 0, "max")  # systemd driver
+            os.makedirs(os.path.join(root, "system.slice"))
+            self.assertEqual(sorted(m.service_slices(root)), ["api", "postgres"])
+            first, counters = m.sample_services(root, {}, 100.0, 4)
+            api = next(s for s in first if s["name"] == "api")
+            self.assertEqual((api["cpuPercent"], api["memoryMb"], api["memoryLimitMb"]), (0.0, 200.0, 768.0))
+            self.make(root, ["hangar-api.slice"], 3_000_000, 300 * 2**20, 100 * 2**20, 768 * 2**20)
+            second, _ = m.sample_services(root, counters, 110.0, 4)
+            api = next(s for s in second if s["name"] == "api")
+            self.assertAlmostEqual(api["cpuPercent"], 5.0)  # 2 s of CPU over 10 s on 4 cores
+            self.assertIsNone(next(s for s in second if s["name"] == "postgres")["memoryLimitMb"])
+
+
 class Measurements(unittest.TestCase):
     def test_cpu(self):
         a = m.cpu_times("cpu  100 0 100 800 0 0 0 0 0 0\ncpu0 1 2 3")

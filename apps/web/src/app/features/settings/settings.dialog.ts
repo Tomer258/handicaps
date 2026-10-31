@@ -12,15 +12,16 @@ import { MembersSection } from './members.section';
 import { RolesSection } from './roles.section';
 import { ServerSection } from './server.section';
 import { SoundboardSection } from './soundboard.section';
+import { SystemSection } from './system.section';
 import { VideoSection } from './video.section';
 import { VoiceSection } from './voice.section';
 
-export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' | 'notif' | 'server' | 'invites' | 'members' | 'roles' | 'audit';
+export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' | 'notif' | 'server' | 'invites' | 'members' | 'roles' | 'audit' | 'system';
 
 /** Full-window settings layer (prototype SETTINGS). Esc or the close button returns to the app. */
 @Component({
   selector: 'hx-settings',
-  imports: [AccountSection, VoiceSection, VideoSection, SoundboardSection, AppearanceSection, NotificationsSection, InvitesSection, MembersSection, RolesSection, AuditSection, ServerSection],
+  imports: [AccountSection, VoiceSection, VideoSection, SoundboardSection, AppearanceSection, NotificationsSection, InvitesSection, MembersSection, RolesSection, AuditSection, ServerSection, SystemSection],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { style: 'display: contents' },
   template: `
@@ -61,6 +62,7 @@ export type SettingsSection = 'account' | 'voice' | 'video' | 'sound' | 'look' |
             @case ('members') { <hx-members-section /> }
             @case ('roles') { <hx-roles-section /> }
             @case ('audit') { <hx-audit-section /> }
+            @case ('system') { <hx-system-section /> }
           }
         </div>
       </div>
@@ -100,6 +102,7 @@ export class SettingsDialog {
       tabs.push({ id: 'roles', label: 'Roles', dot: 'var(--accent)' });
     }
     if (has(p, Perm.ViewAudit)) tabs.push({ id: 'audit', label: 'Audit log', dot: 'var(--tx3)' });
+    if (has(p, Perm.Administrator)) tabs.push({ id: 'system', label: 'System', dot: 'var(--live)' });
     return tabs;
   });
 
