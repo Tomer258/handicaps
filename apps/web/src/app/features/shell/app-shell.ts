@@ -13,6 +13,7 @@ import { CameraProblemDialog } from '../voice/camera-problem.dialog';
 import { Notifier } from '../notifications/notifier.service';
 import { ChatStore } from '../messages/chat.store';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
+import { ServerBadges } from './server-badges.service';
 
 /**
  * Top-level authenticated layout: server rail + routed content + toasts + session recovery.
@@ -37,14 +38,17 @@ import { serverIconUrl, short } from '../../shared/ui/server-icon';
         <div style="width: 28px; height: 2px; border-radius: 1px; background: var(--line)"></div>
         <div role="list" style="display: flex; flex-direction: column; gap: 10px; align-items: center">
           @for (s of session.servers(); track s.id) {
-            <a role="listitem" class="srv" [class.on]="store.serverId() === s.id && !atHome()" [routerLink]="['/s', s.id]"
-               [attr.aria-label]="s.name" [title]="s.name" style="background: #23262C; color: #ECEEF1">
+            @let b = badges.badge(s.id);
+            <a role="listitem" class="srv" [class.on]="store.serverId() === s.id && !atHome()" [class.unread]="b.unread" [routerLink]="['/s', s.id]"
+               [attr.aria-label]="s.name + (b.mentions ? ', ' + b.mentions + (b.mentions === 1 ? ' mention' : ' mentions') : b.unread ? ', unread messages' : '')"
+               [title]="s.name" style="background: #23262C; color: #ECEEF1">
               <span class="pip"></span>
               @if (iconUrl(s.iconAssetId); as u) {
                 <img [src]="u" alt="" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit" />
               } @else {
                 <span class="disp" style="font-size: 15px; font-weight: 700">{{ short(s.name) }}</span>
               }
+              @if (b.mentions) { <span class="badge" aria-hidden="true">{{ b.mentions > 99 ? '99+' : b.mentions }}</span> }
             </a>
           }
         </div>
@@ -80,8 +84,13 @@ export class AppShell {
   private readonly notifier = inject(Notifier);
   private readonly voiceRoster = inject(VoicePresenceStore);
   readonly layout = inject(LayoutService);
+  readonly badges = inject(ServerBadges);
   private readonly media = inject(MediaSessionService);
   private readonly toast = inject(ToastService);
+
+  constructor() {
+    this.badges.start();
+  }
 
   readonly atHome = computed(() => this.store.serverId() === null);
 
