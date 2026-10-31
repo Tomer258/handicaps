@@ -22,6 +22,8 @@ public sealed class RateLimitOptions
     public RateBucket Voice { get; set; } = new() { Burst = 12, PerMinute = 30 };
     /// <summary>Other state changes (admin, settings, profile, favorites…).</summary>
     public RateBucket Writes { get; set; } = new() { Burst = 30, PerMinute = 60 };
+    /// <summary>Link previews and their images (outbound fetches).</summary>
+    public RateBucket Previews { get; set; } = new() { Burst = 40, PerMinute = 60 };
     /// <summary>Hub invocations per connection (typing, heartbeats, subscriptions, voice state).</summary>
     public RateBucket Hub { get; set; } = new() { Burst = 30, PerMinute = 240 };
 }
@@ -64,6 +66,7 @@ public static class RateLimits
     public static string? Category(HttpRequest r)
     {
         var path = r.Path.Value ?? "";
+        if (path.StartsWith("/api/v1/link-previews", StringComparison.Ordinal)) return "previews";
         if (!path.StartsWith("/api/v1/", StringComparison.Ordinal) || HttpMethods.IsGet(r.Method) || HttpMethods.IsHead(r.Method)) return null;
         if (path.StartsWith("/api/v1/auth/", StringComparison.Ordinal)) return null; // own per-IP and per-account throttles
         if (path.EndsWith("/read-position", StringComparison.Ordinal) || path.Contains("/sound-plays") || path.EndsWith("/sound-stop-all", StringComparison.Ordinal))
@@ -101,7 +104,7 @@ public static class RateLimits
                 {
                     var cat = Category(http.Request);
                     if (cat is null) return RateLimitPartition.GetNoLimiter("");
-                    var bucket = cat switch { "uploads" => o.Uploads, "messages" => o.Messages, "voice" => o.Voice, _ => o.Writes };
+                    var bucket = cat switch { "previews" => o.Previews, "uploads" => o.Uploads, "messages" => o.Messages, "voice" => o.Voice, _ => o.Writes };
                     return RateLimitPartition.GetTokenBucketLimiter(cat + "|" + Who(http), _ => Options(bucket));
                 });
                 r.GlobalLimiter = PartitionedRateLimiter.CreateChained(all, byCategory);

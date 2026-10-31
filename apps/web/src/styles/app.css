@@ -55,3 +55,16 @@ a.srv, a.card { color: inherit; }
 .composer textarea.txt::placeholder{color:var(--tx3)}
 .composer textarea.txt:disabled{cursor:not-allowed}
 .replyref:disabled{cursor:default}
+
+/* Link previews under messages (features/messages/link-preview.ts). */
+.lp{display:flex;flex-direction:column;gap:4px;max-width:432px;margin-top:6px;padding:10px 12px 12px;border-radius:10px;background:var(--bg3);border:1px solid var(--line);border-inline-start:4px solid var(--line2)}
+.lp-site{font-size:11.5px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-title{font-weight:600;color:var(--accent-tx);overflow-wrap:anywhere}
+.lp-title:hover{text-decoration:underline}
+.lp-desc{font-size:13px;color:var(--tx2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.lp-media{position:relative;display:block;margin-top:6px;border-radius:8px;overflow:hidden;background:var(--bg2)}
+.lp-media img{display:block;width:100%;max-height:240px;object-fit:cover}
+.lp-media.video img{aspect-ratio:16/9;max-height:none}
+.lp-play{position:absolute;inset:0;margin:auto;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.6);color:#fff}
+.lp-img{display:block;width:fit-content;margin-top:6px;border-radius:8px;overflow:hidden}
+.lp-img img{display:block;max-width:min(400px,100%);max-height:300px}

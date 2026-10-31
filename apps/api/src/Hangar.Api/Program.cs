@@ -28,6 +28,7 @@ builder.Services.Configure<LiveKitOptions>(config.GetSection("Hangar:LiveKit"));
 builder.Services.Configure<Hangar.Core.Soundboard.SoundboardOptions>(config.GetSection("Hangar:Soundboard"));
 builder.Services.Configure<Hangar.Core.Files.StorageOptions>(config.GetSection("Hangar:Storage"));
 builder.Services.Configure<Hangar.Core.Files.AttachmentOptions>(config.GetSection("Hangar:Files"));
+builder.Services.Configure<LinkPreviewOptions>(config.GetSection("Hangar:LinkPreviews"));
 // Relative storage roots resolve from the content root (not the process working directory).
 builder.Services.PostConfigure<Hangar.Core.Files.StorageOptions>(o =>
     o.Root = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, o.Root)));
@@ -60,6 +61,17 @@ builder.Services.AddHostedService<VoiceReconciler>();
 builder.Services.AddHttpClient<Hangar.Core.Soundboard.ISoundPublisher, Hangar.Core.Soundboard.HttpSoundPublisher>(c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddScoped<Hangar.Core.Soundboard.ISoundEventSink, SignalRSoundSink>();
 builder.Services.AddHostedService<SoundboardLoop>();
+// Link previews: outbound fetches of user links, public addresses only (SafeHttp).
+System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+builder.Services.AddHttpClient(LinkPreviewService.ClientName, c =>
+    {
+        c.Timeout = TimeSpan.FromSeconds(12);
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; HangarBot/1.0; link previews for a private chat)");
+        c.MaxResponseContentBufferSize = 6 * 1024 * 1024;
+    })
+    .ConfigurePrimaryHttpMessageHandler(sp => SafeHttp.CreateHandler(sp.GetRequiredService<IOptions<LinkPreviewOptions>>().Value.AllowPrivateAddresses))
+    .SetHandlerLifetime(TimeSpan.FromMinutes(10));
+builder.Services.AddSingleton<LinkPreviewService>();
 builder.Services.AddSignalR(o =>
 {
     o.AddFilter<SessionHubFilter>();
@@ -176,6 +188,7 @@ var api = app.MapGroup("/api/v1").AddEndpointFilter<CsrfFilter>();
 api.MapAuth();
 api.MapWorkspaces();
 api.MapMessages();
+api.MapLinkPreviews();
 api.MapVoice();
 api.MapSoundboard();
 api.MapFiles();

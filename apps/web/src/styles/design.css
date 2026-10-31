@@ -17,8 +17,6 @@ input,select,textarea{font:inherit;color:var(--tx)}
 .srv:hover{border-radius:12px}
 .srv:active{transform:scale(.95)}
 .srv .pip{position:absolute;left:-12px;top:50%;width:4px;height:8px;margin-top:-4px;border-radius:0 4px 4px 0;background:var(--tx);transition:height .18s,margin .18s}
-.srv:not(.on):not(.unread) .pip{height:0;margin-top:0}
-.srv:not(.on):hover .pip{height:20px;margin-top:-10px}
 .srv.on .pip{height:28px;margin-top:-14px;background:var(--accent)}
 .srv .badge{position:absolute;right:-4px;bottom:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--live);color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;border:3px solid var(--bg0)}
 /* sidebar */

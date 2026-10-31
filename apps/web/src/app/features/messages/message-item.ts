@@ -9,6 +9,7 @@ import { Attachment } from '../../core/api/models';
 import { formatSize } from './attachment-uploads';
 import { ChannelUi } from './channel-ui';
 import { ChatMessage, ChatStore } from './chat.store';
+import { LinkPreviewCard, previewUrls } from './link-preview';
 import { QUICK_REACTIONS, decodeMentions, encodeMentions, formatFull, formatTime, parseBody, previewText } from './message-text';
 
 const JOIN_LINES = [
@@ -22,7 +23,7 @@ const JOIN_LINES = [
 /** One message row (prototype `article.msg`): header, reply ref, body/edit, reactions, hover toolbar. */
 @Component({
   selector: 'hx-message',
-  imports: [Icon],
+  imports: [Icon, LinkPreviewCard],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let m = message();
@@ -117,6 +118,9 @@ const JOIN_LINES = [
           </div>
         } @else {
           <div class="mtext">@for (p of parts(); track $index) {@switch (p.kind) {@case ('mention') {<span class="mention">{{ p.text }}</span>}@case ('everyone') {<span class="mention">{{ p.text }}</span>}@case ('link') {<a [href]="p.href" target="_blank" rel="noopener noreferrer nofollow" style="color: var(--accent-tx); text-decoration: underline">{{ p.text }}</a>}@default {<span>{{ p.text }}</span>}}}@if (m.editedAt) {<span style="font-size: 11px; color: var(--tx3)" [title]="'Edited ' + fullEdited()"> (edited)</span>}</div>
+        }
+        @if (!m.pending && !m.deleted) {
+          @for (u of linkUrls(); track u) { <hx-link-preview [url]="u" /> }
         }
         @for (a of m.attachments; track a.id) {
           @if (isImage(a)) {
@@ -214,6 +218,7 @@ export class MessageItem {
   readonly full = computed(() => formatFull(this.message().createdAt));
   readonly fullEdited = computed(() => (this.message().editedAt ? formatFull(this.message().editedAt!) : ''));
   readonly parts = computed(() => parseBody(this.message().body, this.workspace.memberById()));
+  readonly linkUrls = computed(() => previewUrls(this.message().body));
   openProfile(e: Event): void {
     if (this.author()) this.profiles.show(this.message().authorUserId, e);
   }
