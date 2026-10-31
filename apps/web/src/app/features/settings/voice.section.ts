@@ -1,10 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal } from '@angular/core';
 import { DevicesService } from '../../core/media/devices.service';
-import { MediaPrefs, MediaPrefsService, NoiseMode } from '../../core/media/media-prefs.service';
+import { MediaPrefs, MediaPrefsService, NoiseMode, keyLabel } from '../../core/media/media-prefs.service';
 import { MediaSessionService } from '../../core/media/media-session.service';
-import { createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
+import { GateConfig, createMicGate, createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
 
-/** Voice & audio: microphone / speaker choice, a real input level test and browser audio processing. */
+/** Voice & audio: microphone / speaker choice, input mode, a real input level test and browser audio processing. */
 @Component({
   selector: 'hx-voice-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,6 +31,34 @@ import { createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
       </div>
     </div>
 
+    <div class="srow" style="margin-top: 8px"><div><div class="t">Input mode</div>
+        <div class="d">{{ prefs.prefs().inputMode === 'ptt' ? 'Your mic only sends while you hold the key' : 'Your mic sends when you talk' }}</div></div>
+      <div class="seg" role="group" aria-label="Input mode">
+        <button [attr.aria-pressed]="prefs.prefs().inputMode === 'voice'" (click)="set({ inputMode: 'voice' })">Voice activity</button>
+        <button [attr.aria-pressed]="prefs.prefs().inputMode === 'ptt'" (click)="set({ inputMode: 'ptt' })">Push to talk</button>
+      </div></div>
+    @if (prefs.prefs().inputMode === 'ptt') {
+      <div class="srow"><div><div class="t">Push-to-talk key</div>
+          <div class="d">{{ recording() ? 'Press a key or a side mouse button… (Esc cancels)' : 'Hold it to talk. Works while the Hangar tab is focused.' }}</div></div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="kbd" aria-label="Current key">{{ keyLabel(prefs.prefs().pttKey) }}</span>
+          <button class="btn" [class.pri]="recording()" [class.sec]="!recording()" (click)="recordKey()">{{ recording() ? 'Listening…' : 'Change key' }}</button>
+        </div></div>
+      <div class="srow"><div><div class="t">Release delay</div><div class="d">Keeps sending a moment after you let go, so your last word isn't cut</div></div>
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 220px">
+          <input type="range" class="rng" min="0" max="1000" step="20" style="flex: 1" aria-label="Release delay"
+                 [value]="prefs.prefs().pttReleaseMs" (input)="set({ pttReleaseMs: +$any($event.target).value })" />
+          <span class="mono" style="width: 56px; text-align: right; font-size: 12.5px">{{ prefs.prefs().pttReleaseMs }} ms</span>
+        </div></div>
+    } @else {
+      <div class="srow"><div><div class="t">Automatic input sensitivity</div>
+          <div class="d">{{ prefs.prefs().sensitivityAuto ? 'Sends everything noise suppression lets through' : 'Sends only when you are louder than the line on the mic test meter' }}</div></div>
+        <button class="sw" aria-label="Automatic input sensitivity" [attr.aria-pressed]="prefs.prefs().sensitivityAuto" (click)="set({ sensitivityAuto: !prefs.prefs().sensitivityAuto })"></button></div>
+    }
+    @if (media.micGateUnavailable() && (prefs.prefs().inputMode === 'ptt' || !prefs.prefs().sensitivityAuto)) {
+      <div class="note" role="status" style="margin-top: 8px">Push to talk and input sensitivity aren't available in this browser right now — your mic stays open.</div>
+    }
+
     <div class="card" style="margin-top: 20px">
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
         <div><div style="font-weight: 600">Mic test</div>
@@ -38,10 +66,25 @@ import { createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
         <button class="btn" [class.pri]="!testing()" [class.sec]="testing()" (click)="toggleTest()">{{ testing() ? 'Stop test' : "Let's check" }}</button>
       </div>
       <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px">
-        <div class="meter" role="meter" aria-label="Microphone level" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="level()">
-          <i [style.width.%]="level()" [style.background]="level() > 8 ? 'var(--accent)' : 'var(--tx3)'"></i>
+        <div class="meter" role="meter" aria-label="Microphone level" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="level()" style="position: relative">
+          <i [style.width.%]="level()" [style.background]="sending() ? 'var(--accent)' : 'var(--tx3)'"></i>
+          @if (manualSensitivity()) {
+            <b aria-hidden="true" [style.left.%]="pct(prefs.prefs().sensitivityDb)"
+               style="position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--warn); border-radius: 1px"></b>
+          }
         </div>
       </div>
+      @if (manualSensitivity()) {
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px">
+          <input type="range" class="rng" min="-60" max="0" step="1" style="flex: 1" aria-label="Input sensitivity"
+                 [value]="prefs.prefs().sensitivityDb" (input)="setSensitivity(+$any($event.target).value)" />
+          <span class="mono" style="width: 56px; text-align: right; font-size: 12.5px">{{ prefs.prefs().sensitivityDb }} dB</span>
+        </div>
+        <div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Run the test and drag the line just above your background noise: the bar turns green when your mic sends.</div>
+      }
+      @if (prefs.prefs().inputMode === 'ptt' && testing()) {
+        <div style="font-size: 12px; color: var(--tx3); margin-top: 8px" role="status">{{ media.pttDown() ? 'Sending' : 'Hold ' + keyLabel(prefs.prefs().pttKey) + ' to talk' }}</div>
+      }
       @if (testError()) { <div class="note e" role="alert" style="margin-top: 10px">{{ testError() }}</div> }
     </div>
 
@@ -68,6 +111,7 @@ export class VoiceSection {
   readonly devices = inject(DevicesService);
   readonly prefs = inject(MediaPrefsService);
   readonly media = inject(MediaSessionService);
+  readonly keyLabel = keyLabel;
   readonly noiseHint: Record<NoiseMode, string> = {
     off: 'Sends your microphone as it is — for studio mics and quiet rooms',
     standard: "The browser's built-in filter: steady hum and fans",
@@ -77,25 +121,107 @@ export class VoiceSection {
   readonly testing = signal(false);
   readonly level = signal(0);
   readonly testError = signal('');
+  readonly recording = signal(false);
+  /** The test's gate is open (it would send). */
+  private readonly gateOpen = signal(false);
   private stream?: MediaStream;
   private ctx?: AudioContext;
+  private gate?: AudioWorkletNode;
   private raf = 0;
   /** Bumped by every start/stop so a slow getUserMedia or filter load cannot revive a stopped test. */
   private testRun = 0;
+  private recordCleanup?: () => void;
 
   constructor() {
     void this.devices.refresh();
-    inject(DestroyRef).onDestroy(() => this.stopTest());
+    inject(DestroyRef).onDestroy(() => {
+      this.stopTest();
+      this.stopRecording();
+    });
+    // The push-to-talk key is tracked by MediaSessionService; mirror it into the test's gate.
+    effect(() => {
+      const down = this.media.pttDown();
+      this.gate?.port.postMessage({ pttDown: down });
+    });
+  }
+
+  manualSensitivity(): boolean {
+    const p = this.prefs.prefs();
+    return p.inputMode === 'voice' && !p.sensitivityAuto;
+  }
+
+  /** The bar is green while the mic would send. */
+  sending(): boolean {
+    return this.gate ? this.gateOpen() && this.level() > 2 : this.level() > 8;
+  }
+
+  /** dBFS → meter position (the meter shows -60…0 dB). */
+  pct(db: number): number {
+    return Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
   }
 
   set(patch: Partial<MediaPrefs>): void {
+    const before = this.prefs.prefs();
     this.prefs.update(patch);
-    if (this.testing()) void this.startTest(); // re-open with the new device/processing
+    if (!this.testing()) return;
+    const p = this.prefs.prefs();
+    // Re-open with the new device/processing; gate-only changes apply live so the meter keeps going.
+    if (p.inputDeviceId !== before.inputDeviceId || p.outputDeviceId !== before.outputDeviceId || p.noiseMode !== before.noiseMode
+      || p.autoGainControl !== before.autoGainControl || !!this.gate !== this.wantsGate()) void this.startTest();
+    else this.gate?.port.postMessage({ ...this.gateConfig() });
+  }
+
+  setSensitivity(db: number): void {
+    this.set({ sensitivityDb: db });
   }
 
   toggleTest(): void {
     if (this.testing()) this.stopTest();
     else void this.startTest();
+  }
+
+  recordKey(): void {
+    if (this.recording()) return this.stopRecording();
+    this.recording.set(true);
+    this.media.pttRecording.set(true);
+    const done = (code: string | null) => {
+      if (code) this.set({ pttKey: code });
+      this.stopRecording();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      done(e.code === 'Escape' ? null : e.code || null);
+    };
+    const onMouse = (e: MouseEvent) => {
+      if (e.button <= 2) return;
+      e.preventDefault();
+      done(`Mouse${e.button}`);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('mousedown', onMouse, true);
+    this.recordCleanup = () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('mousedown', onMouse, true);
+    };
+  }
+
+  private stopRecording(): void {
+    this.recordCleanup?.();
+    this.recordCleanup = undefined;
+    this.recording.set(false);
+    this.media.pttRecording.set(false);
+  }
+
+  private wantsGate(): boolean {
+    return this.gateConfig().mode !== 'open';
+  }
+
+  /** Same gate as the call (MediaSessionService.gateConfig). */
+  private gateConfig(): GateConfig {
+    const p = this.prefs.prefs();
+    const mode = this.media.micGateUnavailable() ? 'open' : p.inputMode === 'ptt' ? 'ptt' : p.sensitivityAuto ? 'open' : 'vad';
+    return { mode, thresholdDb: p.sensitivityDb, releaseMs: p.pttReleaseMs };
   }
 
   private async startTest(): Promise<void> {
@@ -138,11 +264,25 @@ export class VoiceSection {
     ctx ??= new AudioContext();
     if (run !== this.testRun) return void ctx.close().catch(() => undefined);
     this.ctx = ctx;
+    let gate: AudioWorkletNode | undefined;
+    if (this.wantsGate()) {
+      try {
+        gate = await createMicGate(ctx);
+        gate.port.postMessage({ ...this.gateConfig(), pttDown: this.media.pttDown(), report: true });
+        gate.port.onmessage = (e: MessageEvent<{ open: boolean }>) => this.gateOpen.set(e.data.open);
+      } catch {
+        gate = undefined;
+      }
+    }
+    if (run !== this.testRun) return;
+    this.gate = gate;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     const source = ctx.createMediaStreamSource(stream);
     // Play it back like Discord's mic test: what friends hear, after the same processing, on the chosen speakers.
-    (filter ? source.connect(filter) : source).connect(analyser).connect(ctx.destination);
+    // The meter shows the level before the gate, so the sensitivity line can be set against it.
+    const processed = (filter ? source.connect(filter) : source).connect(analyser);
+    (gate ? processed.connect(gate) : processed).connect(ctx.destination);
     const sink = ctx as AudioContext & { setSinkId?: (id: string) => Promise<void> };
     if (p.outputDeviceId && sink.setSinkId) await sink.setSinkId(p.outputDeviceId).catch(() => undefined);
     if (run !== this.testRun) return;
@@ -153,7 +293,7 @@ export class VoiceSection {
       let sum = 0;
       for (const v of buf) sum += v * v;
       const db = 20 * Math.log10(Math.sqrt(sum / buf.length) || 1e-8);
-      this.level.set(Math.round(Math.max(0, Math.min(100, ((db + 60) / 60) * 100))));
+      this.level.set(Math.round(this.pct(db)));
       this.raf = requestAnimationFrame(tick);
     };
     tick();
@@ -164,6 +304,8 @@ export class VoiceSection {
     cancelAnimationFrame(this.raf);
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = undefined;
+    this.gate = undefined;
+    this.gateOpen.set(false);
     void this.ctx?.close().catch(() => undefined);
     this.ctx = undefined;
     this.testing.set(false);

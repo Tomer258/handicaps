@@ -5,7 +5,7 @@ import type { AudioProcessorOptions, Track, TrackProcessor } from 'livekit-clien
 const ASSETS = '/noise/';
 /** RNNoise works on 48 kHz frames only; the graph resamples the microphone into it. */
 const SAMPLE_RATE = 48000;
-export const NOISE_FILTER = 'hangar-rnnoise';
+export const MIC_PROCESSOR = 'hangar-mic';
 
 let model: Promise<ArrayBuffer> | undefined;
 
@@ -26,7 +26,7 @@ export function loadNoiseModel(): Promise<ArrayBuffer> {
   return model;
 }
 
-/** An AudioContext RNNoise can run in, running (a suspended context would send silence). */
+/** An AudioContext RNNoise (and the gate) can run in, running (a suspended context would send silence). */
 export async function noiseContext(): Promise<AudioContext> {
   const ctx = new AudioContext({ sampleRate: SAMPLE_RATE, latencyHint: 'interactive' });
   if (ctx.state !== 'running') await Promise.race([ctx.resume().catch(() => undefined), new Promise((r) => setTimeout(r, 500))]);
@@ -50,19 +50,42 @@ export async function createNoiseFilter(ctx: AudioContext): Promise<RnnoiseWorkl
   return node;
 }
 
+export type GateMode = 'open' | 'vad' | 'ptt';
+
+export interface GateConfig {
+  /** open = always sending · vad = only above `thresholdDb` · ptt = only while the key is held. */
+  mode: GateMode;
+  thresholdDb: number;
+  releaseMs: number;
+}
+
+/** Push to talk / input sensitivity gate (public/audio/mic-gate.js) in `ctx`, mono. */
+export async function createMicGate(ctx: BaseAudioContext): Promise<AudioWorkletNode> {
+  await ctx.audioWorklet.addModule('/audio/mic-gate.js');
+  return new AudioWorkletNode(ctx, 'hangar-mic-gate', {
+    numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers',
+  });
+}
+
 /**
- * LiveKit audio processor: microphone → RNNoise → published track, in its own 48 kHz context
- * (the room's context runs at the device rate). init() throws when the filter cannot start, so the
- * caller can fall back to the browser's suppression; later failures (rebuild on device switch, a
- * crash in the worklet) are reported through `onFail`.
+ * LiveKit audio processor: microphone → [RNNoise] → gate → published track, in its own 48 kHz context
+ * (the room's context runs at the device rate). init() throws when it cannot start, so the caller can
+ * fall back (browser suppression, open mic); later failures (rebuild on device switch, a crash in a
+ * worklet) are reported through `onFail`. The gate is changed live with setGate()/setPtt().
  */
-export class NoiseFilterProcessor implements TrackProcessor<Track.Kind.Audio, AudioProcessorOptions> {
-  readonly name = NOISE_FILTER;
+export class MicProcessor implements TrackProcessor<Track.Kind.Audio, AudioProcessorOptions> {
+  readonly name = MIC_PROCESSOR;
   processedTrack?: MediaStreamTrack;
   private ctx?: AudioContext;
   private node?: RnnoiseWorkletNode;
+  private gateNode?: AudioWorkletNode;
+  private pttDown = false;
 
-  constructor(private readonly onFail: () => void) {}
+  constructor(
+    readonly rnnoise: boolean,
+    private gate: GateConfig,
+    private readonly onFail: (rnnoise: boolean) => void,
+  ) {}
 
   init(opts: AudioProcessorOptions): Promise<void> {
     return this.build(opts.track);
@@ -74,7 +97,7 @@ export class NoiseFilterProcessor implements TrackProcessor<Track.Kind.Audio, Au
       await this.build(opts.track);
     } catch {
       // Called under LiveKit's track lock: report after it is released.
-      setTimeout(this.onFail);
+      setTimeout(() => this.onFail(this.rnnoise));
     }
   }
 
@@ -82,6 +105,8 @@ export class NoiseFilterProcessor implements TrackProcessor<Track.Kind.Audio, Au
     this.node?.destroy();
     this.node?.disconnect();
     this.node = undefined;
+    this.gateNode?.disconnect();
+    this.gateNode = undefined;
     this.processedTrack?.stop();
     this.processedTrack = undefined;
     const ctx = this.ctx;
@@ -89,16 +114,34 @@ export class NoiseFilterProcessor implements TrackProcessor<Track.Kind.Audio, Au
     await ctx?.close().catch(() => undefined);
   }
 
+  setGate(gate: GateConfig): void {
+    this.gate = gate;
+    this.gateNode?.port.postMessage({ ...gate });
+  }
+
+  setPtt(down: boolean): void {
+    this.pttDown = down;
+    this.gateNode?.port.postMessage({ pttDown: down });
+  }
+
   private async build(track: MediaStreamTrack): Promise<void> {
     const ctx = await noiseContext();
     try {
-      const node = await createNoiseFilter(ctx);
-      node.onprocessorerror = () => this.onFail();
+      let node: RnnoiseWorkletNode | undefined;
+      if (this.rnnoise) {
+        node = await createNoiseFilter(ctx);
+        node.onprocessorerror = () => this.onFail(true);
+      }
+      const gate = await createMicGate(ctx);
+      gate.onprocessorerror = () => this.onFail(this.rnnoise);
+      gate.port.postMessage({ ...this.gate, pttDown: this.pttDown });
       const out = ctx.createMediaStreamDestination();
       out.channelCount = 1;
-      ctx.createMediaStreamSource(new MediaStream([track])).connect(node).connect(out);
+      const src = ctx.createMediaStreamSource(new MediaStream([track]));
+      (node ? src.connect(node) : src).connect(gate).connect(out);
       this.ctx = ctx;
       this.node = node;
+      this.gateNode = gate;
       this.processedTrack = out.stream.getAudioTracks()[0];
     } catch (e) {
       void ctx.close().catch(() => undefined);

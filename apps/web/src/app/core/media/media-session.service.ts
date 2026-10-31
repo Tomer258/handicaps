@@ -21,7 +21,7 @@ import {
 } from 'livekit-client';
 import { ApiService } from '../api/api.service';
 import { MediaPrefsService } from './media-prefs.service';
-import { NOISE_FILTER, NoiseFilterProcessor } from './noise-filter';
+import { GateConfig, MIC_PROCESSOR, MicProcessor } from './noise-filter';
 import { ApiError } from '../api/api-error';
 import { SessionService } from '../auth/session.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -168,6 +168,12 @@ export class MediaSessionService {
   readonly soundMutedActors = computed(() => new Set(this._sound().mutedActors));
   /** Enhanced (RNNoise) suppression could not run in this page; the browser's standard filter is used instead. */
   readonly noiseFilterUnavailable = signal(false);
+  /** The gate (push to talk / sensitivity) could not run in this page: the mic stays open. */
+  readonly micGateUnavailable = signal(false);
+  /** The push-to-talk key is held right now. */
+  readonly pttDown = signal(false);
+  /** Settings is recording a new push-to-talk binding: key presses are not push to talk. */
+  readonly pttRecording = signal(false);
 
   /** Every camera/screen stream in the room, including my own (rendered from the local track). */
   readonly streams = computed<StreamInfo[]>(() => {
@@ -208,7 +214,7 @@ export class MediaSessionService {
   private rejoining = false;
   private mutedBeforeDeafen = false;
   private readonly volumeBeforeMute = new Map<string, number>();
-  /** Serializes noise-filter changes on the mic track (mute toggles and settings can overlap). */
+  /** Serializes mic processor changes on the mic track (mute toggles and settings can overlap). */
   private noiseSync: Promise<void> = Promise.resolve();
   private readonly audioHost: HTMLElement | null = typeof document !== 'undefined' ? document.createElement('div') : null;
 
@@ -232,6 +238,31 @@ export class MediaSessionService {
       const p = this.mediaPrefs.prefs();
       untracked(() => void this.applyDevicePrefs(p.inputDeviceId, p.outputDeviceId, p.cameraDeviceId));
     });
+    if (typeof window !== 'undefined') this.listenPushToTalk();
+  }
+
+  /** Push to talk works while the Hangar tab has focus (browsers give pages no global keys). */
+  private listenPushToTalk(): void {
+    const set = (down: boolean) => {
+      if (down === this.pttDown()) return;
+      this.pttDown.set(down);
+      this.micProcessor()?.setPtt(down);
+    };
+    const active = () => this.mediaPrefs.prefs().inputMode === 'ptt' && !this.pttRecording();
+    window.addEventListener('keydown', (e) => {
+      if (active() && e.code === this.mediaPrefs.prefs().pttKey) set(true);
+    }, true);
+    window.addEventListener('keyup', (e) => {
+      if (e.code === this.mediaPrefs.prefs().pttKey) set(false);
+    }, true);
+    window.addEventListener('mousedown', (e) => {
+      if (active() && e.button > 2 && `Mouse${e.button}` === this.mediaPrefs.prefs().pttKey) set(true);
+    }, true);
+    window.addEventListener('mouseup', (e) => {
+      if (`Mouse${e.button}` === this.mediaPrefs.prefs().pttKey) set(false);
+    }, true);
+    // Key-up never arrives when focus leaves the tab while holding the key.
+    window.addEventListener('blur', () => set(false));
   }
 
   /** A participant's link is poor or lost (theirs as LiveKit sees it). */
@@ -758,8 +789,8 @@ export class MediaSessionService {
       if (output !== prev.output) await room.switchActiveDevice('audiooutput', output || 'default');
       const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack;
       if (mic) {
-        // Drop the filter before a restart that does not want it, so it is not rebuilt in between.
-        if (!this.wantsNoiseFilter()) await this.syncNoiseFilter();
+        // Match the processor before a restart (drops RNNoise first when unwanted, so it is not rebuilt in between).
+        await this.syncNoiseFilter();
         if (capture !== prev.capture) {
           const o = this.captureOptions();
           await mic.restartTrack({ ...o, deviceId: o.deviceId ? { exact: o.deviceId } : undefined });
@@ -830,21 +861,56 @@ export class MediaSessionService {
     return this.mediaPrefs.prefs().noiseMode === 'enhanced' && !this.noiseFilterUnavailable();
   }
 
-  /** Puts RNNoise on the mic track or takes it off, to match the noise mode. Never throws. */
+  /** The gate the mic should have now: push to talk, manual sensitivity or open. */
+  private gateConfig(): GateConfig {
+    const p = this.mediaPrefs.prefs();
+    const mode = this.micGateUnavailable() ? 'open' : p.inputMode === 'ptt' ? 'ptt' : p.sensitivityAuto ? 'open' : 'vad';
+    return { mode, thresholdDb: p.sensitivityDb, releaseMs: p.pttReleaseMs };
+  }
+
+  private micProcessor(): MicProcessor | undefined {
+    const mic = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack as LocalAudioTrack | undefined;
+    const proc = mic?.getProcessor();
+    return proc?.name === MIC_PROCESSOR ? (proc as MicProcessor) : undefined;
+  }
+
+  /**
+   * Puts the mic processor (RNNoise and/or the gate) on the mic track, updates it live, or takes it off,
+   * to match the noise mode and input mode. Never throws.
+   */
   private syncNoiseFilter(): Promise<void> {
     this.noiseSync = this.noiseSync.then(async () => {
       const mic = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack as LocalAudioTrack | undefined;
       if (!mic) return;
-      const want = this.wantsNoiseFilter();
-      if (want === (mic.getProcessor()?.name === NOISE_FILTER)) return;
+      const rnnoise = this.wantsNoiseFilter();
+      const gate = this.gateConfig();
+      const want = rnnoise || gate.mode !== 'open';
+      const current = mic.getProcessor()?.name === MIC_PROCESSOR ? (mic.getProcessor() as MicProcessor) : undefined;
+      if (want && current?.rnnoise === rnnoise) {
+        current.setGate(gate);
+        current.setPtt(this.pttDown());
+        return;
+      }
+      if (!want && !current) return;
       try {
-        if (want) await mic.setProcessor(new NoiseFilterProcessor(() => this.noiseFilterFailed()));
-        else await mic.stopProcessor();
+        if (want) {
+          const proc = new MicProcessor(rnnoise, gate, (withRnnoise) => this.micProcessorFailed(withRnnoise));
+          proc.setPtt(this.pttDown());
+          await mic.setProcessor(proc);
+        } else await mic.stopProcessor();
       } catch {
-        if (want) this.noiseFilterFailed();
+        if (want) this.micProcessorFailed(rnnoise);
       }
     });
     return this.noiseSync;
+  }
+
+  private micProcessorFailed(withRnnoise: boolean): void {
+    if (withRnnoise) return this.noiseFilterFailed();
+    if (this.micGateUnavailable()) return;
+    this.micGateUnavailable.set(true);
+    this.toast.show("Push to talk and input sensitivity aren't available in this browser — your mic stays open.", 'warn');
+    void this.syncNoiseFilter();
   }
 
   /** RNNoise could not start or crashed: fall back to the browser's filter for the rest of this page's life. */
