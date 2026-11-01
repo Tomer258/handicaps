@@ -20,8 +20,8 @@ import {
   createLocalVideoTrack,
 } from 'livekit-client';
 import { ApiService } from '../api/api.service';
-import { MediaPrefsService } from './media-prefs.service';
-import { GateConfig, MIC_PROCESSOR, MicProcessor } from './noise-filter';
+import { MediaPrefsService, NoiseMode } from './media-prefs.service';
+import { GateConfig, MIC_PROCESSOR, MicProcessor, NeuralFilter } from './noise-filter';
 import { SpeakingDetector } from './speaking-detector';
 import { ApiError } from '../api/api-error';
 import { SessionService } from '../auth/session.service';
@@ -167,7 +167,7 @@ export class MediaSessionService {
   readonly soundVolume = computed(() => this._sound().volume);
   readonly soundMuted = computed(() => this._sound().muted);
   readonly soundMutedActors = computed(() => new Set(this._sound().mutedActors));
-  /** Enhanced (RNNoise) suppression could not run in this page; the browser's standard filter is used instead. */
+  /** Enhanced/Strong (RNNoise, GTCRN) suppression could not run in this page; the browser's standard filter is used instead. */
   readonly noiseFilterUnavailable = signal(false);
   /** The gate (push to talk / sensitivity) could not run in this page: the mic stays open. */
   readonly micGateUnavailable = signal(false);
@@ -792,8 +792,8 @@ export class MediaSessionService {
     return {
       deviceId: p.inputDeviceId || undefined,
       echoCancellation: p.echoCancellation,
-      // Enhanced replaces the browser's filter (both at once only adds artifacts) unless RNNoise cannot run.
-      noiseSuppression: p.noiseMode === 'standard' || (p.noiseMode === 'enhanced' && this.noiseFilterUnavailable()),
+      // Enhanced/Strong replace the browser's filter (both at once only adds artifacts) unless the models cannot run.
+      noiseSuppression: p.noiseMode === 'standard' || (isNeural(p.noiseMode) && this.noiseFilterUnavailable()),
       autoGainControl: p.autoGainControl,
       channelCount: 1,
     };
@@ -879,8 +879,9 @@ export class MediaSessionService {
     this.refreshPeers();
   }
 
-  private wantsNoiseFilter(): boolean {
-    return this.mediaPrefs.prefs().noiseMode === 'enhanced' && !this.noiseFilterUnavailable();
+  private wantedFilter(): NeuralFilter | null {
+    const mode = this.mediaPrefs.prefs().noiseMode;
+    return isNeural(mode) && !this.noiseFilterUnavailable() ? mode : null;
   }
 
   /** The gate the mic should have now: push to talk, manual sensitivity or open. */
@@ -897,18 +898,18 @@ export class MediaSessionService {
   }
 
   /**
-   * Puts the mic processor (RNNoise and/or the gate) on the mic track, updates it live, or takes it off,
+   * Puts the mic processor (noise models and/or the gate) on the mic track, updates it live, or takes it off,
    * to match the noise mode and input mode. Never throws.
    */
   private syncNoiseFilter(): Promise<void> {
     this.noiseSync = this.noiseSync.then(async () => {
       const mic = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack as LocalAudioTrack | undefined;
       if (!mic) return;
-      const rnnoise = this.wantsNoiseFilter();
+      const filter = this.wantedFilter();
       const gate = this.gateConfig();
-      const want = rnnoise || gate.mode !== 'open';
+      const want = !!filter || gate.mode !== 'open';
       const current = mic.getProcessor()?.name === MIC_PROCESSOR ? (mic.getProcessor() as MicProcessor) : undefined;
-      if (want && current?.rnnoise === rnnoise) {
+      if (want && current?.filter === filter) {
         current.setGate(gate);
         current.setPtt(this.pttDown());
         return;
@@ -916,30 +917,30 @@ export class MediaSessionService {
       if (!want && !current) return;
       try {
         if (want) {
-          const proc = new MicProcessor(rnnoise, gate, (withRnnoise) => this.micProcessorFailed(withRnnoise));
+          const proc = new MicProcessor(filter, gate, (withFilter) => this.micProcessorFailed(withFilter));
           proc.setPtt(this.pttDown());
           await mic.setProcessor(proc);
         } else await mic.stopProcessor();
       } catch {
-        if (want) this.micProcessorFailed(rnnoise);
+        if (want) this.micProcessorFailed(!!filter);
       }
     });
     return this.noiseSync;
   }
 
-  private micProcessorFailed(withRnnoise: boolean): void {
-    if (withRnnoise) return this.noiseFilterFailed();
+  private micProcessorFailed(withFilter: boolean): void {
+    if (withFilter) return this.noiseFilterFailed();
     if (this.micGateUnavailable()) return;
     this.micGateUnavailable.set(true);
     this.toast.show("Push to talk and input sensitivity aren't available in this browser — your mic stays open.", 'warn');
     void this.syncNoiseFilter();
   }
 
-  /** RNNoise could not start or crashed: fall back to the browser's filter for the rest of this page's life. */
+  /** A noise model could not start or crashed: fall back to the browser's filter for the rest of this page's life. */
   private noiseFilterFailed(): void {
     if (this.noiseFilterUnavailable()) return;
     this.noiseFilterUnavailable.set(true);
-    this.toast.show("Enhanced noise suppression isn't available here — using the browser's standard filter.", 'warn');
+    this.toast.show("Enhanced and Strong noise suppression aren't available here — using the browser's standard filter.", 'warn');
     const p = this.mediaPrefs.prefs();
     // The capture constraints changed (browser suppression on): restart the mic without the filter.
     void this.applyDevicePrefs(p.inputDeviceId, p.outputDeviceId, p.cameraDeviceId);
@@ -1114,4 +1115,9 @@ function loadVolumes(): Record<string, number> {
 
 function isWeak(q: ConnectionQuality | undefined): boolean {
   return q === ConnectionQuality.Poor || q === ConnectionQuality.Lost;
+}
+
+/** Modes that run our own models in the mic processor (and turn the browser's suppression off). */
+export function isNeural(mode: NoiseMode): mode is NeuralFilter {
+  return mode === 'enhanced' || mode === 'strong';
 }

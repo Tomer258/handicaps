@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal } from '@angular/core';
 import { DevicesService } from '../../core/media/devices.service';
 import { MediaPrefs, MediaPrefsService, NoiseMode, keyLabel } from '../../core/media/media-prefs.service';
-import { MediaSessionService } from '../../core/media/media-session.service';
-import { GateConfig, createMicGate, createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
+import { MediaSessionService, isNeural } from '../../core/media/media-session.service';
+import { GateConfig, NoiseFilterChain, createMicGate, createNoiseFilter, noiseContext } from '../../core/media/noise-filter';
 
 /** Voice & audio: microphone / speaker choice, input mode, a real input level test and browser audio processing. */
 @Component({
@@ -90,13 +90,14 @@ import { GateConfig, createMicGate, createNoiseFilter, noiseContext } from '../.
 
     <div class="srow"><div><div class="t">Noise suppression</div>
         <div class="d">{{ noiseHint[prefs.prefs().noiseMode] }}</div>
-        @if (prefs.prefs().noiseMode === 'enhanced' && media.noiseFilterUnavailable()) {
-          <div class="d" role="status" style="color: var(--warn)">Enhanced isn't available in this browser right now — Standard is used instead.</div>
+        @if (neural() && media.noiseFilterUnavailable()) {
+          <div class="d" role="status" style="color: var(--warn)">{{ prefs.prefs().noiseMode === 'strong' ? 'Strong' : 'Enhanced' }} isn't available in this browser right now — Standard is used instead.</div>
         }</div>
       <div class="seg" role="group" aria-label="Noise suppression">
         <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'off'" (click)="set({ noiseMode: 'off' })">Off</button>
         <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'standard'" (click)="set({ noiseMode: 'standard' })">Standard</button>
         <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'enhanced'" (click)="set({ noiseMode: 'enhanced' })">Enhanced</button>
+        <button [attr.aria-pressed]="prefs.prefs().noiseMode === 'strong'" (click)="set({ noiseMode: 'strong' })">Strong</button>
       </div></div>
     <div class="srow"><div><div class="t">Echo cancellation</div><div class="d">Keep on if you use speakers instead of headphones. Applies in calls; the mic test plays without it.</div></div>
       <button class="sw" aria-label="Echo cancellation" [attr.aria-pressed]="prefs.prefs().echoCancellation" (click)="set({ echoCancellation: !prefs.prefs().echoCancellation })"></button></div>
@@ -115,7 +116,8 @@ export class VoiceSection {
   readonly noiseHint: Record<NoiseMode, string> = {
     off: 'Sends your microphone as it is — for studio mics and quiet rooms',
     standard: "The browser's built-in filter: steady hum and fans",
-    enhanced: "AI filter on your PC: keyboards, fans, clicks and that one friend's mechanical switches",
+    enhanced: 'AI filter on your PC (RNNoise): fans, hum, traffic and other steady noise. Lighter on older PCs',
+    strong: "Two AI filters on your PC: steady noise plus keyboards, mouse clicks and that one friend's mechanical switches",
   };
 
   readonly testing = signal(false);
@@ -143,6 +145,10 @@ export class VoiceSection {
       const down = this.media.pttDown();
       this.gate?.port.postMessage({ pttDown: down });
     });
+  }
+
+  neural(): boolean {
+    return isNeural(this.prefs.prefs().noiseMode);
   }
 
   manualSensitivity(): boolean {
@@ -229,14 +235,14 @@ export class VoiceSection {
     const run = ++this.testRun;
     this.testError.set('');
     const p = this.prefs.prefs();
-    const enhanced = p.noiseMode === 'enhanced' && !this.media.noiseFilterUnavailable();
+    const neural = isNeural(p.noiseMode) && !this.media.noiseFilterUnavailable() ? p.noiseMode : null;
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: p.inputDeviceId ? { exact: p.inputDeviceId } : undefined,
-          // Same capture as a call: Enhanced runs RNNoise below instead of the browser's filter.
-          noiseSuppression: p.noiseMode === 'standard' || (p.noiseMode === 'enhanced' && !enhanced),
+          // Same capture as a call: Enhanced/Strong run the models below instead of the browser's filter.
+          noiseSuppression: p.noiseMode === 'standard' || (isNeural(p.noiseMode) && !neural),
           // No echo cancellation here: it treats the test's own playback as echo and chops the voice up. In a call
           // it cancels the friends' voices coming out of your speakers, which the test has none of.
           echoCancellation: false, autoGainControl: p.autoGainControl, channelCount: 1,
@@ -251,11 +257,11 @@ export class VoiceSection {
     this.stream = stream;
     void this.devices.refresh();
     let ctx: AudioContext | undefined;
-    let filter: AudioNode | undefined;
-    if (enhanced) {
+    let filter: NoiseFilterChain | undefined;
+    if (neural) {
       try {
         ctx = await noiseContext();
-        filter = await createNoiseFilter(ctx);
+        filter = await createNoiseFilter(ctx, neural);
       } catch {
         void ctx?.close().catch(() => undefined);
         ctx = filter = undefined;
@@ -281,7 +287,8 @@ export class VoiceSection {
     const source = ctx.createMediaStreamSource(stream);
     // Play it back: what friends hear, after the same processing, on the chosen speakers.
     // The meter shows the level before the gate, so the sensitivity line can be set against it.
-    const processed = (filter ? source.connect(filter) : source).connect(analyser);
+    if (filter) source.connect(filter.input);
+    const processed = (filter ? filter.output : source).connect(analyser);
     (gate ? processed.connect(gate) : processed).connect(ctx.destination);
     const sink = ctx as AudioContext & { setSinkId?: (id: string) => Promise<void> };
     if (p.outputDeviceId && sink.setSinkId) await sink.setSinkId(p.outputDeviceId).catch(() => undefined);

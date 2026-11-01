@@ -1,8 +1,8 @@
 import { Injectable, signal } from '@angular/core';
 import type { ScreenQuality } from './media-session.service';
 
-/** off = raw mic · standard = the browser's WebRTC suppression · enhanced = RNNoise (core/media/noise-filter.ts). */
-export type NoiseMode = 'off' | 'standard' | 'enhanced';
+/** off = raw mic · standard = the browser's WebRTC suppression · enhanced = RNNoise · strong = RNNoise + GTCRN (noise-filter.ts). */
+export type NoiseMode = 'off' | 'standard' | 'enhanced' | 'strong';
 
 /** voice = voice activity (open mic, or gated by `sensitivity*`) · ptt = push to talk. */
 export type InputMode = 'voice' | 'ptt';
@@ -13,6 +13,8 @@ export interface MediaPrefs {
   outputDeviceId: string;
   cameraDeviceId: string;
   noiseMode: NoiseMode;
+  /** 2 since Strong exists: older saved prefs still carry the old default (enhanced), which then moves to strong once. */
+  noiseRev: number;
   echoCancellation: boolean;
   autoGainControl: boolean;
   inputMode: InputMode;
@@ -34,7 +36,8 @@ const DEFAULTS: MediaPrefs = {
   inputDeviceId: '',
   outputDeviceId: '',
   cameraDeviceId: '',
-  noiseMode: 'enhanced',
+  noiseMode: 'strong',
+  noiseRev: 2,
   echoCancellation: true,
   autoGainControl: true,
   inputMode: 'voice',
@@ -70,8 +73,8 @@ function load(): MediaPrefs {
       inputDeviceId: typeof raw.inputDeviceId === 'string' ? raw.inputDeviceId : '',
       outputDeviceId: typeof raw.outputDeviceId === 'string' ? raw.outputDeviceId : '',
       cameraDeviceId: typeof raw.cameraDeviceId === 'string' ? raw.cameraDeviceId : '',
-      // Before the modes there was only an on/off switch (noiseSuppression); 'on' becomes enhanced.
-      noiseMode: raw.noiseMode === 'off' || raw.noiseMode === 'standard' || raw.noiseMode === 'enhanced' ? raw.noiseMode : raw.noiseSuppression === false ? 'off' : 'enhanced',
+      noiseMode: noiseMode(raw),
+      noiseRev: 2,
       echoCancellation: raw.echoCancellation !== false,
       autoGainControl: raw.autoGainControl !== false,
       inputMode: raw.inputMode === 'ptt' ? 'ptt' : 'voice',
@@ -85,6 +88,17 @@ function load(): MediaPrefs {
   } catch {
     return DEFAULTS;
   }
+}
+
+/**
+ * Before the modes there was only an on/off switch (noiseSuppression): off stays off, on becomes the best filter.
+ * Enhanced was the default before Strong existed (noiseRev < 2), so it moves to Strong once; a later choice sticks.
+ */
+function noiseMode(raw: Partial<MediaPrefs> & { noiseSuppression?: boolean }): NoiseMode {
+  const m = raw.noiseMode;
+  if (m === 'enhanced' && (raw.noiseRev ?? 1) < 2) return 'strong';
+  if (m === 'off' || m === 'standard' || m === 'enhanced' || m === 'strong') return m;
+  return raw.noiseSuppression === false ? 'off' : 'strong';
 }
 
 function num(v: unknown, min: number, max: number, fallback: number): number {

@@ -1,4 +1,4 @@
-// Dev smoke for Enhanced noise suppression (RNNoise in an AudioWorklet, core/media/noise-filter.ts):
+// Dev smoke for Enhanced/Strong noise suppression (RNNoise [+ GTCRN] in AudioWorklets, core/media/noise-filter.ts):
 // the shipped model removes noise, old prefs migrate, the call publishes the filtered track, modes switch live,
 // and a page that cannot load the filter falls back to the browser's suppression with a notice.
 // Usage: node scripts/smoke-noise.mjs <out-dir>   (needs compose livekit + API + ng serve; users tomer & friend)
@@ -96,7 +96,7 @@ const dsp = await owner.evaluate(async () => {
 });
 check(dsp.outRms < dsp.inRms * 0.1, `RNNoise removes fan-like noise (rms ${dsp.inRms.toFixed(3)} → ${dsp.outRms.toFixed(5)})`);
 
-// 2. Prefs: the old on/off switch migrates (off stays off, on becomes Enhanced).
+// 2. Prefs: the old on/off switch migrates (off stays off, on becomes Strong); the old default Enhanced moves to Strong once.
 const modeIs = async (label) => (await owner.getByRole('group', { name: 'Noise suppression' }).getByRole('button', { name: label }).getAttribute('aria-pressed')) === 'true';
 const openVoiceSettings = async () => {
   await owner.getByRole('button', { name: 'User settings' }).click();
@@ -115,15 +115,26 @@ await closeSettings();
 await owner.evaluate(() => localStorage.setItem('hangar.mediaPrefs', JSON.stringify({ noiseSuppression: true })));
 await owner.goto(`${BASE}/s/${serverId}`);
 await openVoiceSettings();
-check(await modeIs('Enhanced'), 'old "noise suppression on" migrates to Enhanced');
+check(await modeIs('Strong'), 'old "noise suppression on" migrates to Strong');
+await closeSettings();
+await owner.evaluate(() => localStorage.setItem('hangar.mediaPrefs', JSON.stringify({ noiseMode: 'enhanced' })));
+await owner.goto(`${BASE}/s/${serverId}`);
+await openVoiceSettings();
+check(await modeIs('Strong'), 'Enhanced saved before Strong existed (the old default) moves to Strong');
+await closeSettings();
+await owner.evaluate(() => localStorage.setItem('hangar.mediaPrefs', JSON.stringify({ noiseMode: 'enhanced', noiseRev: 2 })));
+await owner.goto(`${BASE}/s/${serverId}`);
+await openVoiceSettings();
+check(await modeIs('Enhanced'), 'Enhanced chosen after Strong existed stays Enhanced');
+await owner.getByRole('group', { name: 'Noise suppression' }).getByRole('button', { name: 'Strong' }).click();
 
 // Mic test runs through the filter too (worklet loaded, no fallback note).
 // (Worklet module loads are invisible to Playwright; the model download marks the filter path.)
-const modelLoad = owner.waitForResponse((r) => /\/noise\/rnnoise(_simd)?\.wasm$/.test(r.url()) && r.ok(), { timeout: 8000 });
+const modelLoad = owner.waitForResponse((r) => /\/noise\/gtcrn\.wasm$/.test(r.url()) && r.ok(), { timeout: 8000 });
 await owner.getByRole('button', { name: "Let's check" }).click();
 await modelLoad;
 await owner.getByRole('button', { name: 'Stop test' }).waitFor({ timeout: 8000 });
-check(true, 'mic test runs with Enhanced');
+check(true, 'mic test runs with Strong (GTCRN model loaded)');
 await owner.getByRole('button', { name: 'Stop test' }).click();
 await owner.screenshot({ path: `${outDir}/noise-settings.png` });
 await closeSettings();
@@ -164,16 +175,18 @@ await openVoiceSettings();
 await owner.getByRole('group', { name: 'Noise suppression' }).getByRole('button', { name: 'Standard' }).click();
 await waitSender(owner, true, 'switching to Standard during the call publishes the browser-filtered mic');
 await owner.getByRole('group', { name: 'Noise suppression' }).getByRole('button', { name: 'Enhanced' }).click();
-await waitSender(owner, false, 'switching back to Enhanced puts RNNoise back');
+await waitSender(owner, false, 'switching to Enhanced puts RNNoise back');
+await owner.getByRole('group', { name: 'Noise suppression' }).getByRole('button', { name: 'Strong' }).click();
+await waitSender(owner, false, 'switching to Strong keeps the filtered mic (RNNoise + GTCRN)');
 await closeSettings();
 
 // 4. A page that cannot load the filter falls back to Standard and says so (friend's context blocks /noise/*).
-await friend.getByText("Enhanced noise suppression isn't available here").waitFor({ timeout: 10000 });
+await friend.getByText("Enhanced and Strong noise suppression aren't available here").waitFor({ timeout: 10000 });
 check(true, 'blocked filter: toast explains the fallback');
 await waitSender(friend, true, 'blocked filter: the raw (browser-filtered) mic is published, not silence');
 await friend.getByRole('button', { name: 'User settings' }).click();
 await friend.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Voice & audio', exact: true }).click();
-await friend.getByText("Enhanced isn't available in this browser right now").waitFor({ timeout: 5000 });
+await friend.getByText("Strong isn't available in this browser right now").waitFor({ timeout: 5000 });
 check(true, 'settings show that Standard is used instead');
 await friend.screenshot({ path: `${outDir}/noise-fallback.png` });
 
