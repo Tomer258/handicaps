@@ -26,7 +26,7 @@ import { Icon } from '../../shared/ui/icon';
                     [style.border-color]="quality() === '1080p60' ? 'var(--accent)' : null" [style.box-shadow]="quality() === '1080p60' ? '0 0 0 1px var(--accent)' : null">
               <div style="display: flex; justify-content: space-between"><b class="disp" style="font-size: 17px">1080p · 60</b>
                 <span style="font-size: 10.5px; font-weight: 600; color: var(--accent-tx)">RECOMMENDED</span></div>
-              <div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Crisp game streams. Needs about 8 Mbps upload.</div>
+              <div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Crisp, smooth game streams. Needs about 12 Mbps upload.</div>
             </button>
             <button class="card" role="radio" [attr.aria-checked]="quality() === '720p30'" (click)="quality.set('720p30')" style="text-align: left"
                     [style.border-color]="quality() === '720p30' ? 'var(--accent)' : null" [style.box-shadow]="quality() === '720p30' ? '0 0 0 1px var(--accent)' : null">
@@ -41,6 +41,11 @@ import { Icon } from '../../shared/ui/icon';
           <div class="note" style="margin-top: 8px">
             <hx-icon name="info" size="sm" style="color: var(--tx3); margin-top: 1px" />
             <span>On Windows, Chrome and Edge can capture audio from an <b>entire screen</b> or a <b>browser tab</b>. A single app window shares video only — pick Entire screen if friends should hear the game. Sound playing in this browser itself isn't included (so friends don't hear themselves) — share that tab for it.</span>
+          </div>
+          <div class="note" style="margin-top: 8px" data-testid="share-game-tip">
+            <hx-icon name="info" size="sm" style="color: var(--tx3); margin-top: 1px" />
+            <span>Game not in the list? Games in <b>exclusive fullscreen</b> (CS2, Valorant…) can't be captured as a window by a browser.
+              Switch the game to <b>Fullscreen Windowed</b> (in CS2: Settings → Video → Display Mode), or pick <b>Entire screen</b>.</span>
           </div>
           <div class="note" style="margin-top: 16px; background: transparent">
             <hx-icon name="lock" size="sm" style="color: var(--accent-tx); margin-top: 1px" />

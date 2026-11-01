@@ -86,8 +86,9 @@ interface SoundPrefs {
 }
 const MAX_VOLUME = 2;
 const SCREEN_ENCODING: Record<ScreenQuality, { width: number; height: number; fps: number; bitrate: number; layers: VideoPreset[] }> = {
-  // Capacity model: 8 Mbps high layer with 2.0 / 0.4 Mbps lower layers for thumbnails and weak links.
-  '1080p60': { width: 1920, height: 1080, fps: 60, bitrate: 8_000_000, layers: [new VideoPreset(640, 360, 400_000, 15), new VideoPreset(1280, 720, 2_000_000, 30)] },
+  // Capacity model: 8 Mbps high layer with 3.0 / 0.4 Mbps lower layers for thumbnails and weak links. Viewers whose
+  // stream view is under ~1280 px wide get the 720p layer, so it keeps 60 fps too (games); the 360p one is for cards.
+  '1080p60': { width: 1920, height: 1080, fps: 60, bitrate: 8_000_000, layers: [new VideoPreset(640, 360, 400_000, 15), new VideoPreset(1280, 720, 3_000_000, 60)] },
   '720p30': { width: 1280, height: 720, fps: 30, bitrate: 2_500_000, layers: [new VideoPreset(640, 360, 400_000, 15)] },
 };
 
@@ -451,7 +452,9 @@ export class MediaSessionService {
       await room.localParticipant.publishTrack(video, {
         source: Track.Source.ScreenShare,
         simulcast: true,
-        videoEncoding: { maxBitrate: enc.bitrate, maxFramerate: enc.fps },
+        // Screen tracks read screenShareEncoding (videoEncoding is ignored for them): without it livekit-client picked
+        // its own preset for the capture size, 1080p at 15 fps and 2.5 Mbps, whatever quality was chosen.
+        screenShareEncoding: { maxBitrate: enc.bitrate, maxFramerate: enc.fps },
         screenShareSimulcastLayers: enc.layers,
       });
       if (audio) {

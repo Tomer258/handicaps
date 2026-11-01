@@ -61,7 +61,7 @@ For a particular 8 Mbps screen with two high viewers and eight at a 0.4 Mbps thu
 
 ## 4. Client requirements and bottlenecks
 
-A screen publisher needs roughly 12.6 Mbps upload for the assumed video layers plus audio/overhead, before its microphone/camera and other household traffic. Prefer at least 20 Mbps available upload headroom and wired connectivity for high-quality sharing. A viewer watching four high streams plus six cameras can need around 49 Mbps of receive capacity after overhead, and enough GPU/CPU for ten simultaneous video decoders. Lower subscriptions if the receiving laptop cannot decode even when its speed test is excellent.
+A screen publisher needs roughly 13.6 Mbps upload for the assumed video layers (8 + 3 + 0.4; the 720p layer runs at 60 fps since 2026-11-01) plus audio/overhead, before its microphone/camera and other household traffic. Prefer at least 20 Mbps available upload headroom and wired connectivity for high-quality sharing. A viewer watching four high streams plus six cameras can need around 49 Mbps of receive capacity after overhead, and enough GPU/CPU for ten simultaneous video decoders. Lower subscriptions if the receiving laptop cannot decode even when its speed test is excellent.
 
 Published internet speed, VPS port speed and measured application throughput are different. IPv4 routing, Wi-Fi interference, ISP peering, congestion, packet loss, CPU steal and TURN/TCP head-of-line blocking can be bottlenecks. Measure the actual route from users in Israel; geographic proximity is not a latency benchmark.
 
