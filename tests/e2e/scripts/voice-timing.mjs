@@ -69,7 +69,7 @@ const voice = detail.channels.filter((c) => c.type === 'voice' || c.type === 1);
 if (voice.length < 2) throw new Error(`need two voice channels, found ${voice.map((c) => c.name).join(', ')}`);
 console.log(`server ${BASE}, voice channels: ${voice.map((c) => c.name).join(', ')}`);
 
-async function measure(label, act) {
+async function measure(label, act, channelId) {
   await page.evaluate(() => { window.__marks = []; window.__t0 = performance.now(); window.__pcStart = window.__pcs.length; });
   const t = Date.now();
   await act();
@@ -77,6 +77,15 @@ async function measure(label, act) {
   // Connected = the voice toolbar shows and the latest peer connection is up.
   await page.waitForFunction(() => window.__pcs.slice(window.__pcStart).some((pc) => pc.connectionState === 'connected'), null, { timeout: 60000 });
   const total = Date.now() - t;
+  // What friends see: the server roster lists me in the new channel (they get it as a hub event at the same moment).
+  const listed = await page.evaluate(async ({ serverId, userId, channelId }) => {
+    for (let i = 0; i < 600; i++) {
+      const list = await (await fetch(`/api/v1/servers/${serverId}/voice`)).json();
+      if ((list.items ?? list).some((m) => m.userId === userId && m.channelId === channelId)) return Math.round(performance.now() - window.__t0);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return -1;
+  }, { serverId, userId: me.user.id, channelId });
   const { marks, path } = await page.evaluate(async () => {
     const t0 = window.__t0;
     const marks = window.__marks.map(([m, at]) => `${String(Math.round(at - t0)).padStart(6)} ms  ${m}`);
@@ -93,16 +102,16 @@ async function measure(label, act) {
     }
     return { marks, path };
   });
-  console.log(`\n== ${label}: ${total} ms  [${path}]`);
+  console.log(`\n== ${label}: connected ${total} ms, in server roster ${listed} ms  [${path}]`);
   for (const m of marks) console.log(m);
 }
 
 await page.goto(`${BASE}/s/${serverId}/v/${voice[0].id}`);
-await measure(`join ${voice[0].name}`, () => page.getByRole('button', { name: 'Join voice' }).click());
+await measure(`join ${voice[0].name}`, () => page.getByRole('button', { name: 'Join voice' }).click(), voice[0].id);
 for (let i = 0; i < Number(SWITCHES); i++) {
   const target = voice[(i + 1) % 2];
   await page.waitForTimeout(1500);
-  await measure(`switch to ${target.name}`, () => page.locator('button.ch', { hasText: target.name }).first().click());
+  await measure(`switch to ${target.name}`, () => page.locator('button.ch', { hasText: target.name }).first().click(), target.id);
 }
 await page.getByRole('toolbar', { name: 'Voice controls' }).getByRole('button', { name: 'Disconnect', exact: true }).click();
 await browser.close();

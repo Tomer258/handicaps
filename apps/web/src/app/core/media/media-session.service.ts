@@ -337,6 +337,9 @@ export class MediaSessionService {
       audioCaptureDefaults: this.captureOptions(),
       audioOutput: prefs.outputDeviceId ? { deviceId: prefs.outputDeviceId } : undefined,
       publishDefaults: { dtx: true, red: true },
+      // LiveKit 1.9 has no /rtc/v1 (single peer connection) endpoint. Trying it first cost every join a failed
+      // WebSocket: ~0.3–2 s normally, up to the 15 s connect timeout where something holds the failed socket open.
+      singlePeerConnection: false,
     });
     this.room = room;
     this.wire(room, gen);
