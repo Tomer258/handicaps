@@ -77,6 +77,19 @@ async function measure(label, act, channelId) {
   // Connected = the voice toolbar shows and the latest peer connection is up.
   await page.waitForFunction(() => window.__pcs.slice(window.__pcStart).some((pc) => pc.connectionState === 'connected'), null, { timeout: 60000 });
   const total = Date.now() - t;
+  // What I see: my card in the room grid, and me under the new channel in the sidebar.
+  const name = me.user.displayName;
+  const seen = await page.evaluate(async ({ name, channelName }) => {
+    const out = { grid: -1, sidebar: -1 };
+    for (let i = 0; i < 300 && (out.grid < 0 || out.sidebar < 0); i++) {
+      const now = Math.round(performance.now() - window.__t0);
+      if (out.grid < 0 && [...document.querySelectorAll('.pcard')].some((c) => c.textContent?.includes(name))) out.grid = now;
+      const ch = [...document.querySelectorAll('button.ch')].find((b) => b.textContent?.includes(channelName));
+      if (out.sidebar < 0 && ch?.parentElement && [...ch.parentElement.querySelectorAll('.vp[role=group]')].some((v) => v.textContent?.includes(name))) out.sidebar = now;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return out;
+  }, { name, channelName: label.replace(/^(join|switch to) /, '') });
   // What friends see: the server roster lists me in the new channel (they get it as a hub event at the same moment).
   const listed = await page.evaluate(async ({ serverId, userId, channelId }) => {
     for (let i = 0; i < 600; i++) {
@@ -102,7 +115,7 @@ async function measure(label, act, channelId) {
     }
     return { marks, path };
   });
-  console.log(`\n== ${label}: connected ${total} ms, in server roster ${listed} ms  [${path}]`);
+  console.log(`\n== ${label}: connected ${total} ms, my card in grid ${seen.grid} ms, me in sidebar ${seen.sidebar} ms, server roster ${listed} ms  [${path}]`);
   for (const m of marks) console.log(m);
 }
 

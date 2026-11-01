@@ -103,6 +103,11 @@ import { GateConfig, NoiseFilterChain, createMicGate, createNoiseFilter, noiseCo
       <button class="sw" aria-label="Echo cancellation" [attr.aria-pressed]="prefs.prefs().echoCancellation" (click)="set({ echoCancellation: !prefs.prefs().echoCancellation })"></button></div>
     <div class="srow"><div><div class="t">Automatic gain control</div><div class="d">Evens out your volume when you lean back or shout</div></div>
       <button class="sw" aria-label="Automatic gain control" [attr.aria-pressed]="prefs.prefs().autoGainControl" (click)="set({ autoGainControl: !prefs.prefs().autoGainControl })"></button></div>
+    @if (media.lastJoin(); as j) {
+      <div class="srow" data-testid="last-join"><div><div class="t">Last voice connection</div>
+          <div class="d">{{ secs(j.mic) }} in total: server {{ secs(j.grant) }} · connection {{ secs(j.connected - j.grant) }} · microphone {{ secs(j.mic - j.connected) }}.
+            If switching rooms feels slow, this shows which part takes the time.</div></div></div>
+    }
     <div class="srow" style="border-bottom: 0"><div><div class="t">Keyboard shortcuts</div><div class="d">Work while the Hangar tab is focused</div></div>
       <div style="display: flex; gap: 6px; flex-wrap: wrap"><span class="kbd">Ctrl+Shift+M</span><span style="color: var(--tx3); font-size: 12px">mute</span>
         <span class="kbd">Ctrl+Shift+D</span><span style="color: var(--tx3); font-size: 12px">deafen</span></div></div>
@@ -145,6 +150,10 @@ export class VoiceSection {
       const down = this.media.pttDown();
       this.gate?.port.postMessage({ pttDown: down });
     });
+  }
+
+  secs(ms: number): string {
+    return (Math.max(0, ms) / 1000).toFixed(1) + ' s';
   }
 
   neural(): boolean {

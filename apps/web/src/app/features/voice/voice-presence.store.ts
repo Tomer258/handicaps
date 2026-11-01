@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ApiService } from '../../core/api/api.service';
 import { SessionService } from '../../core/auth/session.service';
+import { MediaSessionService } from '../../core/media/media-session.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 
@@ -22,14 +23,32 @@ export class VoicePresenceStore {
   private readonly realtime = inject(RealtimeService);
   private readonly workspace = inject(WorkspaceStore);
   private readonly session = inject(SessionService);
+  private readonly media = inject(MediaSessionService);
 
   private readonly _members = signal<VoiceMember[]>([]);
-  readonly members = this._members.asReadonly();
+  /**
+   * The server's roster, except my own entry follows this tab's call at once: the server only lists me after LiveKit
+   * confirmed the connection, so a switch used to leave me under the old room until then.
+   */
+  readonly members = computed(() => {
+    const list = this._members();
+    const me = this.session.userId();
+    const state = this.media.connection();
+    const channelId = this.media.channelId();
+    if (!me || !channelId || (state !== 'joining' && state !== 'connected' && state !== 'reconnecting')) return list;
+    const server = list.find((m) => m.userId === me);
+    if (server?.channelId === channelId) return list;
+    const mine: VoiceMember = {
+      userId: me, channelId, muted: this.media.muted() || this.media.deafened(), deafened: this.media.deafened(), serverMuted: false,
+      camera: false, screen: false, joinedAt: server?.joinedAt ?? new Date().toISOString(),
+    };
+    return [...list.filter((m) => m.userId !== me), mine];
+  });
   private loadSeq = 0;
 
   readonly byChannel = computed(() => {
     const map = new Map<string, VoiceMember[]>();
-    for (const m of this._members()) {
+    for (const m of this.members()) {
       const list = map.get(m.channelId) ?? [];
       list.push(m);
       map.set(m.channelId, list);
@@ -37,7 +56,7 @@ export class VoicePresenceStore {
     return map;
   });
 
-  readonly byUser = computed(() => new Map(this._members().map((m) => [m.userId, m])));
+  readonly byUser = computed(() => new Map(this.members().map((m) => [m.userId, m])));
 
   constructor() {
     effect(() => {

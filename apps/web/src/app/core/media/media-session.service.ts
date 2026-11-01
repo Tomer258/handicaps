@@ -51,6 +51,13 @@ export interface RoomPeer {
   hasMic: boolean;
 }
 
+/** How long the last join took, ms from the click: the server's grant, the media connection, the microphone. */
+export interface JoinTiming {
+  grant: number;
+  connected: number;
+  mic: number;
+}
+
 export type ScreenQuality = '1080p60' | '720p30';
 /** 'audio-failed': Windows refused system-audio loopback (NotReadableError); sharing without sound usually works. */
 /** Stereo, no voice processing, without this browser's own sound (restrictOwnAudio is not in the DOM typings yet). */
@@ -139,6 +146,9 @@ export class MediaSessionService {
   /** User ids currently speaking (microphone only). */
   readonly speaking = this._speaking.asReadonly();
   readonly peers = this._peers.asReadonly();
+  private readonly _lastJoin = signal<JoinTiming | null>(null);
+  /** Shown in Settings → Voice: where the time of the last join went (slow switches on a particular PC). */
+  readonly lastJoin = this._lastJoin.asReadonly();
   private readonly peerHandlers: ((peers: RoomPeer[], room: number) => void)[] = [];
   readonly canSpeak = this._canSpeak.asReadonly();
   /** Microphone permission denied or device missing: listen-only until the user retries. */
@@ -306,9 +316,13 @@ export class MediaSessionService {
     if (this.room || this.leaseId) await this.leave();
 
     const gen = ++this.generation;
+    const t0 = performance.now();
     this._connection.set('joining');
     this._channelId.set(channelId);
     this._error.set(null);
+    // Show myself in the new room right away; the real roster replaces this once connected.
+    const me = this.session.user();
+    if (me) this._peers.set([{ identity: 'joining', userId: me.id, name: me.displayName, isLocal: true, micMuted: this._muted(), hasMic: false }]);
 
     let grant: VoiceJoinResponse;
     try {
@@ -323,6 +337,7 @@ export class MediaSessionService {
       return;
     }
     this.leaseId = grant.leaseId;
+    const tGrant = performance.now() - t0;
     this._canSpeak.set(grant.canSpeak);
     this._serverMuted.set(false);
     this._canCamera.set(grant.canCamera);
@@ -356,6 +371,7 @@ export class MediaSessionService {
       return;
     }
     if (gen !== this.generation) return;
+    const tConnected = performance.now() - t0;
 
     for (const p of room.remoteParticipants.values()) this.subscribeAudio(p);
     this._connection.set('connected');
@@ -367,6 +383,10 @@ export class MediaSessionService {
     if (grant.canSpeak && !this._serverMuted()) await this.enableMic(gen);
     else this._muted.set(true);
     this.reportState();
+    if (gen !== this.generation) return;
+    const timing = { grant: Math.round(tGrant), connected: Math.round(tConnected), mic: Math.round(performance.now() - t0) };
+    this._lastJoin.set(timing);
+    console.info('[voice] joined', timing);
   }
 
   async leave(): Promise<void> {
@@ -1075,6 +1095,7 @@ export class MediaSessionService {
     }
     this._connection.set('error');
     this._error.set(message);
+    this._peers.set([]);
     this.toast.show(message, 'danger');
   }
 }

@@ -111,9 +111,20 @@ await friend.locator('a.ch', { hasText: 'general' }).click();
 await friend.locator('#composer').waitFor();
 check(await friend.getByRole('region', { name: 'Voice connection' }).isVisible(), 'voice panel persists while reading a text channel');
 
-// 6. Switch channels: owner moves to Ranked Grind; friend sees roster update.
+// 6. Switch channels: owner moves to Ranked Grind; friend sees roster update. The join answer is held back 3 s (a slow
+// connection): the owner's screen must switch at once anyway — room view with "Connecting…", sidebar entry moved.
+await owner.route('**/voice/join', async (route) => {
+  await new Promise((r) => setTimeout(r, 3000));
+  await route.continue();
+});
+const clickedAt = Date.now();
 await owner.locator('button.ch', { hasText: 'Ranked Grind' }).click();
 await owner.waitForURL(new RegExp(`/v/${ranked.id}`));
+await owner.getByTestId('card-connecting').waitFor({ timeout: 1500 });
+await owner.locator('button.ch', { hasText: 'Ranked Grind' }).locator('xpath=..').locator('.vp[role=group]', { hasText: 'Tomer' }).waitFor({ timeout: 1500 });
+check(Date.now() - clickedAt < 2500, `a slow switch shows the new room and moves me in the sidebar at once (${Date.now() - clickedAt} ms, join still pending)`);
+await owner.getByTestId('card-connecting').waitFor({ state: 'detached', timeout: 15000 });
+await owner.unroute('**/voice/join');
 await owner.getByRole('toolbar', { name: 'Voice controls' }).waitFor({ timeout: 15000 });
 await friend.locator('button.ch', { hasText: 'Ranked Grind' }).locator('xpath=..').locator('.vp[role=group]', { hasText: 'Tomer' }).waitFor({ timeout: 20000 });
 check(true, 'switching channels moves owner in the roster');

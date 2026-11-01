@@ -71,7 +71,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
       </header>
 
       <div class="fade" style="flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; background: radial-gradient(120% 80% at 50% 0%, var(--bg3) 0%, var(--bg2) 60%)">
-        @if (!here()) {
+        @if (!here() && !entering()) {
           <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px">
             <h2 class="disp" style="margin: 0; font-size: 26px">{{ ch.name }}</h2>
             <p style="margin: 0; color: var(--tx2)">
@@ -178,6 +178,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                         }
                         @if (c.screen) { <span class="tag live">LIVE</span> }
                         @if (c.reconnecting) { <span class="tag" style="background: var(--warn); color: #1D1300">Reconnecting…</span> }
+                        @else if (c.peer.isLocal && entering()) { <span class="tag" data-testid="card-connecting">Connecting…</span> }
                         @else if (c.weak) { <span class="tag" style="background: var(--warn); color: #1D1300">Weak signal</span> }
                       </div>
                     </button>
@@ -191,6 +192,8 @@ const GHOST_SHOW_AFTER_MS = 1_500;
             </div>
           }
 
+          <!-- The controls need the connection: while entering the room they wait (my card says "Connecting…"). -->
+          @if (here()) {
           <div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; pointer-events: none; z-index: 26">
             <div class="dock" style="pointer-events: auto" role="toolbar" aria-label="Voice controls" (keydown)="dockKeys($event)">
               <button class="dbtn" [class.bad]="media.muted() || media.deafened()" [attr.aria-label]="micLabel()" [attr.aria-pressed]="media.muted()"
@@ -221,6 +224,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
               <button class="dbtn leave" aria-label="Disconnect" title="Disconnect" (click)="media.leave()"><hx-icon name="hangup" size="lg" /></button>
             </div>
           </div>
+          }
         }
 
         @if (menu(); as m) {
@@ -329,6 +333,8 @@ export class VoiceRoomPage {
 
   readonly channel = computed(() => this.store.channel(this.channelId()));
   readonly here = computed(() => this.media.connected() && this.media.channelId() === this.channelId());
+  /** Joining this room right now: the room view shows at once (my card says "Connecting…") instead of after the connection. */
+  readonly entering = computed(() => this.media.connection() === 'joining' && this.media.channelId() === this.channelId());
   readonly rosterCount = computed(() => (this.here() ? this.media.peers().length : this.roster.inChannel(this.channelId()).length));
   readonly viewers = computed(() => Math.max(0, this.rosterCount() - 1));
   readonly canMute = computed(() => ((this.channel()?.permissions ?? 0) & Perm.MuteMembers) !== 0);
