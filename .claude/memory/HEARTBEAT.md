@@ -39,7 +39,7 @@
 
 ## Remaining plan — reordered POC-first (2026-10-18, user request: working template ASAP; nothing removed)
 Items are the existing remaining work (pre-release-gates.md manual list + roadmap Phase 7), only re-sequenced.
-- [x] P1a Local POC (no VPS): `bash infra/scripts/poc-local.sh up` → unmodified prod stack in DinD (docker:28.5.1-dind, privileged; host ports 80/443/7881/7882udp; stops dev livekit+publisher) at https://app.hangar.localhost via `poc-bootstrap.sh --local` (LiveKit node_ip 127.0.0.1). Verified 2026-10-18: poc-verify.sh --insecure 10/10; poc-smoke.mjs (owner invite → register, invite friend, realtime chat, voice with real audio through gate). `poc-local.sh invite|fresh|down|reset|dc …|ca`. Pushed to origin https://github.com/Tomer258/handicaps_discord.git.
+- [x] P1a Local POC (no VPS): `bash infra/scripts/poc-local.sh up` → unmodified prod stack in DinD (docker:28.5.1-dind, privileged; host ports 80/443/7881/7882udp; stops dev livekit+publisher) at https://app.hangar.localhost via `poc-bootstrap.sh --local` (LiveKit node_ip 127.0.0.1). Verified 2026-10-18: poc-verify.sh --insecure 10/10; poc-smoke.mjs (owner invite → register, invite friend, realtime chat, voice with real audio through gate). `poc-local.sh invite|fresh|down|reset|dc …|ca`. Pushed to origin https://github.com/Tomer258/handicaps.git.
 - [ ] P1 POC deploy (needs user: VPS + domain + DNS): deploy.md §1 steps 1–3 by hand, then
       `sudo ./infra/scripts/poc-bootstrap.sh --domain <d> --email <e> --ufw` (steps 4–6 + §2), then deploy.md §3 verify.
       Bootstrap script verified locally: config-only run in Linux, secrets consistent, LiveKit starts with generated keys, compose resolves.

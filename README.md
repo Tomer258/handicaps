@@ -90,7 +90,7 @@ best-effort. For screen sharing, allow about 15–20 Mbps upload.
 2. Install. The script creates every secret and config file, builds the images, migrates the database and starts the stack:
 
    ```sh
-   sudo git clone https://github.com/Tomer258/handicaps_discord.git /opt/hangar
+   sudo git clone https://github.com/Tomer258/handicaps.git /opt/hangar
    cd /opt/hangar
    sudo ./infra/scripts/poc-bootstrap.sh --domain example.com --email you@example.com --ufw
    ```
