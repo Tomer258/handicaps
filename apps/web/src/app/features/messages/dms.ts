@@ -10,7 +10,7 @@ import { Avatar } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { WorkspaceStore } from '../workspaces/workspace.store';
 
-/** Discord's limit: you plus nine. */
+/** Group size limit: you plus nine. */
 export const MAX_GROUP = 10;
 
 /** Direct and group messages: open, add people, rename, leave. The server pushes the new channel list to everyone in it. */

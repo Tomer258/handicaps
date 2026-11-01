@@ -1,6 +1,6 @@
 # Hangar — design canvas export
 
-Private Discord-style app for ~15 friends: voice, streaming, multi-stream viewing and a soundboard.
+Private chat and voice app for ~15 friends: voice, streaming, multi-stream viewing and a soundboard.
 
 ## Contents (`project/`)
 

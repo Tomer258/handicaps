@@ -279,7 +279,7 @@ export class VoiceSection {
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     const source = ctx.createMediaStreamSource(stream);
-    // Play it back like Discord's mic test: what friends hear, after the same processing, on the chosen speakers.
+    // Play it back: what friends hear, after the same processing, on the chosen speakers.
     // The meter shows the level before the gate, so the sensitivity line can be set against it.
     const processed = (filter ? source.connect(filter) : source).connect(analyser);
     (gate ? processed.connect(gate) : processed).connect(ctx.destination);

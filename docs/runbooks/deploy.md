@@ -3,7 +3,7 @@
 > **Fast path (POC):** after §1 steps 1–3 (VPS with Docker, DNS, provider firewall), clone the repo to
 > `/opt/hangar` and run `sudo ./infra/scripts/poc-bootstrap.sh --domain <domain> --email <email> --ufw`.
 > It does steps 4–6 and §2 in one go, generating every secret consistently. Then do §3. Backups are not configured
-> by the script; set them up before inviting real users. For alerts, put a Discord (or ntfy) webhook URL in
+> by the script; set them up before inviting real users. For alerts, put a chat (or ntfy) webhook URL in
 > `/srv/hangar/config/monitor.env` and run `dc up -d ops-monitor` (§4).
 > From another machine, `./infra/scripts/poc-verify.sh --domain <domain> --host <vps-ip>` runs the automated part of §3.
 >

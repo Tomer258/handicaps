@@ -1,6 +1,6 @@
 # Hangar
 
-A private, self-hosted Discord-style hangout for a small group of friends (built for ~15 people). Text, voice,
+A private, self-hosted hangout for a small group of friends (built for ~15 people). Text, voice,
 video, screen sharing, a soundboard and watch-together run on one server you own. Nothing goes to a third-party
 service.
 
@@ -59,7 +59,7 @@ flowchart LR
 | `workers/asset-validator` | Python + ffmpeg | Checks and re-encodes uploads in a sandbox (images → WebP, sounds → trimmed 48 kHz WAV) |
 | `workers/sound-publisher` | Python LiveKit SDK | Plays soundboard sounds into calls |
 | `workers/auth-watchdog` | Python (stdlib) | Closes media access if the API stops checking voice permissions |
-| `workers/ops-monitor` | Python (stdlib) | Alerts (disk, CPU, RAM, certificates, backups, health) to a Discord webhook; per-service resource usage |
+| `workers/ops-monitor` | Python (stdlib) | Alerts (disk, CPU, RAM, certificates, backups, health) to a chat webhook or ntfy; per-service resource usage |
 
 The full design (decisions, data model, security, capacity) is in [docs/architecture](docs/architecture/README.md).
 
@@ -97,7 +97,7 @@ best-effort. For screen sharing, allow about 15–20 Mbps upload.
 
 3. Open the **one-time owner invite** printed by the migrate step, create your account, then clear the terminal.
 4. Check the install from another machine: `./infra/scripts/poc-verify.sh --domain example.com --host <vps-ip>`.
-5. Before inviting friends, set up [backups](docs/runbooks/backup-restore.md). Optionally, add a Discord webhook to
+5. Before inviting friends, set up [backups](docs/runbooks/backup-restore.md). Optionally, add an alert webhook URL to
    `/srv/hangar/config/monitor.env` for alerts.
 
 Day-to-day commands:

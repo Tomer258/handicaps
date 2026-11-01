@@ -1,4 +1,4 @@
-# Private Discord Alternative — Architecture Proposal
+# Hangar — Architecture Proposal
 
 **Status:** Proposed; awaiting architecture approval. **Research date:** 17 October 2026. **Audience:** one developer using Codex and Claude Code. **Scope:** 15 friends, one private workspace, browser first. No application, infrastructure deployment, or proof of concept has been implemented.
 

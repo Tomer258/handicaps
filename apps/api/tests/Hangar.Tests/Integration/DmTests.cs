@@ -66,7 +66,7 @@ public class DmTests(ApiFactory factory)
         Assert.Equal("group", group.GetProperty("type").GetString());
         var id = group.GetProperty("id").GetGuid();
         Assert.Equal(3, group.GetProperty("participants").GetArrayLength());
-        // A second group with the same people is a new conversation (like Discord).
+        // A second group with the same people is a new conversation.
         Assert.NotEqual(id, (await Json(await OpenAsync(a, serverId, bId, cId))).GetProperty("id").GetGuid());
 
         var renamed = await Json(await b.Http.PatchAsJsonAsync($"/api/v1/channels/{id}/group", new { name = "Squad" }));

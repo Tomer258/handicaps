@@ -20,7 +20,7 @@ export interface LinkPreview {
 const MAX_PER_MESSAGE = 3;
 const LINK = /(<)?(https?:\/\/[^\s<>"]+)/g;
 
-/** Links in a message body that get a card: up to three, not wrapped in <…> (Discord's "no preview" syntax). */
+/** Links in a message body that get a card: up to three, not wrapped in <…> (the usual "no preview" syntax). */
 export function previewUrls(body: string): string[] {
   const out: string[] = [];
   for (const m of body.matchAll(LINK)) {

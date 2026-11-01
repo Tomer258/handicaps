@@ -31,8 +31,8 @@ public sealed class WatchTogetherStore
 }
 
 /// <summary>
-/// Watch together: anyone in the call starts a YouTube video and anyone in the call controls it (like Discord's
-/// activity). Everyone who can see the channel gets the state through the hub; it ends when the call empties.
+/// Watch together: anyone in the call starts a YouTube video and anyone in the call controls it.
+/// Everyone who can see the channel gets the state through the hub; it ends when the call empties.
 /// </summary>
 public sealed class WatchTogetherService(
     HangarDbContext db,

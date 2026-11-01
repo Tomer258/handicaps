@@ -67,7 +67,7 @@ await owner.locator('.pcard.talk', { hasText: 'Friend' }).waitFor({ timeout: 150
 check(true, 'owner sees friend speaking (fake microphone audio flows through the SFU)');
 await owner.screenshot({ path: `${outDir}/voice-owner.png` });
 
-// 3b. Right-click a person in the sidebar voice list → menu with their volume (like Discord), applied to the call.
+// 3b. Right-click a person in the sidebar voice list → menu with their volume, applied to the call.
 await owner.locator('.vp[role=group]', { hasText: 'Friend' }).click({ button: 'right' });
 const userMenu = owner.getByRole('menu', { name: 'Friend options' });
 await userMenu.waitFor();

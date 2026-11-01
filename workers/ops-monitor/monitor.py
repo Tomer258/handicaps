@@ -12,7 +12,7 @@ Standard library only, host network, no inbound ports. Every INTERVAL seconds it
   reconcile GET /internal/watchdog/reconcile        failing for >= RECONCILE_ALERT_MIN (5) minutes
 
 and posts to ALERT_WEBHOOK_URL when a check turns bad, every REMIND_HOURS while it stays bad, and once when it
-recovers. Discord/Slack-style webhooks get JSON, ntfy (or anything else) gets plain text. The latest results are
+recovers. Chat (Slack-style) webhooks get JSON, ntfy (or anything else) gets plain text. The latest results are
 written to STATE_DIR/status.json; counters survive restarts in STATE_DIR/state.json.
 
 Every RESOURCE_INTERVAL seconds it also writes STATE_DIR/resources.json: CPU and memory per project service, read from
