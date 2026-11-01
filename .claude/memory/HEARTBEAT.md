@@ -84,7 +84,10 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
 - Complaint 1 (scroll in Shorts): 76c1b37 watch-together list (≤50): WatchStateDto.Queue/Index, request add/index/fromIndex
   (fromIndex = apply only while that item plays → one auto-advance for all viewers); /shorts/ → 9:16 frame; wheel (1 per 700 ms),
   arrows, ▲▼ buttons; auto-advance at end. 122 backend tests; smoke-watch covers it (fill() on a range already fires change).
-- NOT pushed yet (58ec9bb..76c1b37). Deploy on VPS after push: cd /opt/hangar && git pull && dc build api edge && dc up -d api edge
+- Screen share 15 fps + CS2 missing: b4d08e2 — livekit-client ignores videoEncoding for screen tracks (reads screenShareEncoding),
+  so every share was its default 1080p15 2.5 Mbps. Fixed; 720p layer now 60 fps/3 Mbps (viewers <1280 px get it). Go Live dialog
+  tip: exclusive-fullscreen games can't be window-captured → Fullscreen Windowed or Entire screen. Probe: tests/e2e/scripts/stream-stats.mjs.
+- NOT pushed yet (58ec9bb..b4d08e2). Deploy on VPS after push: cd /opt/hangar && git pull && dc build api edge && dc up -d api edge
   (no migration, LiveKit untouched).
 
 ## Next exact step
