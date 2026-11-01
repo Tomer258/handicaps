@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-10-31 — session 4 (Enhanced noise suppression / RNNoise) · 2026-10-18 — session 3 (S9 admin/permissions done) · session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
+**Last update:** 2026-11-01 — session 5 (deployed; room switch, Strong noise, Shorts lists) · 2026-10-31 — session 4 (Enhanced noise suppression / RNNoise) · 2026-10-18 — session 3 (S9 admin/permissions done) · session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -64,7 +64,32 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
 - [x] Resource monitoring (user request 2026-10-31): Settings → System (Administrator). API: Hangar.Api/Infrastructure/ResourceMonitor.cs (ResourceSampler hosted singleton, 10 s samples, 1 h history; HostStats /proc or Win32; SystemStatusService: DB size + largest tables, disk, live counts), GET /servers/{id}/system (Endpoints/SystemEndpoints.cs). Per-service: prod = ops-monitor reads cgroups of hangar-<svc>.slice (compose cgroup_parent on every service, /sys/fs/cgroup ro) → monitor/resources.json → API (Hangar:Resources:ServicesFile); dev = `docker stats` for hangar-dev-* (Hangar:Resources:DockerStatsPrefix, only while the page was viewed in the last 2 min). Web features/settings/system.section.ts. Tests SystemStatusTests (3) → 121; ops-monitor unit tests 8; smoke-system.mjs passes. Runbook deploy.md §4.
 - [x] README.md + docs/screenshots (9415532, pushed with the System page at user request). Regenerate shots: start a second API on an EMPTY DB (ConnectionStrings__Hangar=...Database=hangar_demo, Hangar__Storage__Root=../../../../.data/demo-files) on :5080, then `cd tests/e2e && node scripts/readme-shots.mjs ../../.tmp/api-demo.log`; afterwards drop hangar_demo and restart the normal dev API.
 
+## Session 5 (2026-11-01) — deployed + friends' complaints
+- DEPLOYED by the user (P1 done by hand): LuxVPS v74620.luxvps.net, IP 45.134.39.111, domain handicapsdiscord.duckdns.org
+  (DuckDNS wildcard → app./rtc./turn. work), /opt/hangar, poc-bootstrap.sh --ufw. Repo renamed on GitHub to Tomer258/handicaps
+  (old URL redirects; local remote not repointed — user to run `git remote set-url`). Test account on prod: login voice-test,
+  password in .tmp/voice-test.pw (registered with the user's invite; user may remove it).
+- Discord wording removed from docs/comments (781ac99); kept: monitor.py discord.com webhook detection, folder name, repo URL.
+- Complaint 3 (20 s room switch + UI delay when talking):
+  - Measured live with tests/e2e/scripts/voice-timing.mjs <base> <login> <pw> [switches]: switch connects 1.3–1.7 s, roster 2.4 s;
+    UDP fine (STUN 3478 answers, srflx/udp → host 7882, 58 ms RTT). Could NOT reproduce 20 s.
+  - 1f8052d singlePeerConnection:false — livekit-client 2.23 first tried /rtc/v1 (LiveKit 1.9 404s), costing 0.3–1.8 s and up to
+    the 15 s websocket timeout where something holds the failed socket open (prime suspect for 20 s on friends' PCs).
+  - 58ec9bb speaking rings from core/media/speaking-detector.ts (AnalyserNode on my processed mic + each received mic track, 50 ms
+    poll, on > -50 dBFS, off after 300 ms < -56); SFU ActiveSpeakers only for ids without a measured track.
+  - If friends still see ~20 s after deploy: run voice-timing.mjs from their network / ask for chrome://webrtc-internals.
+- Complaint 2 (keyboard + background noise): e6cf577 Strong mode = RNNoise → GTCRN (same @sapphi-red package, MIT), default;
+  prefs noiseRev 2 migrates saved 'enhanced' (old default) → 'strong' once. tests/e2e/scripts/noise-bench.mjs: fan RNNoise -36 /
+  GTCRN -11 / both -56 dB; keys -6 / -30 / -38 dB; speech unchanged. smoke-noise updated.
+- Complaint 1 (scroll in Shorts): 76c1b37 watch-together list (≤50): WatchStateDto.Queue/Index, request add/index/fromIndex
+  (fromIndex = apply only while that item plays → one auto-advance for all viewers); /shorts/ → 9:16 frame; wheel (1 per 700 ms),
+  arrows, ▲▼ buttons; auto-advance at end. 122 backend tests; smoke-watch covers it (fill() on a range already fires change).
+- NOT pushed yet (58ec9bb..76c1b37). Deploy on VPS after push: cd /opt/hangar && git pull && dc build api edge && dc up -d api edge
+  (no migration, LiveKit untouched).
+
 ## Next exact step
+Push (user approval), user deploys (command above), then ask friends whether switching/noise/Shorts are fixed.
+
 ### HANDOFF — end of 2026-10-18 session (read this first)
 State: all feature phases (1–6) done; Phase 7 ~55% (every locally-testable item done); overall ~85% to first release. 81 backend tests + ~29 smokes pass. Everything committed and pushed (last: d29b0dc server settings). Working tree clean except the untracked 'start prompt.txt' (never commit it).
 Done this session: screen-share sound fix (restrictOwnAudio → per-process loopback; user confirmed it works on their 7.1 Logitech headset), invites v2 (quick Invite dialog, who-joined, invite page), join messages + live roster, Settings → Server (rename, icon, join-message channel).

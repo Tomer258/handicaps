@@ -68,3 +68,9 @@
 - direct: one per pair (dm_key = sorted user ids, unique, find-or-create handles the 23505 race); you cannot add people to it. group: up to 10 people, a new group each time, anyone in it can add people or rename; the last one to leave archives it.
 - Every DM message notifies the other participants (Notification rows type Mention + hub notificationCreated type 'direct'), so it counts as a red badge like a mention. DM channels do not count towards the 100-channel limit.
 - Membership changes go through IPolicyChangeSink so the affected people's hub subscriptions and channel lists refresh.
+
+## 2026-11-01 — Friends' complaints after deploy
+- livekit-client Room option singlePeerConnection:false while the server is LiveKit 1.9 (no /rtc/v1). Revisit when upgrading LiveKit.
+- Speaking rings are measured client-side (speaking-detector.ts); the SFU's active speakers are only a fallback.
+- Noise default Strong = RNNoise then GTCRN (each covers the other's weak spot; measured with noise-bench.mjs). Enhanced kept for slow PCs.
+- Watch together holds a list; auto-advance requests carry fromIndex so N viewers advance once. /shorts/ link shape = vertical.
