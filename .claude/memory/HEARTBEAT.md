@@ -87,11 +87,39 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
 - Screen share 15 fps + CS2 missing: b4d08e2 — livekit-client ignores videoEncoding for screen tracks (reads screenShareEncoding),
   so every share was its default 1080p15 2.5 Mbps. Fixed; 720p layer now 60 fps/3 Mbps (viewers <1280 px get it). Go Live dialog
   tip: exclusive-fullscreen games can't be window-captured → Fullscreen Windowed or Entire screen. Probe: tests/e2e/scripts/stream-stats.mjs.
-- NOT pushed yet (58ec9bb..b4d08e2). Deploy on VPS after push: cd /opt/hangar && git pull && dc build api edge && dc up -d api edge
+- 4ad7c6d room switch shows the new room at once (optimistic: room view while 'joining' with a "Connecting…" card, dock gated
+  on here(), VoicePresenceStore.members puts me in the joining channel; Settings → Voice "Last voice connection" timing row).
+- Everything through 4ad7c6d is PUSHED. Deploy on VPS: cd /opt/hangar && git pull && dc build api edge && dc up -d api edge
   (no migration, LiveKit untouched).
 
+## IN PROGRESS — random Shorts feed (user request 2026-11-01, stopped mid-slice; user will say "continue")
+Request: "the shorts scrolling should be random shorts every time like in youtube, aside from the watch together option".
+User chose: feed SHARED by everyone in the call (reuses watch-together state) + source = YouTube Data API v3 key (user creates
+it; I walk them through it after the code is done).
+- [x] apps/api/src/Hangar.Api/Realtime/ShortsFeed.cs WRITTEN (untracked, NOT built yet): YouTubeOptions (Hangar:YouTube
+  ApiKey/Region/Language/BaseUrl), IShortsSource.NextAsync(count, exclude, ct), YouTubeShortsSource (search.list
+  videoDuration=short + "<random topic> #shorts", random publishedAfter 2–60 days, order viewCount/relevance, pool + last-600
+  seen set, AppProblem 503 shorts.not_configured/quota/key_rejected/unavailable/empty). ClientName "youtube".
+- [ ] Program.cs: Configure<YouTubeOptions>(config.GetSection("Hangar:YouTube")); AddHttpClient(YouTubeShortsSource.ClientName,
+  c => c.Timeout = 6 s) (plain client — fixed Google host, no SafeHttp needed); AddSingleton<IShortsSource, YouTubeShortsSource>.
+- [ ] WatchTogether.cs: WatchControlRequest gains `bool? Shorts = null` (start feed: queue = 5 random Shorts, index 0, playing,
+  WatchStateDto gains `bool Feed` at the end); while Feed, an index jump within 3 of the end appends 5 more (exclude = queue ids;
+  cap: drop the oldest items before Index so queue stays ≤ MaxQueue and Index is shifted). Setting a normal Url/Add ends feed mode.
+- [ ] Test: WatchTogetherTests with a FakeShortsSource (replace IShortsSource in ApiFactory/test) — feed start, top-up, 503 when
+  no key (unconfigured real source).
+- [ ] Web: realtime.service.ts WatchState.feed; watch-together.ts startShorts() (PUT {shorts:true}), counter shows "#n" in feed
+  mode, toast the 503 message; dock/voice-room.page.ts "Shorts" button (also in watch dialog: "Random Shorts"). Wheel/arrows/
+  auto-advance already work through jump().
+- [ ] infra/config.example/api.env: commented `# Hangar__YouTube__ApiKey=` (+ Region) — no CHANGE_ME (bootstrap rejects it).
+  docs: deploy.md note + DECISIONS.md entry (search-based feed, quota math: 100 units/search, 10k/day free).
+- [ ] smoke-watch.mjs: route **/watch to verify UI with feed=true state (or a dev key if present); build web + backend tests.
+- [ ] Commit, update this file, then give the user key steps: console.cloud.google.com → new project → APIs & Services →
+  Library → "YouTube Data API v3" Enable → Credentials → Create credentials → API key → Restrict key → API restrictions: YouTube
+  Data API v3 → copy; on VPS add `Hangar__YouTube__ApiKey=<key>` to /srv/hangar/config/api.env, then git pull, dc build api edge,
+  dc up -d api edge. Ask before pushing.
+
 ## Next exact step
-Push (user approval), user deploys (command above), then ask friends whether switching/noise/Shorts are fixed.
+Continue the Shorts feed checklist above from "Program.cs" (first `dotnet build` ShortsFeed.cs — it was never compiled).
 
 ### HANDOFF — end of 2026-10-18 session (read this first)
 State: all feature phases (1–6) done; Phase 7 ~55% (every locally-testable item done); overall ~85% to first release. 81 backend tests + ~29 smokes pass. Everything committed and pushed (last: d29b0dc server settings). Working tree clean except the untracked 'start prompt.txt' (never commit it).
