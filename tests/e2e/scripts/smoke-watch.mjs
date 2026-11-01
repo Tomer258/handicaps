@@ -100,7 +100,46 @@ await owner.waitForTimeout(2000);
 check((await playerTime(owner)) > before, 'the video keeps playing as a mini player on a text channel');
 await owner.screenshot({ path: `${outDir}/watch-mini.png` });
 
-// 4. Stop ends it for both.
+// 4. A list with a Short: shown 9:16, scrolled through like the Shorts feed (wheel, arrow keys), extended later, and it
+// moves on by itself when a video ends. (Any video id works as a /shorts/ link; the link shape marks it vertical.)
+const SECOND = 'https://www.youtube.com/watch?v=eRsGyueVLvQ'; // Sintel (Blender Foundation, CC BY)
+const THIRD = 'https://www.youtube.com/watch?v=YE7VzlLtp-4'; // Big Buck Bunny trailer
+await owner.locator('button.ch', { hasText: 'Lounge' }).click(); // back to the voice room, still in the call
+await owner.waitForURL(new RegExp(`/v/${lounge.id}`));
+await owner.getByRole('button', { name: 'Add or change videos' }).click();
+await owner.getByLabel('YouTube links').fill(`https://youtube.com/shorts/aqz-KE-bpKQ\n${SECOND}`);
+await owner.getByRole('button', { name: 'Play these instead' }).click();
+const count = (p) => p.getByTestId('watch-count').textContent().catch(() => null);
+for (const p of [owner, friend]) await until(async () => (await count(p)) === '1/2', 10000, 'list of two shown');
+check(await friend.locator('.wt.short').count() === 1, 'a pasted list shows "1/2" for both, and the Short plays in a vertical frame');
+const box = await friend.locator('.wt-frame iframe').boundingBox();
+check(box && box.height > box.width * 1.5, `the Short's frame is 9:16 (${Math.round(box?.width)}×${Math.round(box?.height)})`);
+
+await friend.locator('.wt-shield').hover();
+await friend.mouse.wheel(0, 120);
+await until(async () => (await count(owner)) === '2/2', 8000, 'owner follows the friend scrolling down');
+await until(async () => owner.locator('iframe[src*="eRsGyueVLvQ"]').count(), 8000, 'owner loads the second video');
+check(await owner.locator('.wt.short').count() === 0, "the friend's scroll moves everyone to the next video (normal 16:9)");
+await owner.locator('.wt-shield').focus();
+await owner.keyboard.press('ArrowUp');
+await until(async () => (await count(friend)) === '1/2', 8000, 'arrow up goes back');
+check(true, 'arrow up goes back to the Short for everyone');
+
+await friend.getByRole('button', { name: 'Add or change videos' }).click();
+await friend.getByLabel('YouTube links').fill(THIRD);
+await friend.getByRole('button', { name: 'Add to the list' }).click();
+await until(async () => (await count(owner)) === '1/3', 8000, 'added video shows for the owner');
+check(true, 'adding a link extends the list without interrupting the video');
+
+const duration = await until(async () => Number(await owner.getByRole('slider', { name: 'Seek for everyone' }).getAttribute('max')) > 10
+  ? Number(await owner.getByRole('slider', { name: 'Seek for everyone' }).getAttribute('max')) : null, 15000, 'duration known');
+// fill() already fires input + change (a second change would re-send the slider after it re-rendered).
+await owner.getByRole('slider', { name: 'Seek for everyone' }).fill(String(Math.floor(duration - 3)));
+await until(async () => (await count(friend)) === '2/3', 20000, 'list moves on at the end of the video');
+const state = await owner.evaluate(async (ch) => (await fetch(`/api/v1/channels/${ch}/watch`)).json(), lounge.id);
+check(state.index === 1, 'when a video ends the list moves on once for everyone (both players reported the end)');
+
+// 5. Stop ends it for both.
 await owner.getByRole('button', { name: 'Stop watching together' }).click();
 for (const p of [owner, friend]) await p.locator('[data-testid=watch-player]').waitFor({ state: 'detached', timeout: 8000 });
 check(true, 'stopping removes the player for everyone');

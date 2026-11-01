@@ -10,16 +10,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hangar.Api.Realtime;
 
+/// <summary>One video in the player's list; <see cref="Short"/> = a YouTube Short (vertical, shown 9:16).</summary>
+public sealed record WatchItem(string VideoId, string? Title, bool Short);
+
 /// <summary>
 /// The shared YouTube player of a voice channel. <see cref="Position"/> is the playback time at <see cref="UpdatedAt"/>;
-/// clients add the elapsed time while playing, using <see cref="ServerNow"/> to correct their clock.
+/// clients add the elapsed time while playing, using <see cref="ServerNow"/> to correct their clock. <see cref="Queue"/>
+/// is the shared list (pasted together or added later, like a Shorts feed) and <see cref="Index"/> the item playing;
+/// <see cref="VideoId"/>/<see cref="Title"/> repeat that item.
 /// </summary>
 public sealed record WatchStateDto(
     Guid ServerId, Guid ChannelId, string VideoId, string? Title, bool Playing, double Position, DateTimeOffset UpdatedAt,
-    long Version, Guid StartedBy, Guid ControlledBy, DateTimeOffset ServerNow);
+    long Version, Guid StartedBy, Guid ControlledBy, DateTimeOffset ServerNow, IReadOnlyList<WatchItem> Queue, int Index);
 
-/// <summary>Start (url) or control (playing / position) the channel's player.</summary>
-public sealed record WatchControlRequest(string? Url, bool? Playing, double? Position);
+/// <summary>
+/// Start (url: one or more links, replaces the list), add (links appended), jump (index; with fromIndex only if that
+/// item is still the current one, so several players reporting the same "ended" advance once) or control
+/// (playing / position) the channel's player.
+/// </summary>
+public sealed record WatchControlRequest(string? Url, bool? Playing, double? Position, string? Add = null, int? Index = null, int? FromIndex = null);
 
 /// <summary>Current players by voice channel; in-process like the rest of the realtime state (single API replica).</summary>
 public sealed class WatchTogetherStore
@@ -44,6 +53,7 @@ public sealed class WatchTogetherService(
     TimeProvider clock)
 {
     private const double MaxPosition = 24 * 3600;
+    public const int MaxQueue = 50;
 
     public async Task<WatchStateDto?> GetAsync(Guid userId, Guid channelId, CancellationToken ct)
     {
@@ -60,41 +70,48 @@ public sealed class WatchTogetherService(
         if (req.Position is { } p && (!double.IsFinite(p) || p < 0 || p > MaxPosition))
             throw AppProblem.BadRequest("watch.position", "That position is out of range.");
 
-        string? videoId = null, title = null;
-        if (req.Url is not null)
-        {
-            var url = LinkPreviewService.Normalize(req.Url);
-            videoId = url is null ? null : LinkPreviewService.YoutubeId(new Uri(url));
-            if (videoId is null) throw AppProblem.BadRequest("watch.url", "Paste a YouTube video link.");
-            try
-            {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(4));
-                title = (await previews.GetAsync($"https://www.youtube.com/watch?v={videoId}", cts.Token))?.Title;
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                /* the title is a nicety */
-            }
-        }
+        var started = req.Url is null ? null : await ItemsAsync(req.Url, ct);
+        var added = req.Add is null ? null : await ItemsAsync(req.Add, ct);
 
         WatchStateDto next;
         var now = clock.GetUtcNow();
         lock (store.Gate)
         {
             store.Channels.TryGetValue(channelId, out var cur);
-            if (videoId is not null)
-                next = new WatchStateDto(channel.ServerId, channelId, videoId, title, req.Playing ?? true, req.Position ?? 0, now,
-                    store.NextVersion(), userId, userId, now);
+            if (started is not null)
+                next = new WatchStateDto(channel.ServerId, channelId, started[0].VideoId, started[0].Title, req.Playing ?? true, req.Position ?? 0, now,
+                    store.NextVersion(), userId, userId, now, started, 0);
             else
             {
                 if (cur is null) throw AppProblem.NotFound("watch.none", "Nothing is playing. Start a video first.");
-                var position = req.Position ?? CurrentPosition(cur, now);
-                next = cur with
+                // Someone else already moved on from the item this request was about: nothing to do.
+                if (req.FromIndex is { } from && from != cur.Index) return cur with { ServerNow = now };
+                var queue = cur.Queue;
+                if (added is not null)
                 {
-                    Playing = req.Playing ?? cur.Playing, Position = Math.Min(position, MaxPosition), UpdatedAt = now,
-                    Version = store.NextVersion(), ControlledBy = userId, ServerNow = now,
-                };
+                    if (queue.Count + added.Count > MaxQueue)
+                        throw AppProblem.BadRequest("watch.queue_full", $"The list holds up to {MaxQueue} videos.");
+                    queue = [.. queue, .. added];
+                }
+                if (req.Index is { } index)
+                {
+                    if (index < 0 || index >= queue.Count) throw AppProblem.BadRequest("watch.index", "There is no video there.");
+                    next = cur with
+                    {
+                        VideoId = queue[index].VideoId, Title = queue[index].Title, Queue = queue, Index = index,
+                        Playing = req.Playing ?? true, Position = Math.Min(req.Position ?? 0, MaxPosition), UpdatedAt = now,
+                        Version = store.NextVersion(), ControlledBy = userId, ServerNow = now,
+                    };
+                }
+                else
+                {
+                    var position = req.Position ?? CurrentPosition(cur, now);
+                    next = cur with
+                    {
+                        Queue = queue, Playing = req.Playing ?? cur.Playing, Position = Math.Min(position, MaxPosition), UpdatedAt = now,
+                        Version = store.NextVersion(), ControlledBy = userId, ServerNow = now,
+                    };
+                }
             }
             store.Channels[channelId] = next;
         }
@@ -121,6 +138,41 @@ public sealed class WatchTogetherService(
             if (channel is not null) await BroadcastAsync(channel, null, ct);
         }
     }
+
+    /// <summary>Every link in <paramref name="text"/> (separated by spaces, commas or new lines) as a list item, with titles.</summary>
+    private async Task<List<WatchItem>> ItemsAsync(string text, CancellationToken ct)
+    {
+        var links = text.Split([' ', '\n', '\r', '\t', ','], StringSplitOptions.RemoveEmptyEntries);
+        if (links.Length == 0) throw AppProblem.BadRequest("watch.url", "Paste a YouTube video link.");
+        if (links.Length > MaxQueue) throw AppProblem.BadRequest("watch.queue_full", $"The list holds up to {MaxQueue} videos.");
+        var parsed = new List<(string Id, bool Short)>();
+        foreach (var link in links)
+        {
+            var url = LinkPreviewService.Normalize(link);
+            var uri = url is null ? null : new Uri(url);
+            var id = uri is null ? null : LinkPreviewService.YoutubeId(uri);
+            if (id is null)
+                throw AppProblem.BadRequest("watch.url", links.Length == 1 ? "Paste a YouTube video link." : $"\"{Shorten(link)}\" is not a YouTube video link.");
+            parsed.Add((id, uri!.AbsolutePath.StartsWith("/shorts/", StringComparison.OrdinalIgnoreCase)));
+        }
+        // Titles are a nicety: fetched together, at most 4 s for the whole list.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(4));
+        var titles = await Task.WhenAll(parsed.Select(async p =>
+        {
+            try
+            {
+                return (await previews.GetAsync($"https://www.youtube.com/watch?v={p.Id}", cts.Token))?.Title;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return null;
+            }
+        }));
+        return [.. parsed.Select((p, i) => new WatchItem(p.Id, titles[i], p.Short))];
+    }
+
+    private static string Shorten(string s) => s.Length <= 40 ? s : s[..37] + "...";
 
     private static double CurrentPosition(WatchStateDto s, DateTimeOffset now) =>
         s.Playing ? s.Position + Math.Max(0, (now - s.UpdatedAt).TotalSeconds) : s.Position;

@@ -73,7 +73,10 @@ a.srv, a.card { color: inherit; }
 .wt-slot{flex:none;align-self:center;width:min(calc(100% - 48px),calc((55vh - 72px) * 16 / 9));padding-bottom:72px;margin-top:16px}
 .wt-slot>div{aspect-ratio:16/9}
 .wt{position:fixed;z-index:20;display:flex;flex-direction:column;background:#000;border-radius:14px;overflow:hidden;border:1px solid var(--line2);box-shadow:0 12px 40px rgba(0,0,0,.45)}
-.wt iframe{flex:1;min-height:0;width:100%;border:0;display:block}
+.wt-frame{flex:1;min-height:0;position:relative}
+.wt-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.wt.short .wt-frame iframe{left:50%;right:auto;width:auto;aspect-ratio:9/16;transform:translateX(-50%)}
+.wt-count{font-size:11.5px;color:var(--tx3);white-space:nowrap}
 .wt-shield{position:absolute;left:0;right:0;top:0;bottom:72px;cursor:pointer}
 .wt-bar{flex:none;height:72px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:4px 10px;background:var(--bg2);border-top:1px solid var(--line)}
 .wt-title{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
@@ -81,3 +84,4 @@ a.srv, a.card { color: inherit; }
 .wt-row{display:flex;align-items:center;gap:6px}
 .wt-time{font-size:11.5px;color:var(--tx3);white-space:nowrap}
 .wt.mini .wt-time{display:none}
+.wt-dialog textarea.inp{min-height:76px;resize:vertical;font-family:inherit;line-height:1.4}

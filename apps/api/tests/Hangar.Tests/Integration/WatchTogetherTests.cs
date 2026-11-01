@@ -48,4 +48,50 @@ public class WatchTogetherTests(ApiFactory factory)
             await scope.ServiceProvider.GetRequiredService<Hangar.Api.Realtime.WatchTogetherService>().SweepAsync(CancellationToken.None);
         Assert.Equal(HttpStatusCode.NoContent, (await member.Http.GetAsync(watch)).StatusCode);
     }
+
+    [Fact]
+    public async Task A_list_of_videos_and_shorts_is_shared_and_skipped_through()
+    {
+        var (owner, serverId) = await OwnerAsync(factory);
+        var created = await owner.Http.PostAsJsonAsync($"/api/v1/servers/{serverId}/channels", new { type = "voice", name = $"q{Guid.NewGuid():N}"[..12] });
+        var voice = (await Json(created)).GetProperty("id").GetGuid();
+        var watch = $"/api/v1/channels/{voice}/watch";
+        await owner.Http.PostAsJsonAsync($"/api/v1/channels/{voice}/voice/join", new { requestId = Guid.NewGuid() });
+
+        // Several links at once (new lines, spaces): one list; a /shorts/ link is marked as a Short.
+        var started = await Json(await owner.Http.PutAsJsonAsync(watch, new { url = "https://youtube.com/shorts/aaaaaaaaaaa\nhttps://youtu.be/bbbbbbbbbbb" }));
+        Assert.Equal(0, started.GetProperty("index").GetInt32());
+        Assert.Equal("aaaaaaaaaaa", started.GetProperty("videoId").GetString());
+        var queue = started.GetProperty("queue");
+        Assert.Equal(2, queue.GetArrayLength());
+        Assert.True(queue[0].GetProperty("short").GetBoolean());
+        Assert.False(queue[1].GetProperty("short").GetBoolean());
+
+        // One bad link names itself and changes nothing.
+        var bad = await owner.Http.PutAsJsonAsync(watch, new { add = "https://youtube.com/shorts/ccccccccccc https://example.com/x" });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Contains("example.com", await bad.Content.ReadAsStringAsync());
+
+        var added = await Json(await owner.Http.PutAsJsonAsync(watch, new { add = "https://youtube.com/shorts/ccccccccccc" }));
+        Assert.Equal(3, added.GetProperty("queue").GetArrayLength());
+        Assert.Equal(0, added.GetProperty("index").GetInt32());
+
+        // Scrolling to the next one plays it from the start, for everyone.
+        await owner.Http.PutAsJsonAsync(watch, new { playing = false, position = 30 });
+        var next = await Json(await owner.Http.PutAsJsonAsync(watch, new { index = 1 }));
+        Assert.Equal("bbbbbbbbbbb", next.GetProperty("videoId").GetString());
+        Assert.Equal(0, next.GetProperty("position").GetDouble());
+        Assert.True(next.GetProperty("playing").GetBoolean());
+
+        // Two players report the same video ended: only the first advances.
+        var first = await Json(await owner.Http.PutAsJsonAsync(watch, new { index = 2, fromIndex = 1 }));
+        var second = await Json(await owner.Http.PutAsJsonAsync(watch, new { index = 3, fromIndex = 1 }));
+        Assert.Equal(2, first.GetProperty("index").GetInt32());
+        Assert.Equal(2, second.GetProperty("index").GetInt32());
+        Assert.Equal(first.GetProperty("version").GetInt64(), second.GetProperty("version").GetInt64());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.Http.PutAsJsonAsync(watch, new { index = 3 })).StatusCode);
+        var tooMany = string.Join(' ', Enumerable.Repeat("https://youtu.be/ddddddddddd", 48));
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.Http.PutAsJsonAsync(watch, new { add = tooMany })).StatusCode);
+    }
 }

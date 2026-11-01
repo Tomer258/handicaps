@@ -9,6 +9,7 @@ export const ICONS = {
   'camera-off': `<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3M3 3l18 18"/>`,
   'check': `<path d="M5 12.5 10 17l9-10"/>`,
   'chevron-down': `<path d="m6 9 6 6 6-6"/>`,
+  'chevron-up': `<path d="m6 15 6-6 6 6"/>`,
   'chevron-right': `<path d="m9 6 6 6-6 6"/>`,
   'copy': `<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>`,
   'download': `<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>`,

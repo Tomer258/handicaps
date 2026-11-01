@@ -51,6 +51,16 @@ export interface WatchState {
   startedBy: string;
   controlledBy: string;
   serverNow: string;
+  /** The shared list (one item for a single link); `index` is the one playing, whose id/title repeat above. */
+  queue: WatchItem[];
+  index: number;
+}
+
+export interface WatchItem {
+  videoId: string;
+  title: string | null;
+  /** A YouTube Short: vertical, shown 9:16. */
+  short: boolean;
 }
 
 export interface WatchSignal {
