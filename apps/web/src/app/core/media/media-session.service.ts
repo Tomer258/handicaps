@@ -22,6 +22,7 @@ import {
 import { ApiService } from '../api/api.service';
 import { MediaPrefsService } from './media-prefs.service';
 import { GateConfig, MIC_PROCESSOR, MicProcessor } from './noise-filter';
+import { SpeakingDetector } from './speaking-detector';
 import { ApiError } from '../api/api-error';
 import { SessionService } from '../auth/session.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -217,6 +218,13 @@ export class MediaSessionService {
   /** Serializes mic processor changes on the mic track (mute toggles and settings can overlap). */
   private noiseSync: Promise<void> = Promise.resolve();
   private readonly audioHost: HTMLElement | null = typeof document !== 'undefined' ? document.createElement('div') : null;
+  /** Speaking rings: measured locally where we have the track; the SFU's active speakers fill in the rest. */
+  private readonly detector = new SpeakingDetector((ids) => {
+    this.localSpeakers = ids;
+    this.mergeSpeaking();
+  });
+  private localSpeakers: ReadonlySet<string> = new Set();
+  private serverSpeakers: ReadonlySet<string> = new Set();
 
   constructor() {
     if (this.audioHost) {
@@ -628,8 +636,10 @@ export class MediaSessionService {
         this.subscribeAudio(p);
         this.refreshPeers();
       })
-      .on(RoomEvent.ParticipantDisconnected, () => {
+      .on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
         if (!live()) return;
+        const uid = userIdOf(p);
+        if (uid) this.detector.unwatch(uid);
         this.refreshPeers();
         this.bump();
       })
@@ -653,10 +663,14 @@ export class MediaSessionService {
           if (isSoundboard(p)) this.applySoundVolume(pub);
           else this.applyVolumeFor(p);
         }
+        const uid = userIdOf(p);
+        if (uid && pub.source === Track.Source.Microphone) this.detector.watch(uid, () => pub.track?.mediaStreamTrack);
         this.bump();
       })
-      .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+      .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, p: RemoteParticipant) => {
         if (track.kind === Track.Kind.Audio) track.detach().forEach((el) => el.remove());
+        const uid = userIdOf(p);
+        if (live() && uid && pub.source === Track.Source.Microphone) this.detector.unwatch(uid);
         if (live()) this.bump();
       })
       // Unsubscribing is immediate for us, but the track only ends after the SFU renegotiates: stop playing it now.
@@ -673,14 +687,19 @@ export class MediaSessionService {
       .on(RoomEvent.LocalTrackUnpublished, () => live() && this.bump())
       .on(RoomEvent.TrackMuted, () => live() && this.refreshPeers())
       .on(RoomEvent.TrackUnmuted, () => live() && this.refreshPeers())
-      .on(RoomEvent.LocalTrackPublished, () => {
+      .on(RoomEvent.LocalTrackPublished, (pub: TrackPublication) => {
         if (!live()) return;
+        const uid = userIdOf(room.localParticipant);
+        // The processed track (noise filter + gate) is what friends hear, so my ring follows it; muted = silent.
+        if (uid && pub.source === Track.Source.Microphone)
+          this.detector.watch(uid, () => (pub.track && !pub.track.isMuted ? pub.track.mediaStreamTrack : undefined));
         this.refreshPeers();
         this.bump();
       })
       .on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         if (!live()) return;
-        this._speaking.set(new Set(speakers.map((s) => userIdOf(s)).filter((u): u is string => !!u)));
+        this.serverSpeakers = new Set(speakers.map((s) => userIdOf(s)).filter((u): u is string => !!u));
+        this.mergeSpeaking();
       })
       .on(RoomEvent.ConnectionQualityChanged, (q: ConnectionQuality, p: Participant) => {
         if (live()) this._quality.update((m) => ({ ...m, [p.identity]: q }));
@@ -994,7 +1013,16 @@ export class MediaSessionService {
     if (this.leaseId && this.connected()) this.realtime.updateVoiceState(this.leaseId, this._muted(), this._deafened());
   }
 
+  private mergeSpeaking(): void {
+    const ids = new Set(this.localSpeakers);
+    for (const id of this.serverSpeakers) if (!this.detector.covers(id)) ids.add(id);
+    const cur = this._speaking();
+    if (ids.size !== cur.size || [...ids].some((id) => !cur.has(id))) this._speaking.set(ids);
+  }
+
   private cleanupRoom(): void {
+    this.detector.clear();
+    this.serverSpeakers = new Set();
     const room = this.room;
     this.room = undefined;
     if (!room) return;
