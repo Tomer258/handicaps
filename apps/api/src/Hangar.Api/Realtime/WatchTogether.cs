@@ -17,18 +17,21 @@ public sealed record WatchItem(string VideoId, string? Title, bool Short);
 /// The shared YouTube player of a voice channel. <see cref="Position"/> is the playback time at <see cref="UpdatedAt"/>;
 /// clients add the elapsed time while playing, using <see cref="ServerNow"/> to correct their clock. <see cref="Queue"/>
 /// is the shared list (pasted together or added later, like a Shorts feed) and <see cref="Index"/> the item playing;
-/// <see cref="VideoId"/>/<see cref="Title"/> repeat that item.
+/// <see cref="VideoId"/>/<see cref="Title"/> repeat that item. <see cref="Feed"/>: a random Shorts feed that tops itself up
+/// as the group scrolls (see <see cref="IShortsSource"/>).
 /// </summary>
 public sealed record WatchStateDto(
     Guid ServerId, Guid ChannelId, string VideoId, string? Title, bool Playing, double Position, DateTimeOffset UpdatedAt,
-    long Version, Guid StartedBy, Guid ControlledBy, DateTimeOffset ServerNow, IReadOnlyList<WatchItem> Queue, int Index);
+    long Version, Guid StartedBy, Guid ControlledBy, DateTimeOffset ServerNow, IReadOnlyList<WatchItem> Queue, int Index, bool Feed = false);
 
 /// <summary>
 /// Start (url: one or more links, replaces the list), add (links appended), jump (index; with fromIndex only if that
 /// item is still the current one, so several players reporting the same "ended" advance once) or control
-/// (playing / position) the channel's player.
+/// (playing / position) the channel's player. Shorts: start a random Shorts feed (replaces the list; a later url or add
+/// ends the feed).
 /// </summary>
-public sealed record WatchControlRequest(string? Url, bool? Playing, double? Position, string? Add = null, int? Index = null, int? FromIndex = null);
+public sealed record WatchControlRequest(
+    string? Url, bool? Playing, double? Position, string? Add = null, int? Index = null, int? FromIndex = null, bool? Shorts = null);
 
 /// <summary>Current players by voice channel; in-process like the rest of the realtime state (single API replica).</summary>
 public sealed class WatchTogetherStore
@@ -50,10 +53,14 @@ public sealed class WatchTogetherService(
     IHubContext<HangarHub> hub,
     WatchTogetherStore store,
     LinkPreviewService previews,
+    IShortsSource shorts,
+    ILogger<WatchTogetherService> log,
     TimeProvider clock)
 {
     private const double MaxPosition = 24 * 3600;
     public const int MaxQueue = 50;
+    /// <summary>Shorts fetched per top-up, and how close to the end of the feed a jump triggers one.</summary>
+    private const int FeedBatch = 5, FeedAhead = 3;
 
     public async Task<WatchStateDto?> GetAsync(Guid userId, Guid channelId, CancellationToken ct)
     {
@@ -72,6 +79,8 @@ public sealed class WatchTogetherService(
 
         var started = req.Url is null ? null : await ItemsAsync(req.Url, ct);
         var added = req.Add is null ? null : await ItemsAsync(req.Add, ct);
+        var feed = req.Shorts == true && started is null ? await shorts.NextAsync(FeedBatch, new HashSet<string>(), ct) : null;
+        var more = feed is null && started is null && added is null ? await TopUpAsync(channelId, req, ct) : null;
 
         WatchStateDto next;
         var now = clock.GetUtcNow();
@@ -81,6 +90,9 @@ public sealed class WatchTogetherService(
             if (started is not null)
                 next = new WatchStateDto(channel.ServerId, channelId, started[0].VideoId, started[0].Title, req.Playing ?? true, req.Position ?? 0, now,
                     store.NextVersion(), userId, userId, now, started, 0);
+            else if (feed is not null)
+                next = new WatchStateDto(channel.ServerId, channelId, feed[0].VideoId, feed[0].Title, true, 0, now,
+                    store.NextVersion(), userId, userId, now, feed, 0, Feed: true);
             else
             {
                 if (cur is null) throw AppProblem.NotFound("watch.none", "Nothing is playing. Start a video first.");
@@ -93,12 +105,26 @@ public sealed class WatchTogetherService(
                         throw AppProblem.BadRequest("watch.queue_full", $"The list holds up to {MaxQueue} videos.");
                     queue = [.. queue, .. added];
                 }
-                if (req.Index is { } index)
+                var index = req.Index;
+                if (cur.Feed && more is not null && index is not null)
                 {
-                    if (index < 0 || index >= queue.Count) throw AppProblem.BadRequest("watch.index", "There is no video there.");
+                    var have = queue.Select(q => q.VideoId).ToHashSet();
+                    queue = [.. queue, .. more.Where(m => have.Add(m.VideoId))];
+                    // Keep the list bounded by forgetting Shorts already scrolled past.
+                    var drop = Math.Min(Math.Max(0, queue.Count - MaxQueue), index.Value);
+                    if (drop > 0)
+                    {
+                        queue = [.. queue.Skip(drop)];
+                        index -= drop;
+                    }
+                }
+                if (index is { } at)
+                {
+                    var i = at;
+                    if (i < 0 || i >= queue.Count) throw AppProblem.BadRequest("watch.index", "There is no video there.");
                     next = cur with
                     {
-                        VideoId = queue[index].VideoId, Title = queue[index].Title, Queue = queue, Index = index,
+                        VideoId = queue[i].VideoId, Title = queue[i].Title, Queue = queue, Index = i, Feed = cur.Feed && added is null,
                         Playing = req.Playing ?? true, Position = Math.Min(req.Position ?? 0, MaxPosition), UpdatedAt = now,
                         Version = store.NextVersion(), ControlledBy = userId, ServerNow = now,
                     };
@@ -108,7 +134,7 @@ public sealed class WatchTogetherService(
                     var position = req.Position ?? CurrentPosition(cur, now);
                     next = cur with
                     {
-                        Queue = queue, Playing = req.Playing ?? cur.Playing, Position = Math.Min(position, MaxPosition), UpdatedAt = now,
+                        Queue = queue, Feed = cur.Feed && added is null, Playing = req.Playing ?? cur.Playing, Position = Math.Min(position, MaxPosition), UpdatedAt = now,
                         Version = store.NextVersion(), ControlledBy = userId, ServerNow = now,
                     };
                 }
@@ -136,6 +162,26 @@ public sealed class WatchTogetherService(
             if (occupied || !store.Channels.TryRemove(channelId, out _)) continue;
             var channel = await db.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.Id == channelId, ct);
             if (channel is not null) await BroadcastAsync(channel, null, ct);
+        }
+    }
+
+    /// <summary>
+    /// More Shorts when a jump lands near the end of a feed. Fetched before taking the lock; a failure only means the feed
+    /// does not grow this time (the jump itself still happens).
+    /// </summary>
+    private async Task<IReadOnlyList<WatchItem>?> TopUpAsync(Guid channelId, WatchControlRequest req, CancellationToken ct)
+    {
+        if (req.Index is not { } index || !store.Channels.TryGetValue(channelId, out var cur) || !cur.Feed) return null;
+        if (req.FromIndex is { } from && from != cur.Index) return null;
+        if (index < cur.Queue.Count - FeedAhead) return null;
+        try
+        {
+            return await shorts.NextAsync(FeedBatch, cur.Queue.Select(q => q.VideoId).ToHashSet(), ct);
+        }
+        catch (AppProblem e)
+        {
+            log.LogWarning("Shorts feed top-up failed: {Code}", e.Code);
+            return null;
         }
     }
 

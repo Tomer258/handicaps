@@ -74,3 +74,8 @@
 - Speaking rings are measured client-side (speaking-detector.ts); the SFU's active speakers are only a fallback.
 - Noise default Strong = RNNoise then GTCRN (each covers the other's weak spot; measured with noise-bench.mjs). Enhanced kept for slow PCs.
 - Watch together holds a list; auto-advance requests carry fromIndex so N viewers advance once. /shorts/ link shape = vertical.
+
+## 2026-11-03 — Random Shorts feed
+- Shared by the call: it is a watch-together list with Feed=true, so sync, scroll (wheel/arrows/▲▼) and auto-advance are reused. A jump within 3 of the end appends 5 more (fetched before the store lock; a failed top-up never blocks the jump); the list stays ≤ 50 by dropping Shorts already scrolled past. A pasted url/add ends feed mode.
+- Source: YouTube Data API v3 search (videoDuration=short, "<random topic> #shorts", random publishedAfter 2–60 days, viewCount/relevance), shuffled in-memory pool + last 600 served ids skipped. There is no official Shorts-feed API; scraping youtube.com was rejected (breaks, ToS). Key is optional (Hangar:YouTube:ApiKey); without it the API answers 503 shorts.not_configured with a readable message.
+- Plain HttpClient (fixed Google host) instead of SafeHttp; 6 s timeout.

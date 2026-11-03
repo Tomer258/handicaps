@@ -94,4 +94,54 @@ public class WatchTogetherTests(ApiFactory factory)
         var tooMany = string.Join(' ', Enumerable.Repeat("https://youtu.be/ddddddddddd", 48));
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.Http.PutAsJsonAsync(watch, new { add = tooMany })).StatusCode);
     }
+
+    [Fact]
+    public async Task A_random_shorts_feed_tops_itself_up_while_scrolling()
+    {
+        var (owner, serverId) = await OwnerAsync(factory);
+        var created = await owner.Http.PostAsJsonAsync($"/api/v1/servers/{serverId}/channels", new { type = "voice", name = $"f{Guid.NewGuid():N}"[..12] });
+        var voice = (await Json(created)).GetProperty("id").GetGuid();
+        var watch = $"/api/v1/channels/{voice}/watch";
+        await owner.Http.PostAsJsonAsync($"/api/v1/channels/{voice}/voice/join", new { requestId = Guid.NewGuid() });
+
+        var feed = await Json(await owner.Http.PutAsJsonAsync(watch, new { shorts = true }));
+        Assert.True(feed.GetProperty("feed").GetBoolean());
+        Assert.Equal(5, feed.GetProperty("queue").GetArrayLength());
+        Assert.True(feed.GetProperty("queue")[0].GetProperty("short").GetBoolean());
+
+        // Far from the end: no top-up. Within 3 of the end: 5 more, no repeats.
+        Assert.Equal(5, (await Json(await owner.Http.PutAsJsonAsync(watch, new { index = 1 }))).GetProperty("queue").GetArrayLength());
+        var grown = await Json(await owner.Http.PutAsJsonAsync(watch, new { index = 2 }));
+        var ids = grown.GetProperty("queue").EnumerateArray().Select(q => q.GetProperty("videoId").GetString()).ToList();
+        Assert.Equal(10, ids.Count);
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+
+        // Scrolling a long way keeps the list bounded; the current Short stays current.
+        var state = grown;
+        for (var n = 0; n < 15; n++)
+            state = await Json(await owner.Http.PutAsJsonAsync(watch, new { index = state.GetProperty("queue").GetArrayLength() - 1 }));
+        var queue = state.GetProperty("queue");
+        Assert.True(queue.GetArrayLength() <= 50);
+        Assert.Equal(queue[state.GetProperty("index").GetInt32()].GetProperty("videoId").GetString(), state.GetProperty("videoId").GetString());
+
+        // YouTube down: the jump still happens, the feed just doesn't grow.
+        factory.Shorts.Problem = new Hangar.Core.Common.AppProblem(503, "shorts.unavailable", "down");
+        try
+        {
+            var len = queue.GetArrayLength();
+            var stuck = await Json(await owner.Http.PutAsJsonAsync(watch, new { index = len - 1 }));
+            Assert.Equal(len - 1, stuck.GetProperty("index").GetInt32());
+            var refused = await owner.Http.PutAsJsonAsync(watch, new { shorts = true });
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+            Assert.Contains("shorts.unavailable", await refused.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            factory.Shorts.Problem = null;
+        }
+
+        // A pasted link ends the feed.
+        var normal = await Json(await owner.Http.PutAsJsonAsync(watch, new { url = "https://youtu.be/dQw4w9WgXcQ" }));
+        Assert.False(normal.GetProperty("feed").GetBoolean());
+    }
 }

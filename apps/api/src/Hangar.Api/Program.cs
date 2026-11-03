@@ -30,6 +30,7 @@ builder.Services.Configure<Hangar.Core.Files.StorageOptions>(config.GetSection("
 builder.Services.Configure<Hangar.Core.Files.AttachmentOptions>(config.GetSection("Hangar:Files"));
 builder.Services.Configure<LinkPreviewOptions>(config.GetSection("Hangar:LinkPreviews"));
 builder.Services.Configure<ResourceOptions>(config.GetSection("Hangar:Resources"));
+builder.Services.Configure<YouTubeOptions>(config.GetSection("Hangar:YouTube"));
 // Relative storage roots resolve from the content root (not the process working directory).
 builder.Services.PostConfigure<Hangar.Core.Files.StorageOptions>(o =>
     o.Root = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, o.Root)));
@@ -73,6 +74,9 @@ builder.Services.AddHttpClient(LinkPreviewService.ClientName, c =>
     .ConfigurePrimaryHttpMessageHandler(sp => SafeHttp.CreateHandler(sp.GetRequiredService<IOptions<LinkPreviewOptions>>().Value.AllowPrivateAddresses))
     .SetHandlerLifetime(TimeSpan.FromMinutes(10));
 builder.Services.AddSingleton<LinkPreviewService>();
+// Shorts feed: fixed Google API host, so a plain client (no SafeHttp).
+builder.Services.AddHttpClient(YouTubeShortsSource.ClientName, c => c.Timeout = TimeSpan.FromSeconds(6));
+builder.Services.AddSingleton<IShortsSource, YouTubeShortsSource>();
 builder.Services.AddSingleton<WatchTogetherStore>();
 builder.Services.AddScoped<WatchTogetherService>();
 builder.Services.AddHostedService<WatchTogetherSweeper>();

@@ -54,6 +54,8 @@ export interface WatchState {
   /** The shared list (one item for a single link); `index` is the one playing, whose id/title repeat above. */
   queue: WatchItem[];
   index: number;
+  /** A random Shorts feed: the API appends more Shorts as the group scrolls near the end. */
+  feed?: boolean;
 }
 
 export interface WatchItem {

@@ -75,6 +75,19 @@ export class WatchTogether {
     }
   }
 
+  /** Starts a random Shorts feed for the call (replaces the list; it grows as the group scrolls). */
+  async startShorts(): Promise<boolean> {
+    const ch = this.media.channelId();
+    if (!ch || !this.media.connected()) return false;
+    try {
+      this.apply(ch, await this.api.put<WatchState>(`/channels/${ch}/watch`, { shorts: true }));
+      return true;
+    } catch (e) {
+      this.toast.show(ApiError.from(e).message, 'warn');
+      return false;
+    }
+  }
+
   /** Appends links to the shared list (the current video keeps playing). */
   async add(links: string): Promise<boolean> {
     const ch = this.active()?.channelId;
@@ -177,7 +190,7 @@ interface PlayerInfo {
             </button>
             @if (s.queue.length > 1) {
               <button class="ibtn" aria-label="Previous video for everyone" title="Previous (scroll up)" [disabled]="s.index === 0" (click)="step(-1)"><hx-icon name="chevron-up" size="sm" /></button>
-              <span class="mono wt-count" data-testid="watch-count">{{ s.index + 1 }}/{{ s.queue.length }}</span>
+              <span class="mono wt-count" data-testid="watch-count">{{ s.feed ? '#' + (s.index + 1) : (s.index + 1) + '/' + s.queue.length }}</span>
               <button class="ibtn" aria-label="Next video for everyone" title="Next (scroll down)" [disabled]="s.index >= s.queue.length - 1" (click)="step(1)"><hx-icon name="chevron-down" size="sm" /></button>
             }
             <span class="mono wt-time">{{ clock(shownTime()) }} / {{ clock(duration()) }}</span>
@@ -203,6 +216,9 @@ interface PlayerInfo {
               style="width: 440px; max-width: calc(100% - 32px); padding: 22px; display: flex; flex-direction: column; gap: 12px">
           <h2 id="wt-title" class="disp" style="margin: 0; font-size: 20px">Watch together</h2>
           <p style="margin: 0; color: var(--tx2); font-size: 13.5px">Paste YouTube links or Shorts, one or many. Everyone in the call watches in sync, and anyone in the call can pause or scroll to the next one.</p>
+          <button type="button" class="btn sec" style="justify-content: flex-start; gap: 10px" [disabled]="busy()" (click)="shorts()" data-testid="watch-shorts">
+            <hx-icon name="shuffle" size="sm" /><span style="flex: 1; text-align: left">Random Shorts<span style="display: block; color: var(--tx3); font-size: 12px; font-weight: 400">A fresh feed everyone scrolls together</span></span>
+          </button>
           <div class="field"><label for="wt-url">YouTube links</label>
             <textarea #url id="wt-url" class="inp" rows="3" placeholder="https://youtube.com/shorts/…&#10;https://www.youtube.com/watch?v=…" autocomplete="off"
                       [value]="draft()" (input)="draft.set($any($event.target).value)" (keydown.enter)="onEnter($event)"></textarea>
@@ -269,7 +285,7 @@ export class WatchPlayer {
   readonly title = computed(() => this.watch.active()?.title || this.info().videoData?.title || 'YouTube video');
   readonly starter = computed(() => {
     const s = this.watch.active();
-    return s ? 'started by ' + (this.workspace.memberById().get(s.startedBy)?.displayName ?? 'someone') : '';
+    return s ? (s.feed ? 'Shorts feed, started by ' : 'started by ') + (this.workspace.memberById().get(s.startedBy)?.displayName ?? 'someone') : '';
   });
   readonly shownTime = computed(() => {
     this.tick();
@@ -344,6 +360,14 @@ export class WatchPlayer {
     if (!links || this.busy()) return;
     this.busy.set(true);
     const ok = append ? await this.watch.add(links) : await this.watch.start(links);
+    this.busy.set(false);
+    if (ok) this.watch.dialogOpen.set(false);
+  }
+
+  async shorts(): Promise<void> {
+    if (this.busy()) return;
+    this.busy.set(true);
+    const ok = await this.watch.startShorts();
     this.busy.set(false);
     if (ok) this.watch.dialogOpen.set(false);
   }

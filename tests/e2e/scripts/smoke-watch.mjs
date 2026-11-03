@@ -144,6 +144,30 @@ await owner.getByRole('button', { name: 'Stop watching together' }).click();
 for (const p of [owner, friend]) await p.locator('[data-testid=watch-player]').waitFor({ state: 'detached', timeout: 8000 });
 check(true, 'stopping removes the player for everyone');
 
+// 6. Random Shorts feed. Without a YouTube key (dev) the API explains how to turn it on; the feed UI is then checked
+// with a stubbed reply (the real feed is covered by WatchTogetherTests with a fake source).
+await owner.getByRole('button', { name: 'Watch together' }).first().click();
+await owner.getByTestId('watch-shorts').click();
+const keyed = await Promise.race([
+  owner.locator('.toast', { hasText: 'YouTube API key' }).waitFor({ timeout: 10000 }).then(() => false),
+  owner.locator('[data-testid=watch-player]').waitFor({ timeout: 10000 }).then(() => true),
+]);
+if (!keyed) {
+  check(true, 'without a YouTube key, Random Shorts says the server owner has to add one');
+  const now = new Date().toISOString();
+  const feed = ['s0000000001', 's0000000002', 's0000000003', 's0000000004', 's0000000005'].map((videoId) => ({ videoId, title: 'A Short', short: true }));
+  await owner.route('**/api/v1/channels/*/watch', (r) => r.request().method() === 'PUT'
+    ? r.fulfill({ json: { serverId, channelId: lounge.id, videoId: feed[0].videoId, title: 'A Short', playing: false, position: 0, updatedAt: now,
+        version: 1e12, startedBy: me.id ?? me.user?.id, controlledBy: me.id ?? me.user?.id, serverNow: now, queue: feed, index: 0, feed: true } })
+    : r.fallback());
+  await owner.getByTestId('watch-shorts').click();
+}
+await owner.locator('[data-testid=watch-player]').waitFor({ timeout: 10000 });
+check((await count(owner)) === '#1', 'a Shorts feed counts "#1" (it has no end) and plays in the vertical frame');
+check(await owner.locator('.wt.short').count() === 1, 'the feed plays in the vertical frame');
+await owner.unroute('**/api/v1/channels/*/watch');
+await owner.getByRole('button', { name: 'Stop watching together' }).click();
+
 void general;
 console.log('ok');
 await browser.close();

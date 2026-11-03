@@ -110,3 +110,18 @@ which the API reads. Check it with `cat /srv/hangar/monitor/resources.json`. If 
 measured, look for `no hangar-*.slice` in `dc logs ops-monitor`. CPU is a share of the whole machine (all cores = 100%);
 memory excludes reclaimable page cache, like `docker stats`.
 Test the webhook: stop the API for 3 minutes (`dc stop api`, then `dc start api`) and expect an ALERT and a RESOLVED.
+
+### Shorts feed (watch together → Random Shorts)
+
+Optional. YouTube has no API for its own Shorts feed, so the API searches the YouTube Data API v3 for popular recent
+Shorts on a random topic and serves them shuffled; the feed tops itself up as the call scrolls. It needs an API key:
+
+1. <https://console.cloud.google.com> → create a project → **APIs & Services → Library** → "YouTube Data API v3" → **Enable**.
+2. **APIs & Services → Credentials → Create credentials → API key**. Edit the key → **API restrictions → Restrict key** →
+   YouTube Data API v3 → Save. (No application restriction: the API calls Google from the server, not the browser.)
+3. Add `Hangar__YouTube__ApiKey=<key>` (optionally `Hangar__YouTube__Region=IL`, `Hangar__YouTube__Language=he`) to
+   `/srv/hangar/config/api.env`, then `dc up -d api`.
+
+Quota: 10,000 free units a day; one search costs 100 and yields up to 50 Shorts, so an evening of scrolling uses a few
+hundred units. When the quota runs out the button says so until midnight Pacific time. `dc logs api | grep -i shorts` shows
+each refill and any refusal from YouTube.

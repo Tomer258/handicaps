@@ -1,6 +1,6 @@
 # HEARTBEAT — update after every slice
 
-**Last update:** 2026-11-01 — session 5 (deployed; room switch, Strong noise, Shorts lists) · 2026-10-31 — session 4 (Enhanced noise suppression / RNNoise) · 2026-10-18 — session 3 (S9 admin/permissions done) · session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
+**Last update:** 2026-11-03 — session 6 (random Shorts feed) · 2026-11-01 — session 5 (deployed; room switch, Strong noise, Shorts lists) · 2026-10-31 — session 4 (Enhanced noise suppression / RNNoise) · 2026-10-18 — session 3 (S9 admin/permissions done) · session 2 (S0–S8, search, watchdog, POC bootstrap + local POC committed and pushed; plan reordered POC-first)
 
 ## Slice plan (status)
 - [x] S0 Repo setup: CLAUDE.md, hooks (path guard + session context), memory, docs/ copied from _inputs, git init
@@ -92,34 +92,18 @@ Items are the existing remaining work (pre-release-gates.md manual list + roadma
 - Everything through 4ad7c6d is PUSHED. Deploy on VPS: cd /opt/hangar && git pull && dc build api edge && dc up -d api edge
   (no migration, LiveKit untouched).
 
-## IN PROGRESS — random Shorts feed (user request 2026-11-01, stopped mid-slice; user will say "continue")
-Request: "the shorts scrolling should be random shorts every time like in youtube, aside from the watch together option".
-User chose: feed SHARED by everyone in the call (reuses watch-together state) + source = YouTube Data API v3 key (user creates
-it; I walk them through it after the code is done).
-- [x] apps/api/src/Hangar.Api/Realtime/ShortsFeed.cs WRITTEN (untracked, NOT built yet): YouTubeOptions (Hangar:YouTube
-  ApiKey/Region/Language/BaseUrl), IShortsSource.NextAsync(count, exclude, ct), YouTubeShortsSource (search.list
-  videoDuration=short + "<random topic> #shorts", random publishedAfter 2–60 days, order viewCount/relevance, pool + last-600
-  seen set, AppProblem 503 shorts.not_configured/quota/key_rejected/unavailable/empty). ClientName "youtube".
-- [ ] Program.cs: Configure<YouTubeOptions>(config.GetSection("Hangar:YouTube")); AddHttpClient(YouTubeShortsSource.ClientName,
-  c => c.Timeout = 6 s) (plain client — fixed Google host, no SafeHttp needed); AddSingleton<IShortsSource, YouTubeShortsSource>.
-- [ ] WatchTogether.cs: WatchControlRequest gains `bool? Shorts = null` (start feed: queue = 5 random Shorts, index 0, playing,
-  WatchStateDto gains `bool Feed` at the end); while Feed, an index jump within 3 of the end appends 5 more (exclude = queue ids;
-  cap: drop the oldest items before Index so queue stays ≤ MaxQueue and Index is shifted). Setting a normal Url/Add ends feed mode.
-- [ ] Test: WatchTogetherTests with a FakeShortsSource (replace IShortsSource in ApiFactory/test) — feed start, top-up, 503 when
-  no key (unconfigured real source).
-- [ ] Web: realtime.service.ts WatchState.feed; watch-together.ts startShorts() (PUT {shorts:true}), counter shows "#n" in feed
-  mode, toast the 503 message; dock/voice-room.page.ts "Shorts" button (also in watch dialog: "Random Shorts"). Wheel/arrows/
-  auto-advance already work through jump().
-- [ ] infra/config.example/api.env: commented `# Hangar__YouTube__ApiKey=` (+ Region) — no CHANGE_ME (bootstrap rejects it).
-  docs: deploy.md note + DECISIONS.md entry (search-based feed, quota math: 100 units/search, 10k/day free).
-- [ ] smoke-watch.mjs: route **/watch to verify UI with feed=true state (or a dev key if present); build web + backend tests.
-- [ ] Commit, update this file, then give the user key steps: console.cloud.google.com → new project → APIs & Services →
-  Library → "YouTube Data API v3" Enable → Credentials → Create credentials → API key → Restrict key → API restrictions: YouTube
-  Data API v3 → copy; on VPS add `Hangar__YouTube__ApiKey=<key>` to /srv/hangar/config/api.env, then git pull, dc build api edge,
-  dc up -d api edge. Ask before pushing.
+## Session 6 (2026-11-03) — random Shorts feed DONE
+Request (2026-11-01): "the shorts scrolling should be random shorts every time like in youtube, aside from the watch together
+option". Feed is SHARED by the call (watch-together list with feed=true); source = YouTube Data API v3 key (user creates it).
+- API: Realtime/ShortsFeed.cs (YouTubeOptions Hangar:YouTube ApiKey/Region/Language, IShortsSource, YouTubeShortsSource);
+  WatchControlRequest.Shorts, WatchStateDto.Feed; top-up of 5 when a jump lands within 3 of the end, list ≤ 50 (drops scrolled-past).
+  Without key → 503 shorts.not_configured. Tests: FakeShortsSource in ApiFactory, WatchTogetherTests feed test, Unit/ShortsSourceTests → 124 pass.
+- Web: WatchTogether.startShorts(), dialog "Random Shorts" button (data-testid watch-shorts), counter "#n" in feed mode, shuffle icon.
+- smoke-watch.mjs step 6 (no key → toast; stubbed feed reply → "#1" + vertical frame) passes. Docs: deploy.md "Shorts feed", api.env example, DECISIONS.
+- NOT pushed yet (ask the user). Deploy: git pull && dc build api edge && dc up -d api edge, plus the API key in /srv/hangar/config/api.env.
 
 ## Next exact step
-Continue the Shorts feed checklist above from "Program.cs" (first `dotnet build` ShortsFeed.cs — it was never compiled).
+Ask the user: push + deploy the Shorts feed, and walk them through the YouTube key (deploy.md "Shorts feed"). Then the remaining plan (P2/P3 gates on the VPS).
 
 ### HANDOFF — end of 2026-10-18 session (read this first)
 State: all feature phases (1–6) done; Phase 7 ~55% (every locally-testable item done); overall ~85% to first release. 81 backend tests + ~29 smokes pass. Everything committed and pushed (last: d29b0dc server settings). Working tree clean except the untracked 'start prompt.txt' (never commit it).

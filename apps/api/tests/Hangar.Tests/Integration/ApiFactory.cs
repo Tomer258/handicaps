@@ -48,6 +48,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         {
             s.AddSingleton<ILiveKitRooms>(LiveKit);
             s.AddSingleton<ISoundPublisher>(Publisher);
+            s.AddSingleton<IShortsSource>(Shorts);
             // Tests collect validation results and reconcile playback explicitly.
             foreach (var d in s.Where(d => d.ImplementationType == typeof(SoundboardLoop)).ToList()) s.Remove(d);
         });
@@ -63,6 +64,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const int MaxScreens = 2;
     public FakeLiveKitRooms LiveKit { get; } = new();
     public FakeSoundPublisher Publisher { get; } = new();
+    public FakeShortsSource Shorts { get; } = new();
     public const string WorkerKey = "test-worker-key-0123456789abcdef";
 
     /// <summary>Re-issues the owner bootstrap invitation (only possible while no owner exists) and returns its secret.</summary>
