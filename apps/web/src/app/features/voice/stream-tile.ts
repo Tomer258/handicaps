@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, afterRenderEffect, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { Track } from 'livekit-client';
 import { MediaSessionService, StreamInfo } from '../../core/media/media-session.service';
+import { NetStats, NetStatsReader, streamStatsOpen } from './stream-stats';
 
 /** Renders one camera/screen stream. Subscribes while mounted (explicit subscriptions), detaches on destroy. */
 @Component({
@@ -33,6 +34,8 @@ export class StreamTile implements OnDestroy {
   readonly stream = input.required<StreamInfo>();
   readonly fit = input<'contain' | 'cover'>('contain');
   readonly showLoading = input(true);
+  /** Read WebRTC network stats while the stats panel is open (the big stage and grid tiles, not thumbnails). */
+  readonly detailed = input(false);
 
   private readonly media = inject(MediaSessionService);
   private readonly video = viewChild.required<ElementRef<HTMLVideoElement>>('v');
@@ -49,9 +52,34 @@ export class StreamTile implements OnDestroy {
     const source = this.stream().publication?.dimensions?.height ?? 0;
     return got && source && got < source - 8 ? `Buffering — dropping to ${got}p to keep up` : 'Buffering…';
   });
+  /**
+   * What is being shown right now: the received picture size and the frames actually painted per second (measured once
+   * a second from the video element, so it costs nothing and never touches the stream). Null until frames arrive.
+   */
+  readonly stats = signal<{ width: number; height: number; fps: number } | null>(null);
+  /** "1080p · 60 fps" for the corner of the stream. */
+  readonly statsText = computed(() => {
+    const s = this.stats();
+    return s ? `${s.height}p · ${s.fps} fps` : '';
+  });
+  /** The tooltip: exact size, and why it is smaller than what the streamer sends (the SFU picks a layer per viewer). */
+  readonly statsTitle = computed(() => {
+    const s = this.stats();
+    if (!s) return '';
+    const source = this.stream().publication?.dimensions?.height ?? 0;
+    const lower = !this.stream().isLocal && source > s.height + 8
+      ? ` — the stream is ${source}p; you get a lower layer for your window size or connection` : '';
+    return `Watching ${s.width}×${s.height} at ${s.fps} frames per second${lower}`;
+  });
+  /** Live network numbers (bitrate, loss, ping…) while the stats panel is open; null otherwise. */
+  readonly net = signal<NetStats | null>(null);
+  private readonly netReader = new NetStatsReader();
   private lastFrame = performance.now();
   private frameChain = 0;
+  private frames = 0;
+  private statsAt = performance.now();
   private readonly frameTimer = setInterval(() => this.frameGap.set(this.ready() && performance.now() - this.lastFrame > 2000), 500);
+  private readonly statsTimer = setInterval(() => this.measure(), 1000);
   private watched?: StreamInfo;
   private attached?: Track;
 
@@ -105,13 +133,41 @@ export class StreamTile implements OnDestroy {
     const tick = () => {
       if (chain !== this.frameChain) return;
       this.lastFrame = performance.now();
+      this.frames++;
       el.requestVideoFrameCallback(tick);
     };
     el.requestVideoFrameCallback(tick);
   }
 
+  private measure(): void {
+    const el = this.video().nativeElement;
+    const now = performance.now();
+    const fps = Math.round((this.frames * 1000) / Math.max(1, now - this.statsAt));
+    this.frames = 0;
+    this.statsAt = now;
+    // Hidden tab: no frames are painted, so there is nothing honest to show; keep the last reading.
+    if (document.hidden) return;
+    const next = this.ready() && el.videoHeight > 0 ? { width: el.videoWidth, height: el.videoHeight, fps } : null;
+    const cur = this.stats();
+    if (next?.width !== cur?.width || next?.height !== cur?.height || next?.fps !== cur?.fps) this.stats.set(next);
+    void this.readNet();
+  }
+
+  private async readNet(): Promise<void> {
+    const s = this.stream();
+    const track = s.isLocal ? s.localTrack : s.publication?.track;
+    if (!this.detailed() || !streamStatsOpen() || !track) {
+      if (this.net()) this.net.set(null);
+      this.netReader.reset();
+      return;
+    }
+    const report = await track.getRTCStatsReport().catch(() => undefined);
+    if (report) this.net.set(this.netReader.read(report, s.isLocal ? 'out' : 'in'));
+  }
+
   ngOnDestroy(): void {
     clearInterval(this.frameTimer);
+    clearInterval(this.statsTimer);
     this.frameChain++;
     this.detach();
     if (this.watched) this.media.unwatchVideo(this.watched);

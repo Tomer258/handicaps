@@ -119,6 +119,14 @@ input[type=range].rng.sbr{accent-color:var(--sb)}
 .pcard .foot{position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:center;gap:6px}
 .tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:.03em;background:rgba(0,0,0,.45);color:#fff}
 .tag.live{background:var(--live);color:#fff}
+/* Stream resolution/fps: quiet, fixed-width digits so it does not jitter while it updates. */
+.tag.stats{border:0;background:rgba(0,0,0,.38);color:rgba(255,255,255,.82);font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:0;cursor:pointer}
+.tag.stats:hover,.tag.stats[aria-pressed=true]{background:rgba(0,0,0,.6);color:#fff}
+.sstats{position:absolute;left:10px;top:40px;z-index:2;min-width:210px;padding:8px 30px 8px 10px;border-radius:8px;background:rgba(0,0,0,.62);color:rgba(255,255,255,.9);font-size:11px;line-height:1.65;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px)}
+.sstats span{display:inline-block;width:78px;color:rgba(255,255,255,.55)}
+.sstats .bad{color:var(--warn)}
+.sstats-x{position:absolute;top:4px;right:4px;width:22px;height:22px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:rgba(255,255,255,.6);cursor:pointer}
+.sstats-x:hover{background:rgba(255,255,255,.12);color:#fff}
 .tag.sbt{background:var(--sb);color:#1A0A22}
 .tag.warn{background:var(--warn);color:#1D1300}
 .dock{display:flex;align-items:center;gap:8px;padding:8px;border-radius:18px;background:var(--bg2);border:1px solid var(--line2);box-shadow:0 16px 40px rgba(0,0,0,.35)}

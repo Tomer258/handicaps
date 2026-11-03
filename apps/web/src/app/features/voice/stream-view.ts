@@ -3,6 +3,7 @@ import { MediaSessionService, StreamInfo } from '../../core/media/media-session.
 import { avatarColor, initials } from '../../shared/ui/avatar';
 import { Icon } from '../../shared/ui/icon';
 import { WorkspaceStore } from '../workspaces/workspace.store';
+import { StreamStatsPanel, setStreamStatsOpen, streamStatsOpen } from './stream-stats';
 import { StreamTile } from './stream-tile';
 
 /**
@@ -11,16 +12,21 @@ import { StreamTile } from './stream-tile';
  */
 @Component({
   selector: 'hx-stream-view',
-  imports: [StreamTile, Icon],
+  imports: [StreamTile, StreamStatsPanel, Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="fade" style="flex: 1; min-height: 0; display: flex; flex-direction: column; background: #050608">
       @if (layout() === 'focus' && primary(); as p) {
         <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px; gap: 12px">
           <div #stage class="tile prim" style="flex: 1; min-height: 0; position: relative; border-radius: 14px">
-            <hx-stream-tile [stream]="p" [fit]="fit()" />
+            <hx-stream-tile #pt [stream]="p" [fit]="fit()" [detailed]="true" />
+            @if (statsOpen()) { <hx-stream-stats [view]="pt.stats()" [net]="pt.net()" /> }
             <div class="top">
               <span class="tag live">LIVE</span>
+              @if (pt.statsText()) {
+                <button class="tag mono stats" [title]="pt.statsTitle() + ' — click for live network stats'" [attr.aria-pressed]="statsOpen()"
+                        (click)="toggleStats()" data-testid="stream-stats">{{ pt.statsText() }}</button>
+              }
               @if (p.isLocal) { <span class="tag">Your stream</span> }
               <span style="flex: 1"></span>
               @if (p.hasAudio && !p.isLocal && media.streamVolume(p.userId) > 0) {
@@ -70,8 +76,16 @@ import { StreamTile } from './stream-tile';
         <div style="flex: 1; min-height: 0; padding: 14px; display: grid; gap: 12px; align-content: center" [style.grid-template-columns]="gridCols()">
           @for (s of streams(); track s.key) {
             <div class="tile" style="aspect-ratio: 16/9; position: relative">
-              <hx-stream-tile [stream]="s" fit="contain" />
-              <div class="top"><span class="tag live">LIVE</span><span style="flex: 1"></span></div>
+              <hx-stream-tile #gt [stream]="s" fit="contain" [detailed]="true" />
+              @if (statsOpen()) { <hx-stream-stats [view]="gt.stats()" [net]="gt.net()" /> }
+              <div class="top">
+                <span class="tag live">LIVE</span>
+                @if (gt.statsText()) {
+                  <button class="tag mono stats" [title]="gt.statsTitle() + ' — click for live network stats'" [attr.aria-pressed]="statsOpen()"
+                          (click)="toggleStats()" data-testid="stream-stats">{{ gt.statsText() }}</button>
+                }
+                <span style="flex: 1"></span>
+              </div>
               <div class="ovl">
                 <span class="av s20" [style.background]="colorOf(s)">{{ iniOf(s) }}</span>
                 <b style="font-size: 12.5px; flex: 1">{{ s.isLocal ? 'You' : s.name }}</b>
@@ -99,6 +113,7 @@ export class StreamView implements OnDestroy {
   private readonly store = inject(WorkspaceStore);
   private readonly stage = viewChild<ElementRef<HTMLElement>>('stage');
   readonly fit = signal<'contain' | 'cover'>('contain');
+  readonly statsOpen = streamStatsOpen.asReadonly();
   private readonly audible = new Map<string, StreamInfo>();
   private readonly restore = new Map<string, number>();
 
@@ -129,6 +144,10 @@ export class StreamView implements OnDestroy {
   ngOnDestroy(): void {
     for (const s of this.audible.values()) this.media.unwatchStreamAudio(s);
     this.audible.clear();
+  }
+
+  toggleStats(): void {
+    setStreamStatsOpen(!streamStatsOpen());
   }
 
   toggleStreamMute(s: StreamInfo): void {

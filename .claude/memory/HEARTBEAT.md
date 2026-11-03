@@ -102,6 +102,12 @@ option". Feed is SHARED by the call (watch-together list with feed=true); source
 - smoke-watch.mjs step 6 (no key → toast; stubbed feed reply → "#1" + vertical frame) passes. Docs: deploy.md "Shorts feed", api.env example, DECISIONS.
 - PUSHED (e68b858, user request 2026-11-03). Deploy: git pull && dc build api edge && dc up -d api edge, plus the API key in /srv/hangar/config/api.env.
 
+- Stream stats (user request 2026-11-03: live resolution/fps + system performance while watching a share): stream-tile.ts
+  measures painted fps (requestVideoFrameCallback) + received videoWidth/Height each second → quiet badge "720p · 60 fps" next to
+  LIVE (stage + grid; tooltip says when a lower simulcast layer is received). Click → features/voice/stream-stats.ts panel (WebRTC
+  getStats each second, only while open; open state in localStorage hangar.streamStats): viewer = bitrate, loss, ping/jitter,
+  dropped frames/freezes, decode ms, codec; streamer = layers sent, bitrate, qualityLimitationReason. smoke-stream covers it.
+
 ## Next exact step
 User deploys the Shorts feed; help them through the YouTube key (deploy.md "Shorts feed"). Then the remaining plan (P2/P3 gates on the VPS).
 

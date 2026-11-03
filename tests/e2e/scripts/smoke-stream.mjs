@@ -102,8 +102,28 @@ await friend.getByRole('button', { name: /^Watch Tomer$/ }).click();
 const stage = friend.locator('.tile.prim').first();
 await waitForFrames(stage);
 check(true, 'friend renders owner screen share frames in stream view');
+const statsTag = stage.getByTestId('stream-stats');
+await statsTag.waitFor({ timeout: 8000 });
+await friend.waitForFunction(() => / [1-9]\d* fps$/.test(document.querySelector('[data-testid=stream-stats]')?.textContent?.trim() ?? ''), null, { timeout: 8000 });
+const statsText = (await statsTag.textContent()).trim();
+check(/^\d+p · \d+ fps$/.test(statsText), `viewer sees the stream's resolution and fps quietly in the corner (${statsText}; ${await statsTag.getAttribute('title')})`);
+
+// Click the badge: live network numbers from WebRTC getStats, for the viewer (received) and the streamer (sent).
+await statsTag.click();
+const panel = stage.getByTestId('stream-stats-panel');
+await friend.waitForFunction(() => /Bitrate\s*[1-9][\d.]* (k|M)bps/.test(document.querySelector('[data-testid=stream-stats-panel]')?.textContent ?? ''), null, { timeout: 8000 });
+const viewerPanel = (await panel.innerText()).replace(/\s+/g, ' ');
+check(/Packet loss/.test(viewerPanel) && /Ping/.test(viewerPanel) && /Dropped/.test(viewerPanel), `viewer's stats panel is live: ${viewerPanel}`);
+const ownStage = owner.locator('.tile.prim').first();
+await ownStage.getByTestId('stream-stats').click({ timeout: 8000 });
+await owner.waitForFunction(() => /Sending\s*\d+p[\s\S]*Bitrate\s*[1-9]/.test(document.querySelector('[data-testid=stream-stats-panel]')?.textContent ?? ''), null, { timeout: 8000 });
+const ownPanel = (await ownStage.getByTestId('stream-stats-panel').innerText()).replace(/\s+/g, ' ');
+check(/Limited by/.test(ownPanel), `streamer's panel shows what is sent and what limits it: ${ownPanel}`);
 await friend.screenshot({ path: `${outDir}/stream-friend.png` });
 await owner.screenshot({ path: `${outDir}/stream-owner.png` });
+await friend.getByRole('button', { name: 'Close stream stats' }).click();
+await panel.waitFor({ state: 'detached', timeout: 3000 });
+check(true, 'the stats panel closes');
 
 // 6. Stop sharing → viewer falls back to the voice grid, flag clears.
 await ownerDock.getByRole('button', { name: 'Stop sharing your screen' }).click();
