@@ -100,10 +100,10 @@ option". Feed is SHARED by the call (watch-together list with feed=true); source
   Without key → 503 shorts.not_configured. Tests: FakeShortsSource in ApiFactory, WatchTogetherTests feed test, Unit/ShortsSourceTests → 124 pass.
 - Web: WatchTogether.startShorts(), dialog "Random Shorts" button (data-testid watch-shorts), counter "#n" in feed mode, shuffle icon.
 - smoke-watch.mjs step 6 (no key → toast; stubbed feed reply → "#1" + vertical frame) passes. Docs: deploy.md "Shorts feed", api.env example, DECISIONS.
-- NOT pushed yet (ask the user). Deploy: git pull && dc build api edge && dc up -d api edge, plus the API key in /srv/hangar/config/api.env.
+- PUSHED (e68b858, user request 2026-11-03). Deploy: git pull && dc build api edge && dc up -d api edge, plus the API key in /srv/hangar/config/api.env.
 
 ## Next exact step
-Ask the user: push + deploy the Shorts feed, and walk them through the YouTube key (deploy.md "Shorts feed"). Then the remaining plan (P2/P3 gates on the VPS).
+User deploys the Shorts feed; help them through the YouTube key (deploy.md "Shorts feed"). Then the remaining plan (P2/P3 gates on the VPS).
 
 ### HANDOFF — end of 2026-10-18 session (read this first)
 State: all feature phases (1–6) done; Phase 7 ~55% (every locally-testable item done); overall ~85% to first release. 81 backend tests + ~29 smokes pass. Everything committed and pushed (last: d29b0dc server settings). Working tree clean except the untracked 'start prompt.txt' (never commit it).
