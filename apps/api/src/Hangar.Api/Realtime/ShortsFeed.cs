@@ -25,22 +25,27 @@ public interface IShortsSource
 }
 
 /// <summary>
-/// YouTube has no API for its Shorts feed, so this searches for popular recent Shorts (videoDuration=short, "#shorts")
-/// on a random topic and in a random recent time window, and serves them shuffled from an in-memory pool. A search
-/// returns up to 50 and costs 100 of the 10,000 free daily units, so a group scrolling all evening uses a few hundred.
-/// Recently served ids are skipped so the feed does not repeat itself.
+/// YouTube has no API for its Shorts feed, so this searches for popular recent Shorts (videoDuration=short, "#shorts").
+/// Each refill mixes <see cref="TopicsPerRefill"/> different random topics (none used in the last few refills), each in
+/// its own random recent time window, served shuffled together from an in-memory pool (one topic per refill made a
+/// whole evening of one subject). A search costs 100 of the 10,000 free daily units, so a refill costs 300 for ~60
+/// Shorts. Recently served ids are skipped so the feed does not repeat itself.
 /// </summary>
 public sealed class YouTubeShortsSource(IHttpClientFactory http, IOptions<YouTubeOptions> options, TimeProvider clock, ILogger<YouTubeShortsSource> log)
     : IShortsSource
 {
     public const string ClientName = "youtube";
     private const int RecentLimit = 600;
+    private const int TopicsPerRefill = 3, PerTopic = 20, RecentTopicLimit = 12;
 
     private static readonly string[] Topics =
     [
         "funny", "gaming", "cs2", "fails", "memes", "animals", "football", "basketball", "skate", "cooking", "street food",
         "magic trick", "satisfying", "dance", "music", "standup comedy", "pranks", "cars", "science", "life hacks",
         "minecraft", "fortnite", "valorant", "gym", "travel", "cats", "dogs", "art", "parkour", "movie scenes",
+        "gta", "league of legends", "speedrun", "asmr", "nature", "ocean", "space", "history facts", "illusions", "drawing",
+        "woodworking", "diy", "fishing", "motorcycle", "snowboard", "surfing", "boxing", "ufc", "tennis", "nba",
+        "rap", "guitar", "piano", "beatbox", "comedy sketch", "reaction", "unboxing", "tech", "robots", "experiments",
     ];
 
     private readonly Lock _gate = new();
@@ -48,6 +53,7 @@ public sealed class YouTubeShortsSource(IHttpClientFactory http, IOptions<YouTub
     private readonly Queue<string> _recentOrder = new();
     private readonly HashSet<string> _recent = [];
     private readonly SemaphoreSlim _refill = new(1, 1);
+    private readonly Queue<string> _recentTopics = new();
 
     public async Task<IReadOnlyList<WatchItem>> NextAsync(int count, IReadOnlySet<string> exclude, CancellationToken ct)
     {
@@ -88,13 +94,55 @@ public sealed class YouTubeShortsSource(IHttpClientFactory http, IOptions<YouTub
             lock (_gate)
                 if (_pool.Count >= 10) return; // another request refilled meanwhile
 
-            var topic = Topics[Random.Shared.Next(Topics.Length)];
+            var topics = PickTopics();
+            var results = await Task.WhenAll(topics.Select(async t =>
+            {
+                try
+                {
+                    return (Items: await SearchAsync(o, t, ct), Error: (AppProblem?)null);
+                }
+                catch (AppProblem e)
+                {
+                    return (Items: new List<WatchItem>(), Error: e);
+                }
+            }));
+            var found = results.SelectMany(x => x.Items).DistinctBy(x => x.VideoId).ToList();
+            // Every search failed: say why (quota, rejected key, YouTube down).
+            if (found.Count == 0 && results.FirstOrDefault(x => x.Error is not null).Error is { } error) throw error;
+            Random.Shared.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(found));
+            lock (_gate) _pool.InsertRange(0, found); // Take() serves from the end: older pool items go first
+            log.LogInformation("Shorts pool +{Count} ({Topics})", found.Count, string.Join(", ", topics));
+        }
+        finally
+        {
+            _refill.Release();
+        }
+    }
+
+    /// <summary>Different topics, none of the last <see cref="RecentTopicLimit"/> used.</summary>
+    private string[] PickTopics()
+    {
+        var fresh = Topics.Where(t => !_recentTopics.Contains(t)).ToArray();
+        Random.Shared.Shuffle(fresh);
+        var picked = fresh.Take(TopicsPerRefill).ToArray();
+        foreach (var t in picked)
+        {
+            _recentTopics.Enqueue(t);
+            while (_recentTopics.Count > RecentTopicLimit) _recentTopics.Dequeue();
+        }
+        return picked;
+    }
+
+    private async Task<List<WatchItem>> SearchAsync(YouTubeOptions o, string topic, CancellationToken ct)
+    {
+        try
+        {
             var daysBack = Random.Shared.Next(2, 60);
             var after = clock.GetUtcNow().AddDays(-daysBack).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
             var query = new Dictionary<string, string?>
             {
                 ["part"] = "snippet", ["type"] = "video", ["videoDuration"] = "short", ["videoEmbeddable"] = "true",
-                ["maxResults"] = "50", ["order"] = Random.Shared.Next(3) == 0 ? "relevance" : "viewCount", ["safeSearch"] = "moderate",
+                ["maxResults"] = PerTopic.ToString(), ["order"] = Random.Shared.Next(3) == 0 ? "relevance" : "viewCount", ["safeSearch"] = "moderate",
                 ["q"] = $"{topic} #shorts", ["publishedAfter"] = after, ["regionCode"] = o.Region, ["relevanceLanguage"] = o.Language, ["key"] = o.ApiKey,
             };
             var url = o.BaseUrl + "search?" + string.Join('&', query.Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
@@ -125,9 +173,7 @@ public sealed class YouTubeShortsSource(IHttpClientFactory http, IOptions<YouTub
                     var title = it.TryGetProperty("snippet", out var sn) && sn.TryGetProperty("title", out var t) ? WebUtility.HtmlDecode(t.GetString()) : null;
                     found.Add(new WatchItem(id, title, true));
                 }
-            Random.Shared.Shuffle(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(found));
-            lock (_gate) _pool.InsertRange(0, found); // Take() serves from the end: older pool items go first
-            log.LogInformation("Shorts pool +{Count} ({Topic}, last {Days} days)", found.Count, topic, daysBack);
+            return found;
         }
         catch (HttpRequestException e)
         {
@@ -137,10 +183,6 @@ public sealed class YouTubeShortsSource(IHttpClientFactory http, IOptions<YouTub
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
             throw new AppProblem(503, "shorts.unavailable", "YouTube didn't answer in time. Try again in a moment.");
-        }
-        finally
-        {
-            _refill.Release();
         }
     }
 }

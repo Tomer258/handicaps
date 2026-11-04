@@ -108,6 +108,10 @@ option". Feed is SHARED by the call (watch-together list with feed=true); source
   getStats each second, only while open; open state in localStorage hangar.streamStats): viewer = bitrate, loss, ping/jitter,
   dropped frames/freezes, decode ms, codec; streamer = layers sent, bitrate, qualityLimitationReason. smoke-stream covers it.
 
+- 2026-11-04 fixes (user: "stream drops from 60 to 20", "reels show only football"): 1080p60 shares use degradationPreference
+  maintain-framerate (media-session.service.ts startScreenShare); ShortsFeed refill mixes 3 non-recent topics × 20
+  (Unit/ShortsSourceTests mix test; 125 backend tests). smoke-stream passes.
+
 ## Next exact step
 User deploys the Shorts feed; help them through the YouTube key (deploy.md "Shorts feed"). Then the remaining plan (P2/P3 gates on the VPS).
 

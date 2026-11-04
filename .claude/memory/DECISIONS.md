@@ -79,3 +79,7 @@
 - Shared by the call: it is a watch-together list with Feed=true, so sync, scroll (wheel/arrows/▲▼) and auto-advance are reused. A jump within 3 of the end appends 5 more (fetched before the store lock; a failed top-up never blocks the jump); the list stays ≤ 50 by dropping Shorts already scrolled past. A pasted url/add ends feed mode.
 - Source: YouTube Data API v3 search (videoDuration=short, "<random topic> #shorts", random publishedAfter 2–60 days, viewCount/relevance), shuffled in-memory pool + last 600 served ids skipped. There is no official Shorts-feed API; scraping youtube.com was rejected (breaks, ToS). Key is optional (Hangar:YouTube:ApiKey); without it the API answers 503 shorts.not_configured with a readable message.
 - Plain HttpClient (fixed Google host) instead of SafeHttp; 6 s timeout.
+
+## 2026-11-04 — Stream frame rate + Shorts variety (user complaints)
+- 1080p60 screen shares publish with degradationPreference 'maintain-framerate' (livekit-client defaults screen shares to maintain-resolution, which cut a game/video from 60 to 20 fps whenever the streamer's encoder/upload fell behind). 720p30 uses 'balanced'.
+- Shorts refill = 3 searches on 3 different topics (none from the last 12 used), 20 each, merged + shuffled: 300 quota units per ~60 Shorts (was 1 topic × 50 → feed was all football). Partial failures still serve the other topics.

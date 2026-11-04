@@ -476,6 +476,10 @@ export class MediaSessionService {
         // its own preset for the capture size, 1080p at 15 fps and 2.5 Mbps, whatever quality was chosen.
         screenShareEncoding: { maxBitrate: enc.bitrate, maxFramerate: enc.fps },
         screenShareSimulcastLayers: enc.layers,
+        // livekit-client defaults screen shares to maintain-resolution: when the streamer's encoder or upload falls behind,
+        // the browser keeps 1080p and cuts the frame rate (60 → 20 fps for a game or video). The 60 fps choice is for motion,
+        // so keep the frame rate and let the resolution dip briefly instead; 720p 30 balances both.
+        degradationPreference: quality === '1080p60' ? 'maintain-framerate' : 'balanced',
       });
       if (audio) {
         await this.waitForSource(room, Track.Source.ScreenShareAudio);
