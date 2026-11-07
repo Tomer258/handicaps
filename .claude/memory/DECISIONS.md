@@ -83,3 +83,11 @@
 ## 2026-11-04 — Stream frame rate + Shorts variety (user complaints)
 - 1080p60 screen shares publish with degradationPreference 'maintain-framerate' (livekit-client defaults screen shares to maintain-resolution, which cut a game/video from 60 to 20 fps whenever the streamer's encoder/upload fell behind). 720p30 uses 'balanced'.
 - Shorts refill = 3 searches on 3 different topics (none from the last 12 used), 20 each, merged + shuffled: 300 quota units per ~60 Shorts (was 1 topic × 50 → feed was all football). Partial failures still serve the other topics.
+
+## 2026-11-07 — Several hangars per install (user request)
+- Only the install owner (owner of the oldest hangar) may create hangars (MeResponse.canCreateServers, POST /servers, 403 server.create_forbidden; max 20). The creator owns the new hangar; owning/administering a later hangar never grants creation. User chose this over "Admins can create".
+- People see only hangars they are members of (already true: ListServersAsync, presence peers, voice/watch broadcasts are membership/permission scoped).
+- Existing accounts join with a member invite: POST /auth/invitations/accept (same FOR UPDATE invite checks as register; already a member → no use spent; a former member rejoins with no roles). Invite page shows Join when preview.serverId is not in my servers.
+- Leave: DELETE /servers/{id}/members/me (owner can't: 409 member.owner_leave).
+- DMs are per hangar: unique index moved from dm_key to (server_id, dm_key) (migration DmPerHangar). The same pair has one direct conversation per hangar; existing DMs stay in the first hangar.
+- Install-wide caps (voice humans, screens, cameras) stay install-wide: one machine.

@@ -15,6 +15,10 @@ import { Notifier } from '../notifications/notifier.service';
 import { ChatStore } from '../messages/chat.store';
 import { VoicePresenceStore } from '../voice/voice-presence.store';
 import { ServerBadges } from './server-badges.service';
+import { Dialog } from '@angular/cdk/dialog';
+import { Router } from '@angular/router';
+import { ServerSummary } from '../../core/api/models';
+import { CreateServerDialog } from './create-server.dialog';
 
 /**
  * Top-level authenticated layout: server rail + routed content + toasts + session recovery.
@@ -51,6 +55,12 @@ import { serverIconUrl, short } from '../../shared/ui/server-icon';
               }
               @if (b.mentions) { <span class="badge" aria-hidden="true">{{ b.mentions > 99 ? '99+' : b.mentions }}</span> }
             </a>
+          }
+          @if (session.canCreateServers()) {
+            <button class="srv" aria-label="Create a hangar" title="Create a hangar" (click)="createServer()" data-testid="create-hangar"
+                    style="background: transparent; color: var(--accent); border: 1.5px dashed var(--line)">
+              <hx-icon name="plus" size="lg" />
+            </button>
           }
         </div>
         <div style="flex: 1"></div>
@@ -89,6 +99,8 @@ export class AppShell {
   readonly badges = inject(ServerBadges);
   private readonly media = inject(MediaSessionService);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(Dialog);
+  private readonly router = inject(Router);
 
   constructor() {
     this.badges.start();
@@ -97,6 +109,13 @@ export class AppShell {
   readonly atHome = computed(() => this.store.serverId() === null);
 
   /** Global shortcuts (also while typing): Ctrl+Shift+M mute, Ctrl+Shift+D deafen; Esc closes the drawer / member overlay. */
+  createServer(): void {
+    const ref = this.dialog.open<ServerSummary>(CreateServerDialog, { ariaLabel: 'Create a hangar' });
+    ref.closed.subscribe((s) => {
+      if (s) void this.router.navigate(['/s', s.id]);
+    });
+  }
+
   onKey(e: KeyboardEvent): void {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === 'KeyM' || e.code === 'KeyD')) {
       e.preventDefault();

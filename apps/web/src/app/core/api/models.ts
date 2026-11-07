@@ -20,6 +20,8 @@ export interface MeResponse {
   user: Profile;
   servers: ServerSummary[];
   sessionId: string;
+  /** The install owner may create hangars. */
+  canCreateServers?: boolean;
 }
 
 export type ChannelType = 'text' | 'voice' | 'direct' | 'group';
@@ -90,6 +92,8 @@ export interface InvitePreview {
   /** Who created the link (valid links only). */
   invitedBy?: string | null;
   memberCount?: number;
+  /** The hangar the link is for: a signed-in visitor already in it sees "already in", otherwise "Join". */
+  serverId?: string | null;
 }
 
 export interface Invitation {

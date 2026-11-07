@@ -112,6 +112,15 @@ option". Feed is SHARED by the call (watch-together list with feed=true); source
   maintain-framerate (media-session.service.ts startScreenShare); ShortsFeed refill mixes 3 non-recent topics × 20
   (Unit/ShortsSourceTests mix test; 125 backend tests). smoke-stream passes.
 
+## Session 7 (2026-11-07) — several hangars per install
+- Prod check: owner = Tammer (tomer25898); nobody has Admin/Moderator roles; members tomerp, haji, JERSEY4, Noam, voice-test.
+- [x] API b54411e: POST /servers (install owner only), POST /auth/invitations/accept, DELETE /servers/{id}/members/me,
+  preview.serverId, me.canCreateServers, DMs per hangar (migration DmPerHangar). MultiHangarTests (2) → 127 tests.
+- [x] Web: rail "+" (create-server.dialog.ts, install owner only), invite page Join card (+ Sign in link keeps ?next=invite),
+  sidebar "Leave hangar" (non-owners; hangs up a call there first). smoke-hangars.mjs (deletes its hangar via psql) passes;
+  smoke-invite, smoke-dm, smoke-chat pass.
+- Deploy NEEDS the migration: backup → dc --profile release run --rm migrate → dc up -d api edge.
+
 ## Next exact step
 User deploys the Shorts feed; help them through the YouTube key (deploy.md "Shorts feed"). Then the remaining plan (P2/P3 gates on the VPS).
 

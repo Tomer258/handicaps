@@ -14,6 +14,9 @@ import { openInviteDialog } from '../invites/invite.dialog';
 import { Avatar } from '../../shared/ui/avatar';
 import { DirectMessages } from '../messages/dms';
 import { SessionService } from '../../core/auth/session.service';
+import { ApiError } from '../../core/api/api-error';
+import { MediaSessionService } from '../../core/media/media-session.service';
+import { ToastService } from '../../core/ui/toast.service';
 
 /** ChannelSidebar (hx-channel-sidebar): header, text/voice groups, persistent voice panel, user panel. */
 @Component({
@@ -32,6 +35,9 @@ import { SessionService } from '../../core/auth/session.service';
       <span class="mono" style="font-size: 11px; color: var(--tx3)">{{ store.members().length }} members</span>
       @if (store.canManageInvites()) {
         <button class="ibtn" aria-label="Invite friends" title="Invite friends" (click)="invite()" style="width: 28px; height: 28px; flex: none; margin-right: -6px"><hx-icon name="user-plus" size="sm" /></button>
+      }
+      @if (store.server() && !store.isOwner()) {
+        <button class="ibtn" aria-label="Leave hangar" title="Leave hangar" (click)="leaveServer()" style="width: 28px; height: 28px; flex: none; margin-right: -6px"><hx-icon name="logout" size="sm" /></button>
       }
     </div>
 
@@ -125,6 +131,8 @@ export class ChannelSidebar {
 
   readonly dms = inject(DirectMessages);
   private readonly session = inject(SessionService);
+  private readonly media = inject(MediaSessionService);
+  private readonly toast = inject(ToastService);
 
   readonly dmOpen = signal(true);
   readonly textOpen = signal(true);
@@ -139,6 +147,21 @@ export class ChannelSidebar {
 
   invite(): void {
     openInviteDialog(this.dialog);
+  }
+
+  async leaveServer(): Promise<void> {
+    const s = this.store.server();
+    if (!s || !confirm(`Leave ${s.name}? You'll need a new invite to come back.`)) return;
+    try {
+      // In a call there: hang up first (the call belongs to the hangar being left).
+      const call = this.media.channelId();
+      if (call && this.store.channels().some((c) => c.id === call)) await this.media.leave();
+      await this.session.leaveServer(s.id);
+      await this.router.navigateByUrl('/');
+      this.toast.show(`You left ${s.name}.`);
+    } catch (e) {
+      this.toast.show(ApiError.from(e).message, 'warn');
+    }
   }
 
   create(type: 'text' | 'voice'): void {

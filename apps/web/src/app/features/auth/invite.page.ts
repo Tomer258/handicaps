@@ -16,7 +16,22 @@ import { Icon } from '../../shared/ui/icon';
   template: `
     <main class="auth-wrap">
       @if (preview(); as p) {
-        @if (signedIn()) {
+        @if (signedIn() && canJoin()) {
+          <div class="auth-card fade" data-testid="invite-join">
+            <span class="eyebrow mono" style="font-size: 11.5px; letter-spacing: .12em; color: var(--tx3); text-transform: uppercase">You're invited</span>
+            <h1>Join {{ p.serverName }}</h1>
+            <p style="color: var(--tx2)">
+              @if (p.invitedBy) { <b style="color: var(--tx)">{{ p.invitedBy }}</b> invited you. }
+              @if (p.memberCount) { {{ p.memberCount === 1 ? '1 member' : p.memberCount + ' members' }} already here. }
+              You'll join as <b style="color: var(--tx)">{{ session.user()?.displayName }}</b>, with the account you're signed in with.
+            </p>
+            @if (error(); as e) {
+              <div class="note e" role="alert"><hx-icon name="alert-circle" size="sm" /> {{ e }}</div>
+            }
+            <button class="btn pri" type="button" [disabled]="busy()" (click)="join()" style="height: 40px">{{ busy() ? 'Joining…' : 'Join ' + p.serverName }}</button>
+            <button class="btn ghost" type="button" (click)="signOut()">Sign out and create another account</button>
+          </div>
+        } @else if (signedIn()) {
           <div class="auth-card fade" data-testid="invite-signed-in">
             <span class="eyebrow mono" style="font-size: 11.5px; letter-spacing: .12em; color: var(--tx3); text-transform: uppercase">Invitation</span>
             <h1>You're already in{{ p.serverName ? ' ' + p.serverName : '' }}</h1>
@@ -66,7 +81,7 @@ import { Icon } from '../../shared/ui/icon';
               {{ busy() ? 'Creating account…' : 'Create account' }}
             </button>
             @if (!p.ownerBootstrap) {
-              <p style="margin: 0; font-size: 13px; text-align: center">Already have an account? <a routerLink="/login">Sign in</a></p>
+              <p style="margin: 0; font-size: 13px; text-align: center">Already have an account? <a routerLink="/login" [queryParams]="{ next: '/invite/' + secret() }">Sign in</a> to join with it.</p>
             }
           </form>
         } @else {
@@ -91,6 +106,11 @@ export class InvitePage implements OnInit {
 
   readonly preview = signal<InvitePreview | null>(null);
   readonly signedIn = computed(() => this.session.status() === 'authenticated');
+  /** A valid member link for a hangar I'm not in yet: join it with this account. */
+  readonly canJoin = computed(() => {
+    const p = this.preview();
+    return !!p?.valid && !p.ownerBootstrap && !!p.serverId && !this.session.servers().some((s) => s.id === p.serverId);
+  });
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   readonly form = inject(NonNullableFormBuilder).group({
@@ -107,6 +127,20 @@ export class InvitePage implements OnInit {
       this.preview.set(await this.session.previewInvite(this.secret()));
     } catch {
       this.preview.set({ valid: false, serverName: null, ownerBootstrap: false });
+    }
+  }
+
+  async join(): Promise<void> {
+    if (this.busy()) return;
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      const serverId = await this.session.acceptInvite(this.secret());
+      await this.router.navigate(['/s', serverId]);
+    } catch (e) {
+      this.error.set(ApiError.from(e).message);
+    } finally {
+      this.busy.set(false);
     }
   }
 

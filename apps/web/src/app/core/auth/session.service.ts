@@ -20,11 +20,14 @@ export class SessionService {
   private readonly _servers = signal<ServerSummary[]>([]);
   private readonly _sessionId = signal<string | null>(null);
   private readonly _expired = signal(false);
+  private readonly _canCreateServers = signal(false);
 
   readonly status = this._status.asReadonly();
   readonly user = this._user.asReadonly();
   readonly servers = this._servers.asReadonly();
   readonly sessionId = this._sessionId.asReadonly();
+  /** Only the install owner sees "Create a hangar". */
+  readonly canCreateServers = this._canCreateServers.asReadonly();
   /** True after a 401 during use: the shell shows a login-recovery prompt instead of looping. */
   readonly expired = this._expired.asReadonly();
   readonly userId = computed(() => this._user()?.id ?? null);
@@ -74,6 +77,24 @@ export class SessionService {
     return this.api.get('/auth/csrf').then(() => this.api.post<InvitePreview>('/auth/invitations/preview', { secret }));
   }
 
+  /** Joins the invitation's hangar with the signed-in account; returns that hangar's id. */
+  async acceptInvite(secret: string): Promise<string> {
+    const r = await this.api.post<{ serverId: string; me: MeResponse }>('/auth/invitations/accept', { secret });
+    this.apply(r.me);
+    return r.serverId;
+  }
+
+  async createServer(name: string): Promise<ServerSummary> {
+    const s = await this.api.post<ServerSummary>('/servers', { name });
+    await this.refreshMe();
+    return s;
+  }
+
+  async leaveServer(serverId: string): Promise<void> {
+    await this.api.delete(`/servers/${serverId}/members/me`);
+    await this.refreshMe();
+  }
+
   async refreshMe(): Promise<void> {
     this.apply(await this.api.get<MeResponse>('/auth/me'));
   }
@@ -118,6 +139,7 @@ export class SessionService {
   private apply(me: MeResponse): void {
     this._user.set(me.user);
     this._servers.set(me.servers);
+    this._canCreateServers.set(!!me.canCreateServers);
     this._sessionId.set(me.sessionId);
     this._expired.set(false);
     this._status.set('authenticated');
@@ -126,6 +148,7 @@ export class SessionService {
   private clear(): void {
     this._user.set(null);
     this._servers.set([]);
+    this._canCreateServers.set(false);
     this._sessionId.set(null);
     this._expired.set(false);
     this._status.set('anonymous');
