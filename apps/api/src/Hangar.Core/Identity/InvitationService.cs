@@ -10,7 +10,8 @@ namespace Hangar.Core.Identity;
 public sealed record CreatedInvitation(Invitation Invitation, string Secret);
 
 /// <summary>Landing-page view. InvitedBy/MemberCount are shown only to holders of a valid secret.</summary>
-public sealed record InvitationPreview(bool Valid, string? ServerName, bool OwnerBootstrap, string? InvitedBy = null, int MemberCount = 0);
+/// <summary>ServerId lets a signed-in visitor see whether they are already in that hangar.</summary>
+public sealed record InvitationPreview(bool Valid, string? ServerName, bool OwnerBootstrap, string? InvitedBy = null, int MemberCount = 0, Guid? ServerId = null);
 
 public enum InvitationState { Active, UsedUp, Expired, Revoked }
 
@@ -95,7 +96,7 @@ public sealed class InvitationService(
         if (row is null) return new InvitationPreview(false, null, false);
         var inviter = row.CreatedBy is { } by ? await db.Users.AsNoTracking().Where(u => u.Id == by).Select(u => u.DisplayName).FirstOrDefaultAsync(ct) : null;
         var members = await db.ServerMembers.CountAsync(m => m.ServerId == row.ServerId && m.RemovedAt == null, ct);
-        return new InvitationPreview(true, row.Name, row.Purpose == InvitationPurpose.OwnerBootstrap, inviter, members);
+        return new InvitationPreview(true, row.Name, row.Purpose == InvitationPurpose.OwnerBootstrap, inviter, members, row.ServerId);
     }
 
     internal (Invitation, string) New(Guid serverId, Guid? actor, InvitationPurpose purpose, TimeSpan life, int uses, string? note)

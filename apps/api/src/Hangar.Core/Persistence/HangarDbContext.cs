@@ -121,7 +121,8 @@ public sealed class HangarDbContext(DbContextOptions<HangarDbContext> options) :
                 t.HasCheckConstraint("ck_channels_dm_key", "(type = 2) = (dm_key IS NOT NULL)");
             });
             e.Property(x => x.DmKey).HasMaxLength(73);
-            e.HasIndex(x => x.DmKey).IsUnique().HasFilter("dm_key IS NOT NULL");
+            // One direct conversation per pair in each hangar (the same two people get a separate one in another hangar).
+            e.HasIndex(x => new { x.ServerId, x.DmKey }).IsUnique().HasFilter("dm_key IS NOT NULL");
             e.HasOne<Server>().WithMany().HasForeignKey(x => x.ServerId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ChannelMember>(e =>

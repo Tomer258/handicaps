@@ -21,7 +21,10 @@ public sealed record RecoveryCodesResponse(IReadOnlyList<string> RecoveryCodes);
 public sealed record InvitePreviewRequest(string Secret);
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public sealed record SessionDto(Guid Id, string? DeviceLabel, DateTimeOffset CreatedAt, DateTimeOffset LastSeenAt, bool Current, bool Persistent);
-public sealed record MeResponse(ProfileDto User, IReadOnlyList<ServerSummaryDto> Servers, Guid SessionId);
+/// <summary>CanCreateServers: the install owner (see WorkspaceService.IsInstallOwnerAsync).</summary>
+public sealed record MeResponse(ProfileDto User, IReadOnlyList<ServerSummaryDto> Servers, Guid SessionId, bool CanCreateServers = false);
+
+public sealed record AcceptInvitationRequest(string Secret);
 
 public static class AuthEndpoints
 {
@@ -58,6 +61,23 @@ public static class AuthEndpoints
                 return Results.Ok(await Me(result.User.Id, result.Session.Id, users, ws, ct));
             })
             .AllowAnonymous().RequireRateLimiting("auth");
+
+        // Signed in already: join the invitation's hangar with this account.
+        auth.MapPost("/invitations/accept", async (AcceptInvitationRequest req, HttpContext http, AuthService svc, UserService users, WorkspaceService ws,
+                MessageService messages, Hangar.Api.Realtime.PresenceBroadcaster presence, ILogger<AcceptInvitationRequest> log, CancellationToken ct) =>
+            {
+                var userId = http.User.UserId();
+                var (serverId, joined) = await svc.JoinAsync(userId, req.Secret, ct);
+                if (joined)
+                    try
+                    {
+                        await presence.MembersChangedAsync(userId, serverId);
+                        await messages.PostMemberJoinedAsync(userId, serverId, ct);
+                    }
+                    catch (Exception ex) { log.LogWarning(ex, "welcome message for {UserId} failed", userId); }
+                return Results.Ok(new { serverId, me = await Me(userId, http.User.SessionId(), users, ws, ct) });
+            })
+            .RequireRateLimiting("auth");
 
         auth.MapPost("/login", async (LoginRequest req, HttpContext http, AuthService svc, IAntiforgery af, LoginChallenges challenges,
                 IOptions<HangarOptions> opt, UserService users, WorkspaceService ws, CancellationToken ct) =>
@@ -131,7 +151,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<MeResponse> Me(Guid userId, Guid sessionId, UserService users, WorkspaceService ws, CancellationToken ct) =>
-        new(await users.GetProfileAsync(userId, ct), await ws.ListServersAsync(userId, ct), sessionId);
+        new(await users.GetProfileAsync(userId, ct), await ws.ListServersAsync(userId, ct), sessionId, await ws.IsInstallOwnerAsync(userId, ct));
 
     private static async Task SignInAsync(HttpContext http, AuthResult result, IAntiforgery af, HangarOptions opt)
     {

@@ -17,7 +17,7 @@ public static class Scenario
         var owner = factory.NewClient();
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HangarDbContext>();
-        var server = await db.Servers.FirstAsync();
+        var server = await db.Servers.OrderBy(s => s.CreatedAt).FirstAsync();
         if (server.OwnerUserId is null)
             (await owner.RegisterAsync(await factory.OwnerBootstrapSecretAsync(), "owner")).EnsureSuccessStatusCode();
         else

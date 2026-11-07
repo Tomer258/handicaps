@@ -14,7 +14,7 @@ public sealed record DmMembersRequest(IReadOnlyList<Guid>? UserIds);
 public sealed record RenameGroupRequest(string? Name);
 
 /// <summary>
-/// Direct and group messages between members of a server. They are channels of the server (type Direct/Group) whose
+/// Direct and group messages between members of a server (each hangar has its own; a pair has one direct conversation per hangar). They are channels of the server (type Direct/Group) whose
 /// visibility comes only from <see cref="ChannelMember"/> rows (see <see cref="PermissionEvaluator.DmLevel"/>), so the
 /// whole message pipeline — history, events, unread, mentions, attachments, search — applies unchanged.
 /// </summary>
@@ -35,7 +35,7 @@ public sealed class DmService(HangarDbContext db, PermissionService permissions,
         if (others.Count == 1)
         {
             var key = DmKey(userId, others[0]);
-            var existing = await db.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.DmKey == key, ct);
+            var existing = await db.Channels.AsNoTracking().FirstOrDefaultAsync(c => c.ServerId == serverId && c.DmKey == key, ct);
             if (existing is not null) return await ToDtoAsync(userId, existing, ct);
             channel = NewChannel(serverId, ChannelType.Direct, "", key, now);
             try
@@ -46,7 +46,7 @@ public sealed class DmService(HangarDbContext db, PermissionService permissions,
             {
                 // Both opened the conversation at the same moment: use the one that won.
                 db.ChangeTracker.Clear();
-                return await ToDtoAsync(userId, await db.Channels.AsNoTracking().FirstAsync(c => c.DmKey == key, ct), ct);
+                return await ToDtoAsync(userId, await db.Channels.AsNoTracking().FirstAsync(c => c.ServerId == serverId && c.DmKey == key, ct), ct);
             }
         }
         else

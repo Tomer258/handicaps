@@ -23,7 +23,7 @@ public class AuthTests(ApiFactory factory)
         var owner = factory.NewClient();
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HangarDbContext>();
-        var server = await db.Servers.FirstAsync();
+        var server = await db.Servers.OrderBy(s => s.CreatedAt).FirstAsync();
         if (server.OwnerUserId is null)
         {
             var secret = await factory.OwnerBootstrapSecretAsync();

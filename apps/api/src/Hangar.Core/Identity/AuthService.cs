@@ -108,6 +108,49 @@ public sealed partial class AuthService(
         return new AuthResult(user, session, invite.Purpose == InvitationPurpose.Member ? invite.ServerId : null);
     }
 
+    /// <summary>
+    /// A signed-in user redeems a member invitation to another hangar. Returns the hangar and whether they joined just now
+    /// (already a member: nothing changes and no use of the link is spent). Someone who left or was removed rejoins with
+    /// no roles.
+    /// </summary>
+    public async Task<(Guid ServerId, bool Joined)> JoinAsync(Guid userId, string inviteSecret, CancellationToken ct)
+    {
+        var tokenHash = Secrets.Sha256Hex(inviteSecret ?? "");
+        var now = clock.GetUtcNow();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var invite = await db.Invitations
+            .FromSql($"SELECT * FROM invitations WHERE token_hash = {tokenHash} FOR UPDATE")
+            .FirstOrDefaultAsync(ct);
+        if (invite is null || invite.RevokedAt != null || invite.ExpiresAt <= now || invite.UsedCount >= invite.MaxUses
+            || invite.Purpose != InvitationPurpose.Member)
+            throw AppProblem.BadRequest("invite.invalid", "This invitation is invalid, expired or already used.");
+
+        var member = await db.ServerMembers.FirstOrDefaultAsync(m => m.ServerId == invite.ServerId && m.UserId == userId, ct);
+        if (member is { RemovedAt: null }) return (invite.ServerId, false);
+        if (member is null)
+            db.ServerMembers.Add(new ServerMember
+            {
+                ServerId = invite.ServerId, UserId = userId, JoinedAt = now, MemberVersion = 1, InvitationId = invite.Id, InvitedBy = invite.CreatedBy,
+            });
+        else
+        {
+            await db.MemberRoles.Where(r => r.ServerId == invite.ServerId && r.UserId == userId).ExecuteDeleteAsync(ct);
+            member.RemovedAt = null;
+            member.JoinedAt = now;
+            member.MemberVersion++;
+            member.InvitationId = invite.Id;
+            member.InvitedBy = invite.CreatedBy;
+            member.VoiceMuted = false;
+        }
+        invite.UsedCount++;
+        var server = await db.Servers.FirstAsync(s => s.Id == invite.ServerId, ct);
+        server.PolicyVersion++;
+        audit.Record(userId, "member", userId.ToString(), "member.join", detail: $"invite={invite.Id}");
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return (invite.ServerId, true);
+    }
+
     public async Task<LoginOutcome> LoginAsync(string login, string password, bool remember, string? deviceLabel, string clientIp, CancellationToken ct)
     {
         var normalized = NormalizeLogin(login ?? "");

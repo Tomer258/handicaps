@@ -148,9 +148,9 @@ namespace Hangar.Core.Persistence.Migrations
                     b.HasAlternateKey("ServerId", "Id")
                         .HasName("ak_channels_server_id_id");
 
-                    b.HasIndex("DmKey")
+                    b.HasIndex("ServerId", "DmKey")
                         .IsUnique()
-                        .HasDatabaseName("ix_channels_dm_key")
+                        .HasDatabaseName("ix_channels_server_id_dm_key")
                         .HasFilter("dm_key IS NOT NULL");
 
                     b.HasIndex("ServerId", "Position")

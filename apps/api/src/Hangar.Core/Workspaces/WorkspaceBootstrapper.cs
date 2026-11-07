@@ -29,7 +29,7 @@ public sealed class WorkspaceBootstrapper(
         var server = await db.Servers.OrderBy(s => s.CreatedAt).FirstOrDefaultAsync(ct);
         if (server is null)
         {
-            server = Seed(opt.ServerName);
+            server = Seed(db, opt.ServerName, clock.GetUtcNow(), firstHangar: true);
             await db.SaveChangesAsync(ct);
             log.LogInformation("Created workspace {Name} ({Id})", server.Name, server.Id);
         }
@@ -51,10 +51,13 @@ public sealed class WorkspaceBootstrapper(
         return link;
     }
 
-    private Server Seed(string name)
+    /// <summary>
+    /// A hangar with the three standard roles and starter channels. The first hangar of an install keeps its original
+    /// starter set; hangars created later get a plain one (general, clips, Lounge, AFK).
+    /// </summary>
+    internal static Server Seed(HangarDbContext db, string name, DateTimeOffset now, bool firstHangar, Guid? ownerId = null)
     {
-        var now = clock.GetUtcNow();
-        var server = new Server { Id = Guid.CreateVersion7(), Name = name, CreatedAt = now, PolicyVersion = 1 };
+        var server = new Server { Id = Guid.CreateVersion7(), Name = name, CreatedAt = now, PolicyVersion = 1, OwnerUserId = ownerId };
         db.Servers.Add(server);
 
         db.Roles.AddRange(
@@ -63,16 +66,19 @@ public sealed class WorkspaceBootstrapper(
             new Role { Id = Guid.CreateVersion7(), ServerId = server.Id, Name = "Admin", PermissionMask = PermissionSets.Admin, Position = 2, Hoist = true, Color = "#C8F05A" });
 
         var pos = 0;
-        foreach (var (n, topic) in new[]
-                 {
-                     ("general", "Anything goes. Game night is Thursday 21:00."),
-                     ("clips", "Proof or it did not happen."),
-                     ("memes", "Quality not guaranteed."),
-                     ("game-night", "Vote for Thursday's game."),
-                 })
+        (string, string?)[] text = firstHangar
+            ?
+            [
+                ("general", "Anything goes. Game night is Thursday 21:00."),
+                ("clips", "Proof or it did not happen."),
+                ("memes", "Quality not guaranteed."),
+                ("game-night", "Vote for Thursday's game."),
+            ]
+            : [("general", null), ("clips", null)];
+        foreach (var (n, topic) in text)
             db.Channels.Add(new Channel { Id = Guid.CreateVersion7(), ServerId = server.Id, Type = ChannelType.Text, Name = n, Topic = topic, Position = pos++, CreatedAt = now });
 
-        foreach (var n in new[] { "Lounge", "Ranked Grind", "Movie Night", "AFK" })
+        foreach (var n in firstHangar ? new[] { "Lounge", "Ranked Grind", "Movie Night", "AFK" } : ["Lounge", "AFK"])
             db.Channels.Add(new Channel { Id = Guid.CreateVersion7(), ServerId = server.Id, Type = ChannelType.Voice, Name = n, Position = pos++, CreatedAt = now });
 
         return server;

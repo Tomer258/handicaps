@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hangar.Core.Workspaces;
 
+public sealed record CreateServerRequest(string? Name);
+
 public sealed record ServerSummaryDto(Guid Id, string Name, bool IsOwner, Guid? IconAssetId = null);
 
 /// <summary>Participants and LastActivityAt are set for direct/group messages only.</summary>
@@ -60,6 +62,48 @@ public sealed class WorkspaceService(HangarDbContext db, PermissionService permi
             await serverSink.ServerUpdatedAsync(serverId, ct);
         }
         return await GetServerAsync(actor, serverId, ct);
+    }
+
+    public const int MaxServers = 20;
+
+    /// <summary>
+    /// The install owner (owner of the first hangar) is the only one who may create hangars; owning or administering a
+    /// later hangar does not grant it.
+    /// </summary>
+    public async Task<bool> IsInstallOwnerAsync(Guid userId, CancellationToken ct) =>
+        await db.Servers.AsNoTracking().OrderBy(s => s.CreatedAt).Select(s => s.OwnerUserId).FirstOrDefaultAsync(ct) == userId;
+
+    /// <summary>A new hangar owned by its creator, who is its only member until they invite people.</summary>
+    public async Task<ServerSummaryDto> CreateServerAsync(Guid actor, string? name, CancellationToken ct)
+    {
+        if (!await IsInstallOwnerAsync(actor, ct))
+            throw AppProblem.Forbidden("server.create_forbidden", "Only the owner of this Hangar install can create hangars.");
+        var clean = Guard.Text(name, "name", 1, 48);
+        if (await db.Servers.CountAsync(ct) >= MaxServers)
+            throw AppProblem.Conflict("server.limit", $"This install already has {MaxServers} hangars.");
+        var now = DateTimeOffset.UtcNow;
+        var server = WorkspaceBootstrapper.Seed(db, clean, now, firstHangar: false, ownerId: actor);
+        db.ServerMembers.Add(new ServerMember { ServerId = server.Id, UserId = actor, JoinedAt = now, MemberVersion = 1 });
+        audit.Record(actor, "server", server.Id.ToString(), "server.create", detail: clean);
+        await db.SaveChangesAsync(ct);
+        await policySink.PolicyChangedAsync(server.Id, server.PolicyVersion, [actor], ct);
+        return new ServerSummaryDto(server.Id, server.Name, true);
+    }
+
+    /// <summary>Leaves a hangar (the owner cannot: they would leave it without anyone in charge).</summary>
+    public async Task LeaveAsync(Guid userId, Guid serverId, CancellationToken ct)
+    {
+        var server = await db.Servers.FirstOrDefaultAsync(s => s.Id == serverId, ct)
+                     ?? throw AppProblem.NotFound("server.not_found", "Hangar not found.");
+        var member = await db.ServerMembers.FirstOrDefaultAsync(m => m.ServerId == serverId && m.UserId == userId && m.RemovedAt == null, ct)
+                     ?? throw AppProblem.NotFound("server.not_found", "Hangar not found.");
+        if (server.OwnerUserId == userId) throw AppProblem.Conflict("member.owner_leave", "The owner can't leave their own hangar.");
+        member.RemovedAt = DateTimeOffset.UtcNow;
+        member.MemberVersion++;
+        server.PolicyVersion++;
+        audit.Record(userId, "member", userId.ToString(), "member.leave");
+        await db.SaveChangesAsync(ct);
+        await policySink.PolicyChangedAsync(serverId, server.PolicyVersion, [userId], ct);
     }
 
     public async Task<List<ServerSummaryDto>> ListServersAsync(Guid userId, CancellationToken ct) =>

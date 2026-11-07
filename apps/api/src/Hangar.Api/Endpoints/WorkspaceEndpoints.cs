@@ -29,6 +29,13 @@ public static class WorkspaceEndpoints
         servers.MapGet("/", async (HttpContext http, WorkspaceService ws, CancellationToken ct) =>
             Results.Ok(await ws.ListServersAsync(http.User.UserId(), ct)));
 
+        servers.MapPost("/", async (CreateServerRequest req, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
+            Results.Ok(await ws.CreateServerAsync(http.User.UserId(), req.Name, ct)));
+        servers.MapDelete("/{serverId:guid}/members/me", async (Guid serverId, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
+        {
+            await ws.LeaveAsync(http.User.UserId(), serverId, ct);
+            return Results.NoContent();
+        });
         servers.MapGet("/{serverId:guid}", async (Guid serverId, HttpContext http, WorkspaceService ws, CancellationToken ct) =>
             Results.Ok(await ws.GetServerAsync(http.User.UserId(), serverId, ct)));
 
