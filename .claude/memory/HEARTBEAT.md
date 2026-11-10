@@ -121,8 +121,19 @@ option". Feed is SHARED by the call (watch-together list with feed=true); source
   smoke-invite, smoke-dm, smoke-chat pass.
 - Deploy NEEDS the migration: backup → dc --profile release run --rm migrate → dc up -d api edge.
 
+## Session 8 (2026-11-10) — screen share v2 design (user: "its bad, can't go past 30, very unstable")
+- Wrote docs/architecture/screen-share-v2.md (PROPOSAL, uncommitted, awaiting user approval). Diagnosis from code only:
+  no videoCodec → VP8 software, 3 simulcast layers (1080p60+720p60+360p15), adaptiveStream layer flapping, no feedback loop.
+- Design: H.264 hardware-first single main encode, encode probe (mediaCapabilities), Smooth/Sharp modes, layers
+  main/safe 720p30/thumb, share-governor (getStats loop, setParameters), watchVideo roles + adaptiveStream off,
+  stats rows Encoder/Transport, host UDP buffers; optional OBS→WHIP ingest later. Build order V0–V5 in the doc.
+- Nothing implemented yet.
+
 ## Next exact step
-User deploys the Shorts feed; help them through the YouTube key (deploy.md "Shorts feed"). Then the remaining plan (P2/P3 gates on the VPS).
+User approved building screen share v2 (2026-11-10). Follow README-screen-share-v2.md (repo root) step by step: V0 stats
+rows → V1 codec/layers/watch roles → V2 probe/modes/dialog/API → V3 governor → V4 host. Both docs are uncommitted:
+commit them first ("docs: screen share v2 design + build instructions").
+Older pending: user deploys the Shorts feed + migration DmPerHangar; P2/P3 gates on the VPS.
 
 ### HANDOFF — end of 2026-10-18 session (read this first)
 State: all feature phases (1–6) done; Phase 7 ~55% (every locally-testable item done); overall ~85% to first release. 81 backend tests + ~29 smokes pass. Everything committed and pushed (last: d29b0dc server settings). Working tree clean except the untracked 'start prompt.txt' (never commit it).
