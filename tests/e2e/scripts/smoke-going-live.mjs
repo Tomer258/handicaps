@@ -44,9 +44,12 @@ try {
     await route.continue();
   });
   const dock = owner.getByRole('toolbar', { name: 'Voice controls' });
+  // The test browser has no hardware encoder: pretend it has one so the top rung is offered (dev-only switch).
+  await owner.evaluate(() => localStorage.setItem('hangar.forceEncoder', 'hardware'));
   await dock.getByRole('button', { name: 'Share your screen' }).click();
   const dialog = owner.getByRole('dialog', { name: /Go live in/ });
-  await dialog.getByRole('radio', { name: /1080p/ }).click();
+  await dialog.getByTestId('share-plan').getByText('1080p · 60').waitFor({ timeout: 5000 });
+  await owner.evaluate(() => localStorage.removeItem('hangar.forceEncoder'));
   await dialog.getByRole('button', { name: 'Choose what to share' }).click();
   const starting = owner.getByRole('status').filter({ hasText: 'GOING LIVE' });
   await starting.waitFor({ timeout: 10000 });

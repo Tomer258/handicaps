@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
+import { encoderKindOf } from '../../core/media/share-governor';
 import { Icon } from '../../shared/ui/icon';
 
 const OPEN_KEY = 'hangar.streamStats';
@@ -30,6 +31,8 @@ export interface NetStats {
   mbps: number;
   codec: string | null;
   rttMs: number | null;
+  /** How the media travels: "UDP direct", "TCP direct", "Relay (TLS)"… Direct UDP is the only smooth one at high bitrates. */
+  transport: string | null;
   // Receiving
   lossPct?: number;
   jitterMs?: number;
@@ -40,6 +43,8 @@ export interface NetStats {
   layers?: string[];
   /** The browser's qualityLimitationReason: none, cpu, bandwidth or other. */
   limitedBy?: string;
+  /** "Hardware (MediaFoundation…)" / "Software (libvpx)": where the main layer is encoded. */
+  encoder?: string | null;
 }
 
 type Stat = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -54,14 +59,20 @@ export class NetStatsReader {
     const dt = this.prevAt ? (now - this.prevAt) / 1000 : 0;
     let inbound: Stat | null = null;
     let pair: Stat | null = null;
+    let selectedPairId: string | null = null;
     const outbound: Stat[] = [];
     const codecs = new Map<string, Stat>();
+    const byId = new Map<string, Stat>();
     report.forEach((r: Stat) => {
+      byId.set(r['id'], r);
+      if (r['type'] === 'transport' && r['selectedCandidatePairId']) selectedPairId = r['selectedCandidatePairId'];
       if (r['type'] === 'inbound-rtp' && r['kind'] === 'video') inbound = r;
       else if (r['type'] === 'outbound-rtp' && r['kind'] === 'video') outbound.push(r);
       else if (r['type'] === 'codec') codecs.set(r['id'], r);
       else if (r['type'] === 'candidate-pair' && r['state'] === 'succeeded' && (r['nominated'] || r['selected'] || !pair)) pair = r;
     });
+    if (selectedPairId && byId.has(selectedPairId)) pair = byId.get(selectedPairId)!;
+    const transport = transportText(byId.get((pair as Stat | null)?.['localCandidateId']));
     const rtt = (pair as Stat | null)?.['currentRoundTripTime'];
     const rttMs = typeof rtt === 'number' ? Math.round(rtt * 1000) : null;
     const codecOf = (r: Stat | null) => {
@@ -83,7 +94,7 @@ export class NetStatsReader {
       const got = delta(r, 'packetsReceived');
       const decoded = delta(r, 'framesDecoded');
       out = {
-        direction, rttMs, codec: codecOf(r),
+        direction, rttMs, transport, codec: codecOf(r),
         mbps: (delta(r, 'bytesReceived') * 8) / dt / 1e6,
         lossPct: lost + got > 0 ? (lost / (lost + got)) * 100 : 0,
         jitterMs: typeof r['jitter'] === 'number' ? Math.round(r['jitter'] * 1000) : undefined,
@@ -94,7 +105,7 @@ export class NetStatsReader {
     } else if (direction === 'out' && outbound.length) {
       const active = outbound.filter((r) => r['frameHeight']).sort((a, b) => (b['frameHeight'] ?? 0) - (a['frameHeight'] ?? 0));
       out = {
-        direction, rttMs, codec: codecOf(outbound[0]),
+        direction, rttMs, transport, codec: codecOf(active[0] ?? outbound[0]), encoder: encoderText(active[0]),
         mbps: (outbound.reduce((sum, r) => sum + delta(r, 'bytesSent'), 0) * 8) / dt / 1e6,
         layers: active.map((r) => `${r['frameHeight']}p${r['framesPerSecond'] ? ' ' + Math.round(r['framesPerSecond']) : ''}`),
         limitedBy: active[0]?.['qualityLimitationReason'] ?? 'none',
@@ -112,6 +123,20 @@ export class NetStatsReader {
     this.prev.clear();
     this.prevAt = 0;
   }
+}
+
+/** The selected local ICE candidate in words. Anything but direct UDP means stutter at screen-share bitrates. */
+function transportText(local: Stat | undefined): string | null {
+  if (!local) return null;
+  if (local['candidateType'] === 'relay') return `Relay (${String(local['relayProtocol'] ?? 'udp').toUpperCase()})`;
+  return `${String(local['protocol'] ?? 'udp').toUpperCase()} direct`;
+}
+
+function encoderText(top: Stat | undefined): string | null {
+  const kind = encoderKindOf(top);
+  const impl = typeof top?.['encoderImplementation'] === 'string' ? top['encoderImplementation'] : '';
+  if (!kind) return impl || null;
+  return `${kind === 'hardware' ? 'Hardware' : 'Software'}${impl ? ` (${impl})` : ''}`;
 }
 
 /** The small "stats for nerds" panel under a stream's top bar; numbers refresh every second while it is open. */
@@ -137,8 +162,10 @@ export class NetStatsReader {
           <div><span>Bitrate</span>{{ mbps(n.mbps) }}</div>
           <div [class.bad]="n.limitedBy && n.limitedBy !== 'none'"><span>Limited by</span>{{ limitText(n.limitedBy) }}</div>
           <div><span>Ping</span>{{ n.rttMs ?? '—' }} ms</div>
+          @if (n.encoder) { <div [class.bad]="n.encoder.startsWith('Software')"><span>Encoder</span>{{ n.encoder }}</div> }
         }
         @if (n.codec) { <div><span>Codec</span>{{ n.codec }}</div> }
+        @if (n.transport) { <div [class.bad]="n.transport !== 'UDP direct'"><span>Transport</span>{{ n.transport }}</div> }
       } @else {
         <div><span>Network</span>measuring…</div>
       }

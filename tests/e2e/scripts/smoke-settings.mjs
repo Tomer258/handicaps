@@ -92,9 +92,9 @@ await nav('Video & streaming');
 await owner.getByRole('button', { name: 'Test camera' }).click();
 await owner.waitForFunction(() => (document.querySelector('video')?.videoWidth ?? 0) > 0, null, { timeout: 8000 });
 check(true, 'camera preview renders');
-await owner.getByRole('group', { name: 'Default stream quality' }).getByRole('button', { name: '720p · 30' }).click();
+await owner.getByRole('group', { name: 'Default stream mode' }).getByRole('button', { name: 'Sharp' }).click();
 await owner.screenshot({ path: `${outDir}/settings-video.png` });
-await owner.getByRole('group', { name: 'Default stream quality' }).getByRole('button', { name: '1080p · 60' }).click();
+await owner.getByRole('group', { name: 'Default stream mode' }).getByRole('button', { name: 'Smooth' }).click();
 
 // 6. Invites: link shown once, listed, revoked.
 await nav('Invites');

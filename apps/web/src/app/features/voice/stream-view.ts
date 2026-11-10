@@ -28,6 +28,9 @@ import { StreamTile } from './stream-tile';
                         (click)="toggleStats()" data-testid="stream-stats">{{ pt.statsText() }}</button>
               }
               @if (p.isLocal) { <span class="tag">Your stream</span> }
+              @if (p.isLocal && p.kind === 'screen' && shareNote(); as n) {
+                <span class="tag" [title]="n.title" data-testid="share-status" style="background: var(--warn); color: #1D1300">{{ n.text }}</span>
+              }
               <span style="flex: 1"></span>
               @if (p.hasAudio && !p.isLocal && media.streamVolume(p.userId) > 0) {
                 <span class="tag" style="background: var(--accent); color: var(--accent-ink)"><span class="eq"><i></i><i></i><i></i></span>Stream audio</span>
@@ -59,7 +62,7 @@ import { StreamTile } from './stream-tile';
             <div style="display: flex; gap: 10px; height: 112px; flex: none; overflow-x: auto">
               @for (s of streams(); track s.key) {
                 <div class="tile" [class.prim]="s.key === p.key" style="width: 200px; flex: none">
-                  <hx-stream-tile [stream]="s" fit="cover" [showLoading]="false" />
+                  <hx-stream-tile [stream]="s" fit="cover" [showLoading]="false" watch="thumb" />
                   <button (click)="primaryKey.set(s.key)" [attr.aria-label]="'Watch ' + s.name" style="position: absolute; inset: 0"></button>
                   <div class="top" style="pointer-events: none">
                     <span class="tag live" style="height: 18px; font-size: 10px">LIVE</span>
@@ -120,6 +123,18 @@ export class StreamView implements OnDestroy {
   readonly primary = computed(() => {
     const list = this.streams();
     return list.find((s) => s.key === this.primaryKey()) ?? list[0] ?? null;
+  });
+  /** My own stream is below what I asked for: what is sent instead, and why (from the share governor). */
+  readonly shareNote = computed(() => {
+    const st = this.media.shareStatus();
+    if (!st || st.reason === 'ok') return null;
+    const why = {
+      software: ['no hardware video encoder', "This PC's browser has no hardware (GPU) video encoder, so the stream is encoded on the CPU at a size it can hold next to a game."],
+      capture: ['screen delivers ~30 fps', "The screen capture is not delivering 60 frames a second. If a game is running uncapped, limit its FPS (or use borderless windowed) so the browser gets GPU time to capture."],
+      cpu: ['PC is at its limit', "The video encoder can't keep up right now. The stream steps back up by itself when there is room."],
+      bandwidth: ['upload limit', "Your upload can't carry more right now. The stream steps back up by itself when there is room."],
+    }[st.reason];
+    return { text: `Sending ${st.label} — ${why[0]}`, title: why[1] };
   });
   readonly gridCols = computed(() => (this.streams().length <= 1 ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))'));
 

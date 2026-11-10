@@ -32,12 +32,14 @@ import { Icon } from '../../shared/ui/icon';
         @if (devices.cameras().length === 0) { <span style="font-size: 12.5px; color: var(--tx3)">No camera detected yet. Plug one in or allow access with “Test camera”.</span> }
       </div>
     </div>
-    <div class="lbl" style="margin: 26px 0 4px">Default stream quality</div>
-    <div class="srow"><div><div class="t">When you go live</div><div class="d">You can still change it per stream</div></div>
-      <div class="seg" role="group" aria-label="Default stream quality">
-        <button [attr.aria-pressed]="prefs.prefs().streamQuality === '1080p60'" (click)="prefs.update({ streamQuality: '1080p60' })">1080p · 60</button>
-        <button [attr.aria-pressed]="prefs.prefs().streamQuality === '720p30'" (click)="prefs.update({ streamQuality: '720p30' })">720p · 30</button>
+    <div class="lbl" style="margin: 26px 0 4px">Default stream mode</div>
+    <div class="srow"><div><div class="t">When you go live</div><div class="d">Smooth keeps the frame rate (games, video); Sharp keeps text crisp. You can still change it per stream</div></div>
+      <div class="seg" role="group" aria-label="Default stream mode">
+        <button [attr.aria-pressed]="prefs.prefs().shareMode === 'smooth'" (click)="prefs.update({ shareMode: 'smooth' })">Smooth</button>
+        <button [attr.aria-pressed]="prefs.prefs().shareMode === 'sharp'" (click)="prefs.update({ shareMode: 'sharp' })">Sharp</button>
       </div></div>
+    <div class="srow"><div><div class="t">Limit streams to 720p</div><div class="d">For a small upload (under about 10 Mbps)</div></div>
+      <button class="sw" [attr.aria-pressed]="prefs.prefs().shareCap720" aria-label="Limit streams to 720p" (click)="prefs.update({ shareCap720: !prefs.prefs().shareCap720 })"></button></div>
     <div class="note" style="margin-top: 18px">
       <hx-icon name="info" size="sm" style="color: var(--tx3); margin-top: 1px" />
       <div><b style="color: var(--tx)">Getting game audio into your stream</b><br>Chrome and Edge on Windows: choose <b>Entire screen</b> and tick “Share system audio”,

@@ -298,7 +298,7 @@ public class VoiceTests(ApiFactory factory)
     }
 
     private static Task<HttpResponseMessage> ReserveAsync(TestClient c, Guid leaseId, string kind, object? body = null) =>
-        c.Http.PostAsJsonAsync($"/api/v1/voice/{leaseId}/publications/{kind}", body ?? new { quality = "1080p60", withAudio = true });
+        c.Http.PostAsJsonAsync($"/api/v1/voice/{leaseId}/publications/{kind}", body ?? new { quality = "smooth", withAudio = true });
 
     [Fact]
     public async Task Screen_reservations_grant_sources_per_participant_and_enforce_the_installation_limit()
@@ -327,7 +327,7 @@ public class VoiceTests(ApiFactory factory)
         // Releasing removes the source (LiveKit then unpublishes) and frees the slot.
         Assert.Equal(HttpStatusCode.NoContent, (await people[0].Client.Http.DeleteAsync($"/api/v1/voice/{people[0].LeaseId}/publications/screen")).StatusCode);
         Assert.Equal(["microphone"], factory.LiveKit.Sources[people[0].LeaseId.ToString()]);
-        Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(people[^1].Client, people[^1].LeaseId, "screen", new { quality = "720p30", withAudio = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ReserveAsync(people[^1].Client, people[^1].LeaseId, "screen", new { quality = "sharp", withAudio = false })).StatusCode);
         Assert.Equal(["microphone", "screen_share"], factory.LiveKit.Sources[people[^1].LeaseId.ToString()]);
 
         // Ending the lease releases its reservation.

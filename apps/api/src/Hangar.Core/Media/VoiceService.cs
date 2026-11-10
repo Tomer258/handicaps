@@ -284,8 +284,11 @@ public sealed class VoiceService(
         await permissions.RequireChannelAsync(userId, lease.ChannelId, Permission.JoinVoice | required, ct);
         var quality = kind == PublicationKind.Camera ? "720p30" : req.Quality switch
         {
-            null or "1080p60" => "1080p60",
-            "720p30" => "720p30",
+            // Screen share v2: the mode; the size actually sent is decided by the streamer's encoder and governor.
+            null or "smooth" => "smooth",
+            "sharp" => "sharp",
+            // Clients from before the modes (still loaded in a tab during a deploy).
+            "1080p60" or "720p30" => "smooth",
             _ => throw AppProblem.BadRequest("media.quality", "Unknown quality preset."),
         };
         var max = kind == PublicationKind.Camera ? O.MaxCameras : O.MaxScreens;

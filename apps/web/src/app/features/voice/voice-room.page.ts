@@ -115,7 +115,7 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                 <div class="fade" role="status" style="aspect-ratio: 16 / 9; max-height: 320px; margin: 0 auto 18px; border-radius: 14px; background: #0b0c0e; border: 1px solid var(--line); display: grid; place-items: center">
                   <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; color: #fff">
                     <span class="tag live">GOING LIVE</span>
-                    <span style="font-size: 12.5px; opacity: .8">Negotiating {{ media.shareQuality() === '1080p60' ? '1080p · 60' : '720p · 30' }} with {{ viewers() }} {{ viewers() === 1 ? 'viewer' : 'viewers' }}…</span>
+                    <span style="font-size: 12.5px; opacity: .8">Negotiating {{ media.shareTarget() }} with {{ viewers() }} {{ viewers() === 1 ? 'viewer' : 'viewers' }}…</span>
                   </div>
                 </div>
               }
@@ -157,10 +157,10 @@ const GHOST_SHOW_AFTER_MS = 1_500;
                   <div style="position: relative" [style.opacity]="c.reconnecting ? 0.6 : null">
                     <button class="pcard" [attr.data-user]="c.peer.userId" [class.talk]="c.speaking" [attr.aria-label]="c.aria" (click)="openMenu($event, c)" (contextmenu)="openMenu($event, c)">
                       @if (c.cam; as cam) {
-                        <hx-stream-tile [stream]="cam" fit="cover" [showLoading]="false" />
+                        <hx-stream-tile [stream]="cam" fit="cover" [showLoading]="false" watch="thumb" />
                       } @else if (c.screen; as scr) {
                         <!-- Handoff VoiceParticipantCard "live preview": the card shows what they are sharing. -->
-                        <hx-stream-tile [stream]="scr" fit="cover" [showLoading]="false" />
+                        <hx-stream-tile [stream]="scr" fit="cover" [showLoading]="false" watch="thumb" />
                       } @else {
                         <span class="av s72" [style.background]="c.color">@if (c.avatar; as u) {<img [src]="u" alt="" />} @else {{{ c.ini }}}</span>
                       }

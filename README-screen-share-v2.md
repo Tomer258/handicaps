@@ -2,7 +2,8 @@
 
 For the Claude session that builds this. The design and its reasons are in
 [docs/architecture/screen-share-v2.md](docs/architecture/screen-share-v2.md); read that first, then this file.
-The user approved building it (2026-11-10). Nothing is implemented yet.
+The user approved building it (2026-11-10). **V0–V3 are built and committed** (same day); §5 of the design doc lists
+what testing changed. Open: the user's real game test (see "Done means"), V4, optional V5.
 
 ## Rules of this repo (from CLAUDE.md)
 

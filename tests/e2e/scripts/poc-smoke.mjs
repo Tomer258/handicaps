@@ -175,7 +175,7 @@ await owner.keyboard.press('Escape');
 // 6. Screen share: reservation, publish through the SFU, friend renders frames.
 await dock.getByRole('button', { name: 'Share your screen' }).click();
 const golive = owner.getByRole('dialog', { name: /Go live in/ });
-await golive.getByRole('radio', { name: /720p/ }).click();
+await golive.getByRole('button', { name: 'Limit to 720p' }).click();
 await golive.getByRole('button', { name: 'Choose what to share' }).click();
 await dock.getByRole('button', { name: 'Stop sharing your screen' }).waitFor({ timeout: 20000 });
 await friend.getByRole('button', { name: /^Watch Owner$/ }).click({ timeout: 15000 });

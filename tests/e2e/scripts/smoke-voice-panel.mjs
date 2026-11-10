@@ -72,7 +72,7 @@ check(true, 'Escape closes the soundboard');
 // Screen share from the panel: Go-live dialog → live → the friend can watch → stop from the panel.
 await panel.getByRole('button', { name: 'Share your screen' }).click();
 const golive = owner.getByRole('dialog', { name: /Go live in/ });
-await golive.getByRole('radio', { name: /720p/ }).click();
+await golive.getByRole('button', { name: 'Limit to 720p' }).click();
 await golive.getByRole('button', { name: 'Choose what to share' }).click();
 await panel.getByRole('button', { name: 'Stop sharing your screen' }).waitFor({ timeout: 20000 });
 check(true, 'screen share started from the panel on a text page');

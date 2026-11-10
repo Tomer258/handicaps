@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { encodeProbe, probeEncoder } from '../../core/media/encode-probe';
 import { MediaPrefsService } from '../../core/media/media-prefs.service';
-import { MediaSessionService, ScreenQuality } from '../../core/media/media-session.service';
+import { MediaSessionService } from '../../core/media/media-session.service';
+import { ShareMode, ladderFor, rungLabel } from '../../core/media/share-governor';
 import { Icon } from '../../shared/ui/icon';
 
 /** "Go live" setup (prototype SHARE SCREEN FLOW). The real browser picker opens from the button click itself. */
@@ -20,19 +22,34 @@ import { Icon } from '../../shared/ui/icon';
               <div style="font-size: 12.5px; color: var(--tx3)">{{ viewers() }} {{ viewers() === 1 ? 'friend' : 'friends' }} will be able to watch</div>
             </div>
           </div>
-          <div class="lbl" style="margin: 20px 0 8px">Quality</div>
-          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px" role="radiogroup" aria-label="Quality">
-            <button class="card" role="radio" [attr.aria-checked]="quality() === '1080p60'" (click)="quality.set('1080p60')" style="text-align: left"
-                    [style.border-color]="quality() === '1080p60' ? 'var(--accent)' : null" [style.box-shadow]="quality() === '1080p60' ? '0 0 0 1px var(--accent)' : null">
-              <div style="display: flex; justify-content: space-between"><b class="disp" style="font-size: 17px">1080p · 60</b>
-                <span style="font-size: 10.5px; font-weight: 600; color: var(--accent-tx)">RECOMMENDED</span></div>
-              <div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Crisp, smooth game streams. Needs about 12 Mbps upload.</div>
+          <div class="lbl" style="margin: 20px 0 8px">What are you sharing?</div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px" role="radiogroup" aria-label="Stream mode">
+            <button class="card" role="radio" [attr.aria-checked]="mode() === 'smooth'" (click)="mode.set('smooth')" style="text-align: left"
+                    [style.border-color]="mode() === 'smooth' ? 'var(--accent)' : null" [style.box-shadow]="mode() === 'smooth' ? '0 0 0 1px var(--accent)' : null">
+              <b class="disp" style="font-size: 17px">Smooth</b>
+              <div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Games and video. Keeps the frame rate; the picture softens first when something has to give.</div>
             </button>
-            <button class="card" role="radio" [attr.aria-checked]="quality() === '720p30'" (click)="quality.set('720p30')" style="text-align: left"
-                    [style.border-color]="quality() === '720p30' ? 'var(--accent)' : null" [style.box-shadow]="quality() === '720p30' ? '0 0 0 1px var(--accent)' : null">
-              <b class="disp" style="font-size: 17px">720p · 30</b>
-              <div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Fallback for weaker connections. About 2.5 Mbps.</div>
+            <button class="card" role="radio" [attr.aria-checked]="mode() === 'sharp'" (click)="mode.set('sharp')" style="text-align: left"
+                    [style.border-color]="mode() === 'sharp' ? 'var(--accent)' : null" [style.box-shadow]="mode() === 'sharp' ? '0 0 0 1px var(--accent)' : null">
+              <b class="disp" style="font-size: 17px">Sharp</b>
+              <div style="font-size: 12px; color: var(--tx3); margin-top: 4px">Code, documents, apps. Keeps text crisp at up to 30 frames a second.</div>
             </button>
+          </div>
+          <div class="srow" style="padding-bottom: 10px">
+            <div><div class="t">Limit to 720p</div><div class="d">For a small upload (under about 10 Mbps)</div></div>
+            <button class="sw" [attr.aria-pressed]="cap720()" aria-label="Limit to 720p" (click)="cap720.set(!cap720())"></button>
+          </div>
+          <div class="note" style="margin-top: 8px" data-testid="share-plan" role="status">
+            <hx-icon name="info" size="sm" style="color: var(--tx3); margin-top: 1px" />
+            @if (plan(); as p) {
+              @if (p.hardware) {
+                <span>This PC will send <b>{{ p.label }}</b> (about {{ p.mbps }} Mbps upload) using its graphics card's video encoder. If the PC or the upload can't hold that, the stream steps down by itself and back up when it can.</span>
+              } @else {
+                <span>This browser has no hardware video encoder on this PC, so the stream is encoded on the CPU: <b>{{ p.label }}</b> (about {{ p.mbps }} Mbps upload) — a size it can hold steadily next to a game.</span>
+              }
+            } @else {
+              <span>Checking what this PC can send…</span>
+            }
           </div>
           <div class="srow" style="border-bottom: 0; padding-bottom: 4px">
             <div><div class="t">Include system audio</div><div class="d">So friends hear the game, not just see it</div></div>
@@ -73,7 +90,7 @@ import { Icon } from '../../shared/ui/icon';
               <button class="btn sec" (click)="start(true, true)" [disabled]="busy()">Share a tab with sound</button>
               <button class="btn pri" (click)="start(false)" [disabled]="busy()">Share without sound</button>
             } @else {
-              <button class="btn pri" (click)="start()" [disabled]="busy()">Choose what to share</button>
+              <button class="btn pri" (click)="start()" [disabled]="busy() || !plan()">Choose what to share</button>
             }
           </div>
         </div>
@@ -103,7 +120,16 @@ export class ShareDialog {
   readonly closed = output<void>();
 
   readonly media = inject(MediaSessionService);
-  readonly quality = signal<ScreenQuality>(inject(MediaPrefsService).prefs().streamQuality);
+  private readonly prefs = inject(MediaPrefsService).prefs();
+  readonly mode = signal<ShareMode>(this.prefs.shareMode);
+  readonly cap720 = signal(this.prefs.shareCap720);
+  /** What will be sent with the current choices on this PC; null until the encoder probe has answered. */
+  readonly plan = computed(() => {
+    const probe = encodeProbe();
+    if (!probe) return null;
+    const top = ladderFor(this.mode(), this.cap720(), probe.encoder)[0];
+    return { hardware: probe.encoder === 'hardware', label: rungLabel(top), mbps: +(top.bitrate / 1e6).toFixed(1) };
+  });
   readonly audio = signal(true);
   readonly denied = signal(false);
   readonly busy = signal(false);
@@ -113,6 +139,7 @@ export class ShareDialog {
   private done = false;
 
   constructor() {
+    void probeEncoder();
     // Capture picked: the room shows "Going live" while the stream negotiates (States 08), so get out of the way.
     effect(() => {
       if (this.busy() && this.media.sharing() === 'starting') untracked(() => this.close());
@@ -122,7 +149,7 @@ export class ShareDialog {
   /** Runs inside the click: startScreenShare calls getDisplayMedia before any await. */
   async start(withAudio = this.audio(), compat?: boolean): Promise<void> {
     this.busy.set(true);
-    const result = await this.media.startScreenShare(this.quality(), withAudio, compat);
+    const result = await this.media.startScreenShare({ mode: this.mode(), cap720: this.cap720() }, withAudio, compat);
     this.busy.set(false);
     // Stay open after a sound failure: the next step is one click (a fresh user gesture, which the picker needs).
     if (result === 'denied') this.denied.set(true);

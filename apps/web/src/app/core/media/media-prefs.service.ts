@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import type { ScreenQuality } from './media-session.service';
+import type { ShareMode } from './share-governor';
 
 /** off = raw mic · standard = the browser's WebRTC suppression · enhanced = RNNoise · strong = RNNoise + GTCRN (noise-filter.ts). */
 export type NoiseMode = 'off' | 'standard' | 'enhanced' | 'strong';
@@ -26,7 +26,10 @@ export interface MediaPrefs {
   pttKey: string;
   /** Push to talk: keep sending this long after the key is released, ms (0…1000). */
   pttReleaseMs: number;
-  streamQuality: ScreenQuality;
+  /** Default for the Go Live dialog: smooth (games, video) or sharp (text, apps). */
+  shareMode: ShareMode;
+  /** Default for the Go Live dialog: never send more than 720p. */
+  shareCap720: boolean;
   /** Screen-share sound with the browser's default audio settings: set once clean capture failed and this worked. */
   screenAudioCompat: boolean;
 }
@@ -45,7 +48,8 @@ const DEFAULTS: MediaPrefs = {
   sensitivityDb: -50,
   pttKey: 'Backquote',
   pttReleaseMs: 200,
-  streamQuality: '1080p60',
+  shareMode: 'smooth',
+  shareCap720: false,
   screenAudioCompat: false,
 };
 
@@ -67,7 +71,7 @@ export class MediaPrefsService {
 
 function load(): MediaPrefs {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as (Partial<MediaPrefs> & { noiseSuppression?: boolean }) | null;
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as (Partial<MediaPrefs> & { noiseSuppression?: boolean; streamQuality?: string }) | null;
     if (!raw) return DEFAULTS;
     return {
       inputDeviceId: typeof raw.inputDeviceId === 'string' ? raw.inputDeviceId : '',
@@ -82,7 +86,9 @@ function load(): MediaPrefs {
       sensitivityDb: num(raw.sensitivityDb, -60, 0, DEFAULTS.sensitivityDb),
       pttKey: typeof raw.pttKey === 'string' && /^[A-Za-z0-9]{1,24}$/.test(raw.pttKey) ? raw.pttKey : DEFAULTS.pttKey,
       pttReleaseMs: num(raw.pttReleaseMs, 0, 1000, DEFAULTS.pttReleaseMs),
-      streamQuality: raw.streamQuality === '720p30' ? '720p30' : '1080p60',
+      shareMode: raw.shareMode === 'sharp' ? 'sharp' : 'smooth',
+      // Before the modes there were two presets: '720p30' was the choice for a small upload.
+      shareCap720: typeof raw.shareCap720 === 'boolean' ? raw.shareCap720 : raw.streamQuality === '720p30',
       screenAudioCompat: raw.screenAudioCompat === true,
     };
   } catch {

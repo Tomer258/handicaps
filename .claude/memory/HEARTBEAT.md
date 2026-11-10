@@ -127,13 +127,23 @@ option". Feed is SHARED by the call (watch-together list with feed=true); source
 - Design: H.264 hardware-first single main encode, encode probe (mediaCapabilities), Smooth/Sharp modes, layers
   main/safe 720p30/thumb, share-governor (getStats loop, setParameters), watchVideo roles + adaptiveStream off,
   stats rows Encoder/Transport, host UDP buffers; optional OBS→WHIP ingest later. Build order V0–V5 in the doc.
-- Nothing implemented yet.
+- BUILT V0–V3 the same day: core/media/{encode-probe,share-governor}.ts (+ specs, `npx ng test --watch=false` → 11 pass),
+  media-session.service.ts (codec/layers/watch roles/governor), share-dialog (Smooth/Sharp, Limit to 720p, plan line),
+  stream-tile `watch` input, stream-view share-status tag, stream-stats rows Encoder + Transport, settings video section,
+  API VoiceService quality smooth|sharp (VoiceTests 16 pass). Findings in screen-share-v2.md §5 (High-profile rewrite!).
+- Verified: web dev + prod build; smokes stream, going-live, share-audio, voice-panel, settings, responsive pass;
+  real Edge on this PC (RTX 4070): all layers on NVIDIA H.264 MFT, viewer 1080p via D3D11, main layer up in 4–8 s.
+  NOT verified: 60 fps (Playwright tab capture gives ~20 fps here) → user must share a real game.
+- Tools: `CHANNEL=msedge HEADED=1 [SDP=1] [ENCODER=hardware|software] node scripts/stream-stats.mjs 60`;
+  `node scripts/encode-probe-check.mjs msedge` (what the browser says it can encode).
+- poc-smoke.mjs was edited for the new dialog ("Limit to 720p") but not rerun (needs the POC stack).
 
 ## Next exact step
-User approved building screen share v2 (2026-11-10). Follow README-screen-share-v2.md (repo root) step by step: V0 stats
-rows → V1 codec/layers/watch roles → V2 probe/modes/dialog/API → V3 governor → V4 host. Both docs are uncommitted:
-commit them first ("docs: screen share v2 design + build instructions").
-Older pending: user deploys the Shorts feed + migration DmPerHangar; P2/P3 gates on the VPS.
+User tests a real game share on two PCs and reads the stats panel (Encoder should say Hardware, Codec H264, Sending 1080p 60).
+Deploy: git pull && dc build api edge && dc up -d api edge (no migration for this; DmPerHangar migration still pending from session 7).
+Then V4 (host UDP buffers per LiveKit's deployment guide — value not verified, not written into bootstrap; jitterBufferTarget
+experiment) and optionally V5 (OBS → WHIP ingest, needs ADR).
+Older pending: Shorts feed key on the VPS; P2/P3 gates.
 
 ### HANDOFF — end of 2026-10-18 session (read this first)
 State: all feature phases (1–6) done; Phase 7 ~55% (every locally-testable item done); overall ~85% to first release. 81 backend tests + ~29 smokes pass. Everything committed and pushed (last: d29b0dc server settings). Working tree clean except the untracked 'start prompt.txt' (never commit it).

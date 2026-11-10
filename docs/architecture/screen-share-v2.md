@@ -1,6 +1,6 @@
 # Screen share v2 — design proposal
 
-Status: **proposal, not built** (2026-11-10). Replaces the publish/receive pipeline of slice S5. The control plane
+Status: **V0–V3 built 2026-11-10** (see §5 for what building it changed); V4 open, V5 optional. Replaces the publish/receive pipeline of slice S5. The control plane
 (leases, publication reservations, source grants, caps of 4 screens) stays as it is.
 
 Problem reported: streams do not hold more than about 30 fps and are very unstable.
@@ -62,8 +62,9 @@ Optional manual cap in the dialog ("limit to 720p") for people who know their up
 | safe | 720p30, 1.5 Mbps (only when main is above 720p30) | a viewer whose own link cannot take main (SFU decision) |
 | thumb | 360p15, 0.25 Mbps | participant cards, stream strip |
 
-Dynacast (already on) stops encoding a layer nobody receives. With rule 4 the usual case is main + thumb: about
-127 million pixels/s on the GPU instead of 183 on the CPU.
+Dynacast (already on) stops encoding layers above what anyone receives. Measured: while someone watches the main
+layer, the SFU keeps the lower ones on too (they are its fallback), so the usual case is all three — about 155
+million pixels/s on the GPU's encoder instead of 183 on the CPU.
 
 Publish options: `videoCodec: 'h264'`, `backupCodec: false` (targets are Chrome/Edge desktop; all decode H.264),
 `simulcast: true`, `screenShareEncoding` = main, `screenShareSimulcastLayers` = [thumb, safe].
@@ -129,3 +130,22 @@ software-only PC — steady 30 fps.
 - Hardware H.264 rate control overshoots more than libvpx. The governor's bitrate rule and the 8 Mbps cap bound it.
 - If the game is uncapped and takes 100% of the GPU, Chrome's capture itself drops frames. No encoder choice fixes
   that; the governor settles on 30 fps and tells the streamer.
+
+## 5. What building it changed (2026-11-10, measured on an RTX 4070 PC with Edge)
+
+- **LiveKit 1.9.1 answers publishers, and offers viewers, only H.264 Constrained Baseline level 3.1.** Windows GPU
+  encoders are used for High profile only; with Baseline the browser used OpenH264 in software and, at level 3.1, never
+  sent the 720p/1080p layers at all. Publishing real High profile (reordering the answer) made the SFU fall back to
+  its VP8 backup for every viewer. What works: the answer's first H.264 entry is rewritten to High profile level 5.0
+  before the browser sees it (`encode-probe.ts` `preferHighProfileH264`). The browser then encodes High on the GPU
+  under the payload type the SFU chose; the SFU forwards it as-is; Chrome/Edge decode it (D3D11). Result: all three
+  layers on "NVIDIA H.264 Encoder MFT", viewer at 1080p.
+- **The probe must ask per profile.** `mediaCapabilities.encodingInfo` says `powerEfficient: false` for plain
+  `video/H264` and true only with a High-profile `profile-level-id`, so the probe tries every profile the browser can send.
+- **Start bitrate.** With H.264 the bandwidth estimate started at the browser default and viewers sat on 360p for
+  12–18 s. The rewritten answer carries `x-google-start-bitrate=4000`; the main layer now arrives in 4–8 s.
+- **Software ladder is VP8, not H.264** (libvpx holds 720p30 better than OpenH264), and has no "safe" layer.
+- **Not proven by automation: 60 fps.** Playwright's tab capture delivers about 20 fps on this PC whatever is asked,
+  so the governor's "screen delivers ~30 fps" rule was exercised but a 1080p60 run was not. Needs a real game share.
+- **A viewer that is not Chrome/Edge** (Firefox, Safari) is told Baseline and receives High. Out of the supported
+  targets; if it ever matters, turn the rewrite off for rooms with such a viewer.

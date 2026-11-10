@@ -91,3 +91,19 @@
 - Leave: DELETE /servers/{id}/members/me (owner can't: 409 member.owner_leave).
 - DMs are per hangar: unique index moved from dm_key to (server_id, dm_key) (migration DmPerHangar). The same pair has one direct conversation per hangar; existing DMs stay in the first hangar.
 - Install-wide caps (voice humans, screens, cameras) stay install-wide: one machine.
+
+## 2026-11-10 — Screen share v2 (docs/architecture/screen-share-v2.md)
+- Hardware PCs publish H.264; the SFU's answer is rewritten client-side to High profile level 5.0 + x-google-start-bitrate=4000
+  (encode-probe.ts preferHighProfileH264, on for the whole share). Reason: LiveKit 1.9.1 negotiates only Constrained Baseline 3.1,
+  which Windows encodes in software (OpenH264) and caps at 720p30; real High-profile negotiation made the SFU serve VP8 backup.
+  Revisit when upgrading LiveKit (it may then offer High itself) — remove the rewrite if so.
+- Probe = mediaCapabilities.encodingInfo per H.264 profile the browser can send; powerEfficient ⇒ hardware. Software PCs publish
+  VP8 at 720p30 (smooth) / 1080p15 (sharp), thumb layer only. Dev-only override: localStorage hangar.forceEncoder.
+- adaptiveStream is OFF. Layers are requested by tile role: watchVideo(stream, 'full'|'thumb') → setVideoQuality HIGH / LOW
+  (cameras: thumb = MEDIUM 360p). Hidden tab without picture-in-picture → small layer.
+- Modes replace presets: smooth (motion, maintain-framerate, 1080p60→720p60→720p30) / sharp (detail, maintain-resolution,
+  1080p30→1080p15); "Limit to 720p" switch. API quality values smooth|sharp (old 1080p60/720p30 accepted → smooth).
+  Prefs shareMode/shareCap720 (old streamQuality '720p30' → cap on).
+- Share governor (share-governor.ts): pure govStep + runtime; 2 s samples, 6 s to act, 30 s clean to step up, failed step-up
+  doubles the wait (max 5 min). Capture between 15 fps and 75% of target counts as "cannot deliver" → 30 fps cap; under 15 fps
+  is a still screen and is ignored.

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, afterRenderEffect, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { Track } from 'livekit-client';
-import { MediaSessionService, StreamInfo } from '../../core/media/media-session.service';
+import { MediaSessionService, StreamInfo, WatchRole } from '../../core/media/media-session.service';
 import { NetStats, NetStatsReader, streamStatsOpen } from './stream-stats';
 
 /** Renders one camera/screen stream. Subscribes while mounted (explicit subscriptions), detaches on destroy. */
@@ -34,6 +34,8 @@ export class StreamTile implements OnDestroy {
   readonly stream = input.required<StreamInfo>();
   readonly fit = input<'contain' | 'cover'>('contain');
   readonly showLoading = input(true);
+  /** full = the main layer (someone is watching this tile) · thumb = the small layer (cards, strips). */
+  readonly watch = input<WatchRole>('full');
   /** Read WebRTC network stats while the stats panel is open (the big stage and grid tiles, not thumbnails). */
   readonly detailed = input(false);
 
@@ -68,7 +70,7 @@ export class StreamTile implements OnDestroy {
     if (!s) return '';
     const source = this.stream().publication?.dimensions?.height ?? 0;
     const lower = !this.stream().isLocal && source > s.height + 8
-      ? ` — the stream is ${source}p; you get a lower layer for your window size or connection` : '';
+      ? ` — the stream is ${source}p; a lower layer is sent while your connection can't take the full one` : '';
     return `Watching ${s.width}×${s.height} at ${s.fps} frames per second${lower}`;
   });
   /** Live network numbers (bitrate, loss, ping…) while the stats panel is open; null otherwise. */
@@ -81,6 +83,7 @@ export class StreamTile implements OnDestroy {
   private readonly frameTimer = setInterval(() => this.frameGap.set(this.ready() && performance.now() - this.lastFrame > 2000), 500);
   private readonly statsTimer = setInterval(() => this.measure(), 1000);
   private watched?: StreamInfo;
+  private watchedAs: WatchRole = 'full';
   private attached?: Track;
 
   readonly label = () => `${this.stream().name} ${this.stream().kind === 'screen' ? 'screen share' : 'camera'}`;
@@ -89,15 +92,19 @@ export class StreamTile implements OnDestroy {
     // (Re)subscribe when the tile is pointed at a different stream.
     effect(() => {
       const s = this.stream();
+      const role = this.watch();
       untracked(() => {
-        if (this.watched?.key === s.key && this.watched.publication === s.publication) {
+        if (this.watched?.key === s.key && this.watched.publication === s.publication && this.watchedAs === role) {
           this.watched = s;
           return;
         }
-        if (this.watched) this.media.unwatchVideo(this.watched);
-        this.detach();
+        const same = this.watched?.key === s.key && this.watched.publication === s.publication;
+        // Take the new role before giving up the old one, so a role change never unsubscribes in between.
+        this.media.watchVideo(s, role);
+        if (this.watched) this.media.unwatchVideo(this.watched, this.watchedAs);
+        if (!same) this.detach();
         this.watched = s;
-        this.media.watchVideo(s);
+        this.watchedAs = role;
       });
     });
     // Attach once the track exists (subscription completes asynchronously).
@@ -170,7 +177,7 @@ export class StreamTile implements OnDestroy {
     clearInterval(this.statsTimer);
     this.frameChain++;
     this.detach();
-    if (this.watched) this.media.unwatchVideo(this.watched);
+    if (this.watched) this.media.unwatchVideo(this.watched, this.watchedAs);
   }
 
   private detach(): void {

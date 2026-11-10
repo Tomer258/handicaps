@@ -16,12 +16,15 @@ import {
   Track,
   TrackPublication,
   VideoPreset,
+  VideoQuality,
   createLocalScreenTracks,
   createLocalVideoTrack,
 } from 'livekit-client';
 import { ApiService } from '../api/api.service';
+import { encodeProbe, preferHighProfileH264 } from './encode-probe';
 import { MediaPrefsService, NoiseMode } from './media-prefs.service';
 import { GateConfig, MIC_PROCESSOR, MicProcessor, NeuralFilter } from './noise-filter';
+import { ShareGovernor, ShareMode, ShareStatus, ladderFor, rungLabel } from './share-governor';
 import { SpeakingDetector } from './speaking-detector';
 import { ApiError } from '../api/api-error';
 import { SessionService } from '../auth/session.service';
@@ -58,7 +61,14 @@ export interface JoinTiming {
   mic: number;
 }
 
-export type ScreenQuality = '1080p60' | '720p30';
+/** What the Go Live dialog asks for. The size and frame rate actually sent follow from the PC's encoder (encode-probe). */
+export interface ShareOptions {
+  mode: ShareMode;
+  /** Never send more than 720p (small uploads). */
+  cap720: boolean;
+}
+/** full = a tile someone is watching (stage, grid, pop-out) · thumb = a card or strip preview. */
+export type WatchRole = 'full' | 'thumb';
 /** 'audio-failed': Windows refused system-audio loopback (NotReadableError); sharing without sound usually works. */
 /** Stereo, no voice processing, without this browser's own sound (restrictOwnAudio is not in the DOM typings yet). */
 const CLEAN_SCREEN_AUDIO = {
@@ -92,12 +102,13 @@ interface SoundPrefs {
   mutedActors: string[];
 }
 const MAX_VOLUME = 2;
-const SCREEN_ENCODING: Record<ScreenQuality, { width: number; height: number; fps: number; bitrate: number; layers: VideoPreset[] }> = {
-  // Capacity model: 8 Mbps high layer with 3.0 / 0.4 Mbps lower layers for thumbnails and weak links. Viewers whose
-  // stream view is under ~1280 px wide get the 720p layer, so it keeps 60 fps too (games); the 360p one is for cards.
-  '1080p60': { width: 1920, height: 1080, fps: 60, bitrate: 8_000_000, layers: [new VideoPreset(640, 360, 400_000, 15), new VideoPreset(1280, 720, 3_000_000, 60)] },
-  '720p30': { width: 1280, height: 720, fps: 30, bitrate: 2_500_000, layers: [new VideoPreset(640, 360, 400_000, 15)] },
-};
+/**
+ * Simulcast layers under the main one (docs/architecture/screen-share-v2.md). Viewers ask for a layer by role, and
+ * dynacast stops encoding a layer nobody receives, so the usual load is main + thumb.
+ */
+const THUMB_LAYER = new VideoPreset(640, 360, 250_000, 15);
+/** For a viewer whose own link cannot take the main layer (the SFU's choice). Only next to a hardware-encoded main above 720p30. */
+const SAFE_LAYER = new VideoPreset(1280, 720, 1_500_000, 30);
 
 /**
  * Root voice/media session: one LiveKit Room for the whole app. Route components only read its signals;
@@ -126,7 +137,8 @@ export class MediaSessionService {
   private readonly _volumes = signal<Record<string, number>>(loadVolumes());
   private readonly _sharing = signal<'off' | 'starting' | 'live'>('off');
   private readonly _shareHasAudio = signal(false);
-  private readonly _shareQuality = signal<ScreenQuality>('1080p60');
+  private readonly _shareTarget = signal('1080p · 60');
+  private readonly _shareStatus = signal<ShareStatus | null>(null);
   /** LiveKit's per-participant link quality (identity → quality); drives "Weak connection" (States 09). */
   private readonly _quality = signal<Readonly<Record<string, ConnectionQuality>>>({});
   private readonly _camera = signal<'off' | 'starting' | 'on'>('off');
@@ -164,8 +176,10 @@ export class MediaSessionService {
   readonly shareHasAudio = this._shareHasAudio.asReadonly();
   /** getDisplayMedia exists (missing in embedded/in-app browsers and on phones). */
   readonly screenCaptureSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia;
-  /** Quality being negotiated or sent while sharing. */
-  readonly shareQuality = this._shareQuality.asReadonly();
+  /** "1080p · 60": what the share being negotiated starts at. */
+  readonly shareTarget = this._shareTarget.asReadonly();
+  /** What my live share sends right now and why it is below the target, from the governor; null when not sharing. */
+  readonly shareStatus = this._shareStatus.asReadonly();
   /** My own link is poor or lost. */
   readonly weakLink = computed(() => isWeak(this._quality()[this.room?.localParticipant.identity ?? '']));
   /** My link as LiveKit grades it: 'excellent' | 'good' | 'poor' | 'lost' | 'unknown'. */
@@ -215,7 +229,8 @@ export class MediaSessionService {
   });
 
   private room?: Room;
-  private readonly videoWatchers = new Map<string, number>();
+  private readonly videoWatchers = new Map<string, Record<WatchRole, number>>();
+  private governor?: ShareGovernor;
   private readonly audioWatchers = new Map<string, number>();
   private screenTracks: LocalTrack[] = [];
   private cameraTrack?: LocalVideoTrack;
@@ -258,6 +273,8 @@ export class MediaSessionService {
       untracked(() => void this.applyDevicePrefs(p.inputDeviceId, p.outputDeviceId, p.cameraDeviceId));
     });
     if (typeof window !== 'undefined') this.listenPushToTalk();
+    // A hidden tab shows nothing: take the small layer until it is looked at again (a pop-out window keeps the full one).
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => this.applyVideoQualities());
   }
 
   /** Push to talk works while the Hangar tab has focus (browsers give pages no global keys). */
@@ -345,7 +362,9 @@ export class MediaSessionService {
 
     const prefs = this.mediaPrefs.prefs();
     const room = new Room({
-      adaptiveStream: true,
+      // Layers are requested per tile role (watchVideo), not from element sizes: a resize must not switch layers,
+      // because every switch costs a keyframe and a bitrate spike.
+      adaptiveStream: false,
       dynacast: true,
       // Web Audio mixing lets per-user volume go above 100%.
       webAudioMix: true,
@@ -420,18 +439,22 @@ export class MediaSessionService {
    * and friends' voices playing in Hangar don't echo back into the stream. compat: the browser's default whole-device
    * capture, kept as a fallback for browsers without per-process loopback.
    */
-  async startScreenShare(quality: ScreenQuality, withAudio: boolean, compat = this.mediaPrefs.prefs().screenAudioCompat): Promise<ShareResult> {
+  async startScreenShare(opts: ShareOptions, withAudio: boolean, compat = this.mediaPrefs.prefs().screenAudioCompat): Promise<ShareResult> {
     const room = this.room;
     const lease = this.leaseId;
     if (!room || !lease || this._sharing() !== 'off') return 'failed';
-    const enc = SCREEN_ENCODING[quality];
+    // Read, not awaited: the picker below needs the click's activation. The dialog runs the probe before enabling Go Live.
+    const probe = encodeProbe() ?? { codec: 'vp8' as const, encoder: 'software' as const };
+    const ladder = ladderFor(opts.mode, opts.cap720, probe.encoder);
+    const enc = ladder[0];
+    const sharp = opts.mode === 'sharp';
     let tracks: LocalTrack[];
     try {
       tracks = await createLocalScreenTracks({
         audio: withAudio ? (compat ? true : CLEAN_SCREEN_AUDIO) : false,
         systemAudio: withAudio ? 'include' : 'exclude',
         resolution: { width: enc.width, height: enc.height, frameRate: enc.fps },
-        contentHint: 'motion',
+        contentHint: sharp ? 'detail' : 'motion',
         selfBrowserSurface: 'exclude',
         surfaceSwitching: 'include',
       });
@@ -463,23 +486,24 @@ export class MediaSessionService {
       tracks.forEach((t) => t.stop());
       return 'failed';
     }
-    this._shareQuality.set(quality);
+    this._shareTarget.set(rungLabel(enc));
     this._sharing.set('starting');
     try {
-      await this.api.post(`/voice/${lease}/publications/screen`, { quality, withAudio: !!audio });
+      await this.api.post(`/voice/${lease}/publications/screen`, { quality: opts.mode, withAudio: !!audio });
       if (gen !== this.generation) throw new Error('stale');
       await this.waitForSource(room, Track.Source.ScreenShare);
+      preferHighProfileH264(probe.codec === 'h264');
       await room.localParticipant.publishTrack(video, {
         source: Track.Source.ScreenShare,
+        // H.264 on the GPU's encoder where the PC has one, else VP8 in software at a size it can hold. A viewer that
+        // cannot decode H.264 gets livekit's VP8 backup encode on demand (backupCodec default).
+        videoCodec: probe.codec,
         simulcast: true,
-        // Screen tracks read screenShareEncoding (videoEncoding is ignored for them): without it livekit-client picked
-        // its own preset for the capture size, 1080p at 15 fps and 2.5 Mbps, whatever quality was chosen.
+        // Screen tracks read screenShareEncoding (videoEncoding is ignored for them).
         screenShareEncoding: { maxBitrate: enc.bitrate, maxFramerate: enc.fps },
-        screenShareSimulcastLayers: enc.layers,
-        // livekit-client defaults screen shares to maintain-resolution: when the streamer's encoder or upload falls behind,
-        // the browser keeps 1080p and cuts the frame rate (60 → 20 fps for a game or video). The 60 fps choice is for motion,
-        // so keep the frame rate and let the resolution dip briefly instead; 720p 30 balances both.
-        degradationPreference: quality === '1080p60' ? 'maintain-framerate' : 'balanced',
+        screenShareSimulcastLayers: probe.encoder === 'hardware' && (enc.height > 720 || enc.fps > 30) ? [THUMB_LAYER, SAFE_LAYER] : [THUMB_LAYER],
+        // What the browser gives up first when it must; the governor then settles on a rung that holds.
+        degradationPreference: sharp ? 'maintain-resolution' : 'maintain-framerate',
       });
       if (audio) {
         await this.waitForSource(room, Track.Source.ScreenShareAudio);
@@ -487,6 +511,7 @@ export class MediaSessionService {
       }
     } catch (e) {
       tracks.forEach((t) => t.stop());
+      preferHighProfileH264(false);
       this._sharing.set('off');
       if (gen === this.generation) {
         void this.api.delete(`/voice/${lease}/publications/screen`).catch(() => undefined);
@@ -499,6 +524,10 @@ export class MediaSessionService {
     video.mediaStreamTrack.addEventListener('ended', () => void this.stopScreenShare());
     this._shareHasAudio.set(!!audio);
     this._sharing.set('live');
+    this.governor = new ShareGovernor(video, ladder,
+      { expectHardware: probe.encoder === 'hardware', softwareLadder: ladderFor(opts.mode, opts.cap720, 'software') },
+      (st) => this._shareStatus.set(st));
+    this.governor.start();
     this.bump();
     return 'ok';
   }
@@ -507,6 +536,7 @@ export class MediaSessionService {
     if (this._sharing() === 'off') return;
     const tracks = this.screenTracks;
     this.screenTracks = [];
+    this.stopGovernor();
     this._sharing.set('off');
     this._shareHasAudio.set(false);
     const room = this.room;
@@ -556,21 +586,41 @@ export class MediaSessionService {
     }
   }
 
-  /** Ref-counted explicit video subscription: only streams on screen are received. */
-  watchVideo(s: StreamInfo): void {
+  /**
+   * Ref-counted explicit video subscription: only streams on screen are received, and the layer follows the role of
+   * the tiles showing it — the main layer for a watched tile, a small one for previews.
+   */
+  watchVideo(s: StreamInfo, role: WatchRole = 'full'): void {
     if (!s.publication) return;
-    const n = (this.videoWatchers.get(s.key) ?? 0) + 1;
-    this.videoWatchers.set(s.key, n);
-    if (n === 1) s.publication.setSubscribed(true);
+    const w = this.videoWatchers.get(s.key) ?? { full: 0, thumb: 0 };
+    const first = w.full + w.thumb === 0;
+    w[role]++;
+    this.videoWatchers.set(s.key, w);
+    if (first) s.publication.setSubscribed(true);
+    this.applyVideoQuality(s.key, s.kind, s.publication);
   }
 
-  unwatchVideo(s: StreamInfo): void {
+  unwatchVideo(s: StreamInfo, role: WatchRole = 'full'): void {
     if (!s.publication) return;
-    const n = (this.videoWatchers.get(s.key) ?? 1) - 1;
-    if (n <= 0) {
+    const w = this.videoWatchers.get(s.key);
+    if (!w) return;
+    w[role] = Math.max(0, w[role] - 1);
+    if (w.full + w.thumb === 0) {
       this.videoWatchers.delete(s.key);
       s.publication.setSubscribed(false);
-    } else this.videoWatchers.set(s.key, n);
+    } else this.applyVideoQuality(s.key, s.kind, s.publication);
+  }
+
+  private applyVideoQuality(key: string, kind: 'screen' | 'camera', pub: RemoteTrackPublication): void {
+    const w = this.videoWatchers.get(key);
+    if (!w || !pub.isDesired) return;
+    const looking = !document.hidden || !!document.pictureInPictureElement;
+    // Screen layers: f = main, q = 360p thumb. Camera layers: f = 720p, h = 360p (a card is wider than 180p looks good at).
+    pub.setVideoQuality(w.full > 0 && looking ? VideoQuality.HIGH : kind === 'camera' ? VideoQuality.MEDIUM : VideoQuality.LOW);
+  }
+
+  private applyVideoQualities(): void {
+    for (const s of untracked(() => this.streams())) if (s.publication) this.applyVideoQuality(s.key, s.kind, s.publication);
   }
 
   /** Stream audio is received only while that stream is being watched (it is independent of voice). */
@@ -693,6 +743,11 @@ export class MediaSessionService {
           if (isSoundboard(p)) this.applySoundVolume(pub);
           else this.applyVolumeFor(p);
         }
+        // The layer request made at watch time may have gone out before the subscription existed: repeat it.
+        if (track.kind === Track.Kind.Video && (pub.source === Track.Source.ScreenShare || pub.source === Track.Source.Camera)) {
+          const kind = pub.source === Track.Source.ScreenShare ? 'screen' : 'camera';
+          this.applyVideoQuality(`${p.identity}:${kind}`, kind, pub);
+        }
         const uid = userIdOf(p);
         if (uid && pub.source === Track.Source.Microphone) this.detector.watch(uid, () => pub.track?.mediaStreamTrack);
         this.bump();
@@ -800,7 +855,15 @@ export class MediaSessionService {
     return this.room?.remoteParticipants.get(s.identity)?.getTrackPublication(Track.Source.ScreenShareAudio) as RemoteTrackPublication | undefined;
   }
 
+  private stopGovernor(): void {
+    this.governor?.stop();
+    this.governor = undefined;
+    preferHighProfileH264(false);
+    this._shareStatus.set(null);
+  }
+
   private resetPublishing(): void {
+    this.stopGovernor();
     this.screenTracks.forEach((t) => t.stop());
     this.screenTracks = [];
     this.cameraTrack?.stop();

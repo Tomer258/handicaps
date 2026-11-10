@@ -2,13 +2,21 @@
 // friend watches it in the stream view. Prints, every 2 s, what the sender encodes per simulcast layer (resolution,
 // fps, encoder, what limits it) and what the viewer receives (resolution, fps).
 // Usage: node scripts/stream-stats.mjs [seconds]   (needs compose livekit + API + ng serve; users tomer & friend)
+// Env: CHANNEL=chrome|msedge  run the installed browser (it has H.264 and the GPU encoder; the bundled Chromium has neither)
+//      ENCODER=hardware|software  override the encoder probe (dev builds)   THROTTLE=<rate>  slow the sender's CPU after 20 s
+//      HEADED=1  show the windows (GPU encoders usually need it)
 import { chromium } from '@playwright/test';
 
 const [, , SECONDS = '16'] = process.argv;
 const BASE = 'http://localhost:4200';
+const { CHANNEL, ENCODER, THROTTLE, HEADED } = process.env;
 const browser = await chromium.launch({
+  channel: CHANNEL || undefined,
+  headless: !HEADED,
   args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--auto-select-tab-capture-source-by-title=HangarAnim',
-    '--autoplay-policy=no-user-gesture-required'],
+    '--autoplay-policy=no-user-gesture-required',
+    // The viewer's window covers the sender's: without these the covered window is painted at a fraction of the display rate.
+    '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
 });
 const keepPcs = () => {
   const Native = window.RTCPeerConnection;
@@ -23,6 +31,7 @@ const keepPcs = () => {
 async function session(login) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone', 'camera'] });
   await ctx.addInitScript(keepPcs);
+  if (ENCODER) await ctx.addInitScript((e) => localStorage.setItem('hangar.forceEncoder', e), ENCODER);
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login`);
   await page.getByLabel('Login').fill(login);
@@ -59,10 +68,12 @@ for (const p of [owner, friend]) {
 const dock = owner.getByRole('toolbar', { name: 'Voice controls' });
 await dock.getByRole('button', { name: 'Share your screen' }).click();
 const dialog = owner.getByRole('dialog', { name: /Go live in/ });
-await dialog.getByRole('radio', { name: /1080p/ }).click();
+console.log('plan:', (await dialog.getByTestId('share-plan').innerText()).replace(/\s+/g, ' '));
 await dialog.getByRole('button', { name: 'Choose what to share' }).click();
 await dock.getByRole('button', { name: 'Stop sharing your screen' }).waitFor({ timeout: 20000 });
 await friend.getByRole('button', { name: /^Watch Tomer$/ }).click({ timeout: 15000 });
+// A background tab is painted at about 20 fps; in a visible window the shared tab must be the front one to reach 60.
+if (HEADED) await anim.bringToFront();
 
 const sent = () => owner.evaluate(async () => {
   const out = [];
@@ -71,7 +82,7 @@ const sent = () => owner.evaluate(async () => {
     for (const s of (await pc.getStats()).values()) {
       if (s.type === 'media-source' && s.kind === 'video') out.push(`source ${s.width}x${s.height}@${Math.round(s.framesPerSecond ?? 0)}`);
       if (s.type === 'outbound-rtp' && s.kind === 'video')
-        out.push(`${s.rid ?? '-'}:${s.frameWidth ?? 0}x${s.frameHeight ?? 0}@${Math.round(s.framesPerSecond ?? 0)} limit=${s.qualityLimitationReason} ${Math.round((s.targetBitrate ?? 0) / 1000)}kbps`);
+        out.push(`${s.rid ?? '-'}:${s.frameWidth ?? 0}x${s.frameHeight ?? 0}@${Math.round(s.framesPerSecond ?? 0)} limit=${s.qualityLimitationReason} ${Math.round((s.targetBitrate ?? 0) / 1000)}kbps ${s.active === false ? 'off' : s.encoderImplementation ?? ''}`);
     }
   }
   return out.join(' | ');
@@ -86,9 +97,19 @@ const got = () => friend.evaluate(async () => {
   }
   return out.join(' | ');
 });
+if (process.env.SDP) {
+  // Which H.264 profiles were offered and which one the SFU answered with (hardware encoders need High, 64xxxx).
+  await owner.waitForTimeout(3000);
+  for (const [who, pg] of [['sender', owner], ['viewer', friend]]) console.log(`== ${who}\n` + await pg.evaluate(() => window.__pcs.filter((pc) => pc.connectionState === 'connected').map((pc) =>
+    ['local', 'remote'].map((side) => `${side}: ` + (pc[`${side}Description`]?.sdp.match(/a=(rtpmap:\d+ H264.*|fmtp:\d+ .*profile-level-id.*)/g) ?? []).join(' ; ')).join('\n')).join('\n--\n')));
+}
+const cdp = THROTTLE ? await owner.context().newCDPSession(owner) : null;
+const status = async () => (await owner.getByTestId('share-status').count()) ? (await owner.getByTestId('share-status').innerText()).trim() : 'at target';
 for (let i = 0; i < Number(SECONDS) / 2; i++) {
   await owner.waitForTimeout(2000);
-  console.log(`t=${(i + 1) * 2}s sent [${await sent()}]  received [${await got()}]`);
+  if (cdp && i === 10) { await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(THROTTLE) }); console.log(`-- sender CPU throttled x${THROTTLE}`); }
+  if (cdp && i === 25) { await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 }); console.log('-- throttle off'); }
+  console.log(`t=${(i + 1) * 2}s sent [${await sent()}]  received [${await got()}]  governor [${await status()}]`);
 }
 await dock.getByRole('button', { name: 'Stop sharing your screen' }).click();
 await browser.close();
